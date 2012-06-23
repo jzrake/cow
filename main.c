@@ -4,6 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if (COW_MPI)
+#include <mpi.h>
+#endif
 
 struct cow_dfield; // forward declarations (for opaque data structure)
 struct cow_domain;
@@ -37,6 +40,8 @@ int cow_domain_getnumlocalzones(struct cow_domain *d);
 // -----------------------------------------------------------------------------
 struct cow_domain
 {
+  double coord_lower[3]; // lower coordinates of physical domain
+  double coord_upper[3]; // upper " "
   int A_nint[3];
   int L_ntot[3];
   int L_strt[3];
@@ -47,13 +52,29 @@ struct cow_domain
   int n_fields;
   int field_iter;
   int committed;
-  struct cow_dfield **fields;
+  struct cow_dfield **fields; // array of pointers to data fields
+
+#if (COW_MPI)
+  int comm_rank; // rank with respect to MPI_COMM_WORLD communicator
+  int comm_size; // size " "
+  int cart_rank; // rank with respect to the cartesian communicator
+  int cart_size; // size " "
+  int num_neighbors; // 3, 9, or 27 depending on the domain dimensionality
+  int *neighbors; // cartesian ranks of the neighboring processors
+  int *send_tags; // tag used to on send calls with respective neighbor
+  int *recv_tags; // " "            recv " "
+  MPI_Comm mpi_cart; // the cartesian communicator
+  MPI_Datatype *send_type; // chunk of data to be sent to respective neighbor
+  MPI_Datatype *recv_type; // " "                 received from " "
+#endif
 } ;
 
 struct cow_domain *cow_domain_new()
 {
   struct cow_domain *d = (struct cow_domain*) malloc(sizeof(struct cow_domain));
   struct cow_domain dom = {
+    .coord_lower = { 0.0, 0.0, 0.0 },
+    .coord_upper = { 1.0, 1.0, 1.0 },
     .A_nint = { 1, 1, 1 },
     .L_ntot = { 1, 1, 1 },
     .L_strt = { 1, 1, 1 },
@@ -127,6 +148,11 @@ void cow_domain_setguard(struct cow_domain *d, int guard)
 void cow_domain_commit(struct cow_domain *d)
 {
   if (d->committed) return;
+
+#if (COW_MPI)
+  MPI_Comm_rank(MPI_COMM_WORLD, &d->comm_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &d->comm_size);
+#endif
 
   d->L_ntot[0] = d->G_ntot[0] + 2 * d->n_ghst;
   d->L_ntot[1] = d->G_ntot[1] + 2 * d->n_ghst;
@@ -218,6 +244,10 @@ int main()
   struct cow_dfield *prim = cow_domain_addfield(domain, "primitive");
   struct cow_dfield *magf = cow_domain_addfield(domain, "magnetic");
 
+#if (COW_MPI)
+  printf("was compiled with COW_MPI\n");
+#endif
+
   cow_dfield_add_member(prim, "vx");
   cow_dfield_add_member(prim, "vy");
   cow_dfield_add_member(prim, "vz");
@@ -230,7 +260,6 @@ int main()
 
   for (struct cow_dfield *d = cow_domain_iteratefields(domain);
        d != NULL; d = cow_domain_nextfield(domain)) {
-
     printf("%s\n", cow_dfield_getname(d));
     for (const char *m = cow_dfield_iteratemembers(d);
 	 m != NULL; m = cow_dfield_nextmember(d)) {
