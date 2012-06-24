@@ -143,6 +143,11 @@ void cow_domain_setsize(cow_domain *d, int dim, int size)
   if (dim > 3 || d->committed) return;
   d->G_ntot[dim] = size;
 }
+int cow_domain_getsize(cow_domain *d, int dim)
+{
+  if (dim > 3) return 0;
+  return d->L_nint[dim];
+}
 void cow_domain_setndim(cow_domain *d, int ndim)
 {
   if (ndim > 3 || d->committed) return;
@@ -152,6 +157,10 @@ void cow_domain_setguard(cow_domain *d, int guard)
 {
   if (guard < 0 || d->committed) return;
   d->n_ghst = guard;
+}
+int cow_domain_getguard(cow_domain *d)
+{
+  return d->n_ghst;
 }
 void cow_domain_setprocsizes(cow_domain *d, int dim, int size)
 {
@@ -276,6 +285,16 @@ void cow_dfield_setname(cow_dfield *f, const char *name)
   f->name = (char*) realloc(f->name, strlen(name)+1);
   strcpy(f->name, name);
 }
+int cow_dfield_getstride(cow_dfield *f, int dim)
+{
+  int *N = f->domain->L_ntot;
+  switch (dim) {
+  case 0: return f->n_members * N[2] * N[1];
+  case 1: return f->n_members * N[2];
+  case 2: return f->n_members;
+  }
+  return 0;
+}
 const char *cow_dfield_getname(cow_dfield *f)
 {
   return f->name;
@@ -311,9 +330,14 @@ void cow_dfield_commit(cow_dfield *f)
   f->data = malloc(n_zones * f->n_members * sizeof(double));
   f->committed = 1;
 }
+void *cow_dfield_getdata(cow_dfield *f)
+{
+  return f->data;
+}
 void cow_dfield_syncguard(cow_dfield *f)
 {
 #if (COW_MPI)
+  if (f->domain->n_ghst == 0) return;
   cow_domain *d = f->domain;
   int N = d->num_neighbors;
   MPI_Request *requests = (MPI_Request*) malloc(2*N*sizeof(MPI_Request));
@@ -415,7 +439,7 @@ void _dfield_maketype1d(cow_dfield *f)
   int Ng = d->n_ghst;
   int c = MPI_ORDER_C;
   int n = 0;
-  _dfield_alloctype(f);
+  if (d->n_ghst == 0) return;
   for (int i=-1; i<=1; ++i) {
     if (i == 0) continue;  // don't include self
     int Plx[] = { Ng, Ng, d->L_nint[0] };
@@ -424,7 +448,7 @@ void _dfield_maketype1d(cow_dfield *f)
     int start_recv[] = { Qlx[i+1] };
     int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*Ng };
     MPI_Datatype send, recv, type;
-    MPI_Type_contiguous(d->n_fields, MPI_DOUBLE, &type);
+    MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
     MPI_Type_create_subarray(1, d->L_ntot, subsize, start_send, c, type, &send);
     MPI_Type_create_subarray(1, d->L_ntot, subsize, start_recv, c, type, &recv);
     MPI_Type_commit(&send);
@@ -442,6 +466,7 @@ void _dfield_maketype2d(cow_dfield *f)
   int Ng = d->n_ghst;
   int c = MPI_ORDER_C;
   int n = 0;
+  if (d->n_ghst == 0) return;
   for (int i=-1; i<=1; ++i) {
     for (int j=-1; j<=1; ++j) {
       if (i == 0 && j == 0) continue; // don't include self
@@ -454,7 +479,7 @@ void _dfield_maketype2d(cow_dfield *f)
       int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*Ng,
 			(1-abs(j))*d->L_nint[1] + abs(j)*Ng };
       MPI_Datatype send, recv, type;
-      MPI_Type_contiguous(d->n_fields, MPI_DOUBLE, &type);
+      MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
       MPI_Type_create_subarray(2, d->L_ntot, subsize, start_send, c, type, &send);
       MPI_Type_create_subarray(2, d->L_ntot, subsize, start_recv, c, type, &recv);
       MPI_Type_commit(&send);
@@ -473,6 +498,7 @@ void _dfield_maketype3d(cow_dfield *f)
   int Ng = d->n_ghst;
   int c = MPI_ORDER_C;
   int n = 0;
+  if (d->n_ghst == 0) return;
   for (int i=-1; i<=1; ++i) {
     for (int j=-1; j<=1; ++j) {
       for (int k=-1; k<=1; ++k) {
@@ -489,7 +515,7 @@ void _dfield_maketype3d(cow_dfield *f)
 			  (1-abs(j))*d->L_nint[1] + abs(j)*Ng,
 			  (1-abs(k))*d->L_nint[2] + abs(k)*Ng };
 	MPI_Datatype send, recv, type;
-	MPI_Type_contiguous(d->n_fields, MPI_DOUBLE, &type);
+	MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
 	MPI_Type_create_subarray(3, d->L_ntot, subsize, start_send, c, type, &send);
 	MPI_Type_create_subarray(3, d->L_ntot, subsize, start_recv, c, type, &recv);
 	MPI_Type_commit(&send);
@@ -506,6 +532,7 @@ void _dfield_maketype3d(cow_dfield *f)
 
 void _dfield_alloctype(cow_dfield *f)
 {
+  if (f->domain->n_ghst == 0) return;
   cow_domain *d = f->domain;
   int N = d->num_neighbors;
   f->send_type = (MPI_Datatype*) malloc(N * sizeof(MPI_Datatype));
@@ -513,6 +540,7 @@ void _dfield_alloctype(cow_dfield *f)
 }
 void _dfield_freetype(cow_dfield *f)
 {
+  if (f->domain->n_ghst == 0) return;
   cow_domain *d = f->domain;
   int N = d->num_neighbors;
   for (int n=0; n<N; ++n) MPI_Type_free(&f->send_type[n]);

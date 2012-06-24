@@ -30,11 +30,9 @@ int main(int argc, char **argv)
   cow_dfield_addmember(magf, "By");
   cow_dfield_addmember(magf, "Bz");
 
-  cow_domain_setndim(domain, 3);
+  cow_domain_setndim(domain, 1);
   cow_domain_setguard(domain, 2);
-  cow_domain_setsize(domain, 0, 12);
-  cow_domain_setsize(domain, 1, 13);
-  cow_domain_setsize(domain, 2, 14);
+  cow_domain_setsize(domain, 0, 10);
   cow_domain_commit(domain);
 
   for (cow_dfield *d = cow_domain_iteratefields(domain);
@@ -46,7 +44,23 @@ int main(int argc, char **argv)
     }
   }
 
+  int si = cow_dfield_getstride(prim, 0);
+  int ng = cow_domain_getguard(domain);
+
+  double *P = (double*) cow_dfield_getdata(prim);
+  for (int i=ng; i<cow_domain_getsize(domain, 0)+ng; ++i) {
+    P[si*i + 0] = 1.0;
+    P[si*i + 1] = 2.0;
+    P[si*i + 2] = 3.0;
+    printf("(%02d) %f %f %f\n", i, P[si*i + 0], P[si*i + 1], P[si*i + 2]);
+  }
+
+
   cow_dfield_syncguard(prim);
+  printf("\n\n ------------------------------------------------- \n\n");
+  for (int i=0; i<cow_domain_getsize(domain, 0)+2*ng; ++i) {
+    printf("(%02d) %f %f %f\n", i, P[si*i + 0], P[si*i + 1], P[si*i + 2]);
+  }
   cow_domain_del(domain);
 #if (COW_MPI)
   MPI_Finalize();
