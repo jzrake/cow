@@ -77,8 +77,6 @@ struct cow_domain
   int *send_tags; // tag used to on send calls with respective neighbor
   int *recv_tags; // " "            recv " "
   MPI_Comm mpi_cart; // the cartesian communicator
-  MPI_Datatype *send_type; // chunk of data to be sent to respective neighbor
-  MPI_Datatype *recv_type; // " "                 received from " "
 #endif
 } ;
 
@@ -92,11 +90,11 @@ struct cow_domain *cow_domain_new()
     .loc_upper = { 1.0, 1.0, 1.0 },
     .L_nint = { 1, 1, 1 },
     .L_ntot = { 1, 1, 1 },
-    .L_strt = { 1, 1, 1 },
+    .L_strt = { 0, 0, 0 },
     .G_ntot = { 1, 1, 1 },
-    .G_strt = { 1, 1, 1 },
+    .G_strt = { 0, 0, 0 },
     .n_dims = 1,
-    .n_ghst = 1,
+    .n_ghst = 0,
     .n_fields = 0,
     .field_iter = 0,
     .committed = 0,
@@ -253,6 +251,10 @@ struct cow_dfield
   void *data;
   int committed;
   cow_domain *domain;
+#if (COW_MPI)
+  MPI_Datatype *send_type; // chunk of data to be sent to respective neighbor
+  MPI_Datatype *recv_type; // " "                 received from " "
+#endif
 } ;
 cow_dfield *cow_dfield_new(cow_domain *domain)
 {
@@ -355,3 +357,190 @@ int main(int argc, char **argv)
 #endif
   return 0;
 }
+
+
+
+
+
+#if (COW_MPI)
+void _domain_maketags1d(cow_domain *d)
+{
+  int N = d->num_neighbors = 3-1;
+  int n = 0;
+  d->neighbors = (int*) malloc(N*sizeof(int));
+  d->send_tags = (int*) malloc(N*sizeof(int));
+  d->recv_tags = (int*) malloc(N*sizeof(int));
+  for (int i=-1; i<=1; ++i) {
+    if (i == 0) continue; // don't include self
+    int rel_index [] = { i };
+    int index[] = { d->proc_index[0] + rel_index[0] };
+    int their_rank;
+    MPI_Cart_rank(d->mpi_cart, index, &their_rank);
+    d->neighbors[n] = their_rank;
+    d->send_tags[n] = 1*(+i+5);
+    d->recv_tags[n] = 1*(-i+5);
+    ++n;
+  }
+}
+void _domain_maketags2d(cow_domain *d)
+{
+  int N = d->num_neighbors = 9-1;
+  int n = 0;
+  d->neighbors = (int*) malloc(N*sizeof(int));
+  d->send_tags = (int*) malloc(N*sizeof(int));
+  d->recv_tags = (int*) malloc(N*sizeof(int));
+  for (int i=-1; i<=1; ++i) {
+    for (int j=-1; j<=1; ++j) {
+      if (i == 0 && j == 0) continue; // don't include self
+      int rel_index [] = { i, j };
+      int index[] = { d->proc_index[0] + rel_index[0],
+		      d->proc_index[1] + rel_index[1] };
+      int their_rank;
+      MPI_Cart_rank(d->mpi_cart, index, &their_rank);
+      d->neighbors[n] = their_rank;
+      d->send_tags[n] = 10*(+i+5) + 1*(+j+5);
+      d->recv_tags[n] = 10*(-i+5) + 1*(-j+5);
+      ++n;
+    }
+  }
+}
+void _domain_maketags3d(cow_domain *d)
+{
+  int N = d->num_neighbors = 27-1;
+  int n = 0;
+  d->neighbors = (int*) malloc(N*sizeof(int));
+  d->send_tags = (int*) malloc(N*sizeof(int));
+  d->recv_tags = (int*) malloc(N*sizeof(int));
+  for (int i=-1; i<=1; ++i) {
+    for (int j=-1; j<=1; ++j) {
+      for (int k=-1; k<=1; ++k) {
+	if (i == 0 && j == 0 && k == 0) continue; // don't include self
+	int rel_index [] = { i, j, k };
+	int index[] = { d->proc_index[0] + rel_index[0],
+			d->proc_index[1] + rel_index[1],
+			d->proc_index[2] + rel_index[2] };
+	int their_rank;
+	MPI_Cart_rank(d->mpi_cart, index, &their_rank);
+	d->neighbors[n] = their_rank;
+	d->send_tags[n] = 100*(+i+5) + 10*(+j+5) + 1*(+k+5);
+	d->recv_tags[n] = 100*(-i+5) + 10*(-j+5) + 1*(-k+5);
+	++n;
+      }
+    }
+  }
+}
+void _domain_freetags(cow_domain *d)
+{
+  free(d->neighbors);
+  free(d->send_tags);
+  free(d->recv_tags);
+}
+void _dfield_createtype1d(cow_dfield *f)
+{
+  cow_domain *d = f->domain;
+  int Ng = d->n_ghst;
+  int c = MPI_ORDER_C;
+  int n = 0;
+  for (int i=-1; i<=1; ++i) {
+    if (i == 0) continue;  // don't include self
+    int Plx[] = { Ng, Ng, d->L_nint[0] };
+    int Qlx[] = {  0, Ng, d->L_nint[0] + Ng };
+    int start_send[] = { Plx[i+1] };
+    int start_recv[] = { Qlx[i+1] };
+    int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*Ng };
+    MPI_Datatype send, recv, type;
+    MPI_Type_contiguous(d->n_fields, MPI_DOUBLE, &type);
+    MPI_Type_create_subarray(1, d->L_ntot, subsize, start_send, c, type, &send);
+    MPI_Type_create_subarray(1, d->L_ntot, subsize, start_recv, c, type, &recv);
+    MPI_Type_commit(&send);
+    MPI_Type_commit(&recv);
+    MPI_Type_free(&type);
+    f->send_type[n] = send;
+    f->recv_type[n] = recv;
+    ++n;
+  }
+}
+void _dfield_createtype2d(cow_dfield *f)
+{
+  cow_domain *d = f->domain;
+  int Ng = d->n_ghst;
+  int c = MPI_ORDER_C;
+  int n = 0;
+  for (int i=-1; i<=1; ++i) {
+    for (int j=-1; j<=1; ++j) {
+      if (i == 0 && j == 0) continue; // don't include self
+      int Plx[] = { Ng, Ng, d->L_nint[0] };
+      int Ply[] = { Ng, Ng, d->L_nint[1] };
+      int Qlx[] = {  0, Ng, d->L_nint[0] + Ng };
+      int Qly[] = {  0, Ng, d->L_nint[1] + Ng };
+      int start_send[] = { Plx[i+1], Ply[j+1] };
+      int start_recv[] = { Qlx[i+1], Qly[j+1] };
+      int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*Ng,
+			(1-abs(j))*d->L_nint[1] + abs(j)*Ng };
+      MPI_Datatype send, recv, type;
+      MPI_Type_contiguous(d->n_fields, MPI_DOUBLE, &type);
+      MPI_Type_create_subarray(2, d->L_ntot, subsize, start_send, c, type, &send);
+      MPI_Type_create_subarray(2, d->L_ntot, subsize, start_recv, c, type, &recv);
+      MPI_Type_commit(&send);
+      MPI_Type_commit(&recv);
+      MPI_Type_free(&type);
+      f->send_type[n] = send;
+      f->recv_type[n] = recv;
+      ++n;
+    }
+  }
+}
+void _dfield_createtype3d(cow_dfield *f)
+{
+  cow_domain *d = f->domain;
+  int Ng = d->n_ghst;
+  int c = MPI_ORDER_C;
+  int n = 0;
+  for (int i=-1; i<=1; ++i) {
+    for (int j=-1; j<=1; ++j) {
+      for (int k=-1; k<=1; ++k) {
+	if (i == 0 && j == 0 && k == 0) continue; // don't include self
+	int Plx[] = { Ng, Ng, d->L_nint[0] };
+	int Ply[] = { Ng, Ng, d->L_nint[1] };
+	int Plz[] = { Ng, Ng, d->L_nint[2] };
+	int Qlx[] = {  0, Ng, d->L_nint[0] + Ng };
+	int Qly[] = {  0, Ng, d->L_nint[1] + Ng };
+	int Qlz[] = {  0, Ng, d->L_nint[2] + Ng };
+	int start_send[] = { Plx[i+1], Ply[j+1], Plz[k+1] };
+	int start_recv[] = { Qlx[i+1], Qly[j+1], Qlz[k+1] };
+	int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*Ng,
+			  (1-abs(j))*d->L_nint[1] + abs(j)*Ng,
+			  (1-abs(k))*d->L_nint[2] + abs(k)*Ng };
+	MPI_Datatype send, recv, type;
+	MPI_Type_contiguous(d->n_fields, MPI_DOUBLE, &type);
+	MPI_Type_create_subarray(3, d->L_ntot, subsize, start_send, c, type, &send);
+	MPI_Type_create_subarray(3, d->L_ntot, subsize, start_recv, c, type, &recv);
+	MPI_Type_commit(&send);
+	MPI_Type_commit(&recv);
+	MPI_Type_free(&type);
+	f->send_type[n] = send;
+	f->recv_type[n] = recv;
+	++n;
+      }
+    }
+  }
+}
+
+
+void _dfield_maketype(cow_dfield *f)
+{
+  cow_domain *d = f->domain;
+  int N = d->num_neighbors;
+  f->send_type = (MPI_Datatype*) malloc(N * sizeof(MPI_Datatype));
+  f->recv_type = (MPI_Datatype*) malloc(N * sizeof(MPI_Datatype));
+}
+void _dfield_freetype(cow_dfield *f)
+{
+  cow_domain *d = f->domain;
+  int N = d->num_neighbors;
+  for (int n=0; n<N; ++n) MPI_Type_free(&f->send_type[n]);
+  for (int n=0; n<N; ++n) MPI_Type_free(&f->recv_type[n]);
+  free(f->send_type);
+  free(f->recv_type);
+}
+#endif
