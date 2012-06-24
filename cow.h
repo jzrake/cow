@@ -30,6 +30,7 @@ void cow_dfield_commit(cow_dfield *f);
 void cow_dfield_del(cow_dfield *f);
 void cow_dfield_addmember(cow_dfield *f, const char *name);
 void cow_dfield_setname(cow_dfield *f, const char *name);
+void cow_dfield_syncguard(cow_dfield *f);
 const char *cow_dfield_getname(cow_dfield *f);
 const char *cow_dfield_iteratemembers(cow_dfield *f);
 const char *cow_dfield_nextmember(cow_dfield *f);

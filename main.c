@@ -46,6 +46,7 @@ int main(int argc, char **argv)
     }
   }
 
+  cow_dfield_syncguard(prim);
   cow_domain_del(domain);
 #if (COW_MPI)
   MPI_Finalize();

@@ -311,7 +311,28 @@ void cow_dfield_commit(cow_dfield *f)
   f->data = malloc(n_zones * f->n_members * sizeof(double));
   f->committed = 1;
 }
-
+void cow_dfield_syncguard(cow_dfield *f)
+{
+#if (COW_MPI)
+  cow_domain *d = f->domain;
+  int N = d->num_neighbors;
+  MPI_Request *requests = (MPI_Request*) malloc(2*N*sizeof(MPI_Request));
+  MPI_Status *statuses = (MPI_Status*) malloc(2*N*sizeof(MPI_Status));
+  for (int n=0; n<N; ++n) {
+    MPI_Request req1, req2;
+    int st = d->send_tags[n];
+    int rt = d->recv_tags[n];
+    int nr = d->neighbors[n];
+    MPI_Isend(f->data, 1, f->send_type[n], nr, st, d->mpi_cart, &req1);
+    MPI_Irecv(f->data, 1, f->recv_type[n], nr, rt, d->mpi_cart, &req2);
+    requests[2*n+0] = req1;
+    requests[2*n+1] = req2;
+  }
+  MPI_Waitall(2*N, requests, statuses);
+  free(requests);
+  free(statuses);
+#endif
+}
 
 #if (COW_MPI)
 void _domain_maketags1d(cow_domain *d)
