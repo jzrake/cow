@@ -15,6 +15,7 @@
 // private helper functions
 //
 // -----------------------------------------------------------------------------
+#if (COW_MPI)
 static void _domain_maketags1d(cow_domain *d);
 static void _domain_maketags2d(cow_domain *d);
 static void _domain_maketags3d(cow_domain *d);
@@ -25,7 +26,7 @@ static void _dfield_maketype2d(cow_dfield *f);
 static void _dfield_maketype3d(cow_dfield *f);
 static void _dfield_alloctype(cow_dfield *f);
 static void _dfield_freetype(cow_dfield *f);
-
+#endif
 
 // -----------------------------------------------------------------------------
 //
@@ -96,6 +97,7 @@ void cow_domain_del(cow_domain *d)
 {
 #if (COW_MPI)
   MPI_Comm_free(&d->mpi_cart);
+  _domain_freetags(d);
 #endif
   for (int n=0; n<d->n_fields; ++n) cow_dfield_del(d->fields[n]);
   free(d->fields);
@@ -195,7 +197,11 @@ void cow_domain_commit(cow_domain *d)
     d->L_ntot[i] = d->L_nint[i] + 2 * d->n_ghst;
     d->L_strt[i] = d->n_ghst;
   }
-
+  switch (d->n_dims) {
+  case 1: _domain_maketags1d(d); break;
+  case 2: _domain_maketags2d(d); break;
+  case 3: _domain_maketags3d(d); break;
+  }
   printf("[cow] subgrid layout is (%d %d %d)\n",
          d->proc_sizes[0], d->proc_sizes[1], d->proc_sizes[2]);
   //  printf("[cow] this domain has size (%d %d %d)\n",
@@ -255,6 +261,9 @@ cow_dfield *cow_dfield_new(cow_domain *domain)
 }
 void cow_dfield_del(cow_dfield *f)
 {
+#if (COW_MPI)
+  _dfield_freetype(f);
+#endif
   for (int n=0; n<f->n_members; ++n) free(f->members[n]);
   free(f->members);
   free(f->name);
@@ -291,6 +300,13 @@ const char *cow_dfield_nextmember(cow_dfield *f)
 void cow_dfield_commit(cow_dfield *f)
 {
   if (f->committed) return;
+#if (COW_MPI)
+  switch (f->domain->n_dims) {
+  case 1: _dfield_maketype1d(f); break;
+  case 2: _dfield_maketype2d(f); break;
+  case 3: _dfield_maketype3d(f); break;
+  }
+#endif
   const int n_zones = cow_domain_getnumlocalzones(f->domain);
   f->data = malloc(n_zones * f->n_members * sizeof(double));
   f->committed = 1;
@@ -302,7 +318,7 @@ void _domain_maketags1d(cow_domain *d)
 {
   d->num_neighbors = 3-1;
   _domain_alloctags(d);
-  int n;
+  int n = 0;
   for (int i=-1; i<=1; ++i) {
     if (i == 0) continue; // don't include self
     int rel_index [] = { i };
@@ -319,7 +335,7 @@ void _domain_maketags2d(cow_domain *d)
 {
   d->num_neighbors = 9-1;
   _domain_alloctags(d);
-  int n;
+  int n = 0;
   for (int i=-1; i<=1; ++i) {
     for (int j=-1; j<=1; ++j) {
       if (i == 0 && j == 0) continue; // don't include self
@@ -339,7 +355,7 @@ void _domain_maketags3d(cow_domain *d)
 {
   d->num_neighbors = 27-1;
   _domain_alloctags(d);
-  int n;
+  int n = 0;
   for (int i=-1; i<=1; ++i) {
     for (int j=-1; j<=1; ++j) {
       for (int k=-1; k<=1; ++k) {
