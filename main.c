@@ -42,6 +42,24 @@ const char *cow_dfield_nextmember(cow_dfield *f);
 int cow_domain_getnumlocalzones(cow_domain *d);
 
 
+
+// -----------------------------------------------------------------------------
+//
+// private helper functions
+//
+// -----------------------------------------------------------------------------
+static void _domain_maketags1d(cow_domain *d);
+static void _domain_maketags2d(cow_domain *d);
+static void _domain_maketags3d(cow_domain *d);
+static void _domain_alloctags(cow_domain *d);
+static void _domain_freetags(cow_domain *d);
+static void _dfield_maketype1d(cow_dfield *f);
+static void _dfield_maketype2d(cow_dfield *f);
+static void _dfield_maketype3d(cow_dfield *f);
+static void _dfield_alloctype(cow_dfield *f);
+static void _dfield_freetype(cow_dfield *f);
+
+
 // -----------------------------------------------------------------------------
 //
 // cow_domain interface functions
@@ -365,11 +383,9 @@ int main(int argc, char **argv)
 #if (COW_MPI)
 void _domain_maketags1d(cow_domain *d)
 {
-  int N = d->num_neighbors = 3-1;
-  int n = 0;
-  d->neighbors = (int*) malloc(N*sizeof(int));
-  d->send_tags = (int*) malloc(N*sizeof(int));
-  d->recv_tags = (int*) malloc(N*sizeof(int));
+  d->num_neighbors = 3-1;
+  _domain_alloctags(d);
+  int n;
   for (int i=-1; i<=1; ++i) {
     if (i == 0) continue; // don't include self
     int rel_index [] = { i };
@@ -384,11 +400,9 @@ void _domain_maketags1d(cow_domain *d)
 }
 void _domain_maketags2d(cow_domain *d)
 {
-  int N = d->num_neighbors = 9-1;
-  int n = 0;
-  d->neighbors = (int*) malloc(N*sizeof(int));
-  d->send_tags = (int*) malloc(N*sizeof(int));
-  d->recv_tags = (int*) malloc(N*sizeof(int));
+  d->num_neighbors = 9-1;
+  _domain_alloctags(d);
+  int n;
   for (int i=-1; i<=1; ++i) {
     for (int j=-1; j<=1; ++j) {
       if (i == 0 && j == 0) continue; // don't include self
@@ -406,11 +420,9 @@ void _domain_maketags2d(cow_domain *d)
 }
 void _domain_maketags3d(cow_domain *d)
 {
-  int N = d->num_neighbors = 27-1;
-  int n = 0;
-  d->neighbors = (int*) malloc(N*sizeof(int));
-  d->send_tags = (int*) malloc(N*sizeof(int));
-  d->recv_tags = (int*) malloc(N*sizeof(int));
+  d->num_neighbors = 27-1;
+  _domain_alloctags(d);
+  int n;
   for (int i=-1; i<=1; ++i) {
     for (int j=-1; j<=1; ++j) {
       for (int k=-1; k<=1; ++k) {
@@ -429,18 +441,27 @@ void _domain_maketags3d(cow_domain *d)
     }
   }
 }
+void _domain_alloctags(cow_domain *d)
+{
+  int N = d->num_neighbors;
+  d->neighbors = (int*) malloc(N*sizeof(int));
+  d->send_tags = (int*) malloc(N*sizeof(int));
+  d->recv_tags = (int*) malloc(N*sizeof(int));
+}
 void _domain_freetags(cow_domain *d)
 {
   free(d->neighbors);
   free(d->send_tags);
   free(d->recv_tags);
 }
-void _dfield_createtype1d(cow_dfield *f)
+void _dfield_maketype1d(cow_dfield *f)
 {
+  _dfield_alloctype(f);
   cow_domain *d = f->domain;
   int Ng = d->n_ghst;
   int c = MPI_ORDER_C;
   int n = 0;
+  _dfield_alloctype(f);
   for (int i=-1; i<=1; ++i) {
     if (i == 0) continue;  // don't include self
     int Plx[] = { Ng, Ng, d->L_nint[0] };
@@ -460,8 +481,9 @@ void _dfield_createtype1d(cow_dfield *f)
     ++n;
   }
 }
-void _dfield_createtype2d(cow_dfield *f)
+void _dfield_maketype2d(cow_dfield *f)
 {
+  _dfield_alloctype(f);
   cow_domain *d = f->domain;
   int Ng = d->n_ghst;
   int c = MPI_ORDER_C;
@@ -490,8 +512,9 @@ void _dfield_createtype2d(cow_dfield *f)
     }
   }
 }
-void _dfield_createtype3d(cow_dfield *f)
+void _dfield_maketype3d(cow_dfield *f)
 {
+  _dfield_alloctype(f);
   cow_domain *d = f->domain;
   int Ng = d->n_ghst;
   int c = MPI_ORDER_C;
@@ -527,7 +550,7 @@ void _dfield_createtype3d(cow_dfield *f)
 }
 
 
-void _dfield_maketype(cow_dfield *f)
+void _dfield_alloctype(cow_dfield *f)
 {
   cow_domain *d = f->domain;
   int N = d->num_neighbors;
