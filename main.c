@@ -68,6 +68,9 @@ int main(int argc, char **argv)
   printf("%f %f\n", subarray[0], subarray[3]);
   printf("%f %f\n", subarray[1], subarray[4]);
   printf("%f %f\n", subarray[2], subarray[5]);
+  subarray[0] = 10.0;
+  cow_dfield_replace(prim, I0, I1, subarray);
+  printf("%f %f\n", subarray[0], subarray[1]);
   free(subarray);
 
   cow_domain_del(domain);

@@ -26,6 +26,8 @@ static void _dfield_maketype2d(cow_dfield *f);
 static void _dfield_maketype3d(cow_dfield *f);
 static void _dfield_alloctype(cow_dfield *f);
 static void _dfield_freetype(cow_dfield *f);
+static void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
+				   void *out, char op);
 #endif
 
 // -----------------------------------------------------------------------------
@@ -361,8 +363,17 @@ void cow_dfield_syncguard(cow_dfield *f)
 #endif
 }
 
-
 void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out)
+{
+  _dfield_extractreplace(f, I0, I1, out, 'e');
+}
+void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out)
+{
+  _dfield_extractreplace(f, I0, I1, out, 'r');
+}
+
+void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
+			    void *out, char op)
 {
   int ng = cow_domain_getguard(f->domain);
   int si = cow_dfield_getstride(f, 0);
@@ -371,12 +382,16 @@ void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out)
   size_t sz = sizeof(double);
   switch (f->domain->n_dims) {
   case 1: {
-    int ng = cow_domain_getguard(f->domain);
     int ti = f->n_members;
     for (int i=I0[0]; i<I1[0]; ++i) {
       int m0 = (i+ng)*si;
       int m1 = i*ti;
-      memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+      if (op == 'e') {
+	memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+      }
+      else if (op == 'r') {
+	memcpy(f->data + m0*sz, out + m1*sz, f->n_members * sz);
+      }
     }
   } break;
   case 2: {
@@ -387,7 +402,12 @@ void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out)
       for (int j=I0[1]; j<I1[1]; ++j) {
 	int m0 = (i+ng)*si + (j+ng)*sj;
 	int m1 = i*ti + j*tj;
-	memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+	if (op == 'e') {
+	  memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+	}
+	else if (op == 'r') {
+	  memcpy(f->data + m0*sz, out + m1*sz, f->n_members * sz);
+	}
       }
     }
   } break;
@@ -402,14 +422,18 @@ void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out)
 	for (int k=I0[2]; k<I1[2]; ++k) {
 	  int m0 = (i+ng)*si + (j+ng)*sj + (k+ng)*sk;
 	  int m1 = i*ti + j*tj + k*tk;
-	  memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+	  if (op == 'e') {
+	    memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+	  }
+	  else if (op == 'r') {
+	    memcpy(f->data + m0*sz, out + m1*sz, f->n_members * sz);
+	  }
 	}
       }
     }
   } break;
   }
 }
-
 
 #if (COW_MPI)
 void _domain_maketags1d(cow_domain *d)
@@ -489,17 +513,17 @@ void _dfield_maketype1d(cow_dfield *f)
 {
   _dfield_alloctype(f);
   cow_domain *d = f->domain;
-  int Ng = d->n_ghst;
+  int ng = d->n_ghst;
   int c = MPI_ORDER_C;
   int n = 0;
   if (d->n_ghst == 0) return;
   for (int i=-1; i<=1; ++i) {
     if (i == 0) continue;  // don't include self
-    int Plx[] = { Ng, Ng, d->L_nint[0] };
-    int Qlx[] = {  0, Ng, d->L_nint[0] + Ng };
+    int Plx[] = { ng, ng, d->L_nint[0] };
+    int Qlx[] = {  0, ng, d->L_nint[0] + ng };
     int start_send[] = { Plx[i+1] };
     int start_recv[] = { Qlx[i+1] };
-    int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*Ng };
+    int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng };
     MPI_Datatype send, recv, type;
     MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
     MPI_Type_create_subarray(1, d->L_ntot, subsize, start_send, c, type, &send);
@@ -516,21 +540,21 @@ void _dfield_maketype2d(cow_dfield *f)
 {
   _dfield_alloctype(f);
   cow_domain *d = f->domain;
-  int Ng = d->n_ghst;
+  int ng = d->n_ghst;
   int c = MPI_ORDER_C;
   int n = 0;
   if (d->n_ghst == 0) return;
   for (int i=-1; i<=1; ++i) {
     for (int j=-1; j<=1; ++j) {
       if (i == 0 && j == 0) continue; // don't include self
-      int Plx[] = { Ng, Ng, d->L_nint[0] };
-      int Ply[] = { Ng, Ng, d->L_nint[1] };
-      int Qlx[] = {  0, Ng, d->L_nint[0] + Ng };
-      int Qly[] = {  0, Ng, d->L_nint[1] + Ng };
+      int Plx[] = { ng, ng, d->L_nint[0] };
+      int Ply[] = { ng, ng, d->L_nint[1] };
+      int Qlx[] = {  0, ng, d->L_nint[0] + ng };
+      int Qly[] = {  0, ng, d->L_nint[1] + ng };
       int start_send[] = { Plx[i+1], Ply[j+1] };
       int start_recv[] = { Qlx[i+1], Qly[j+1] };
-      int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*Ng,
-			(1-abs(j))*d->L_nint[1] + abs(j)*Ng };
+      int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng,
+			(1-abs(j))*d->L_nint[1] + abs(j)*ng };
       MPI_Datatype send, recv, type;
       MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
       MPI_Type_create_subarray(2, d->L_ntot, subsize, start_send, c, type, &send);
@@ -548,7 +572,7 @@ void _dfield_maketype3d(cow_dfield *f)
 {
   _dfield_alloctype(f);
   cow_domain *d = f->domain;
-  int Ng = d->n_ghst;
+  int ng = d->n_ghst;
   int c = MPI_ORDER_C;
   int n = 0;
   if (d->n_ghst == 0) return;
@@ -556,17 +580,17 @@ void _dfield_maketype3d(cow_dfield *f)
     for (int j=-1; j<=1; ++j) {
       for (int k=-1; k<=1; ++k) {
 	if (i == 0 && j == 0 && k == 0) continue; // don't include self
-	int Plx[] = { Ng, Ng, d->L_nint[0] };
-	int Ply[] = { Ng, Ng, d->L_nint[1] };
-	int Plz[] = { Ng, Ng, d->L_nint[2] };
-	int Qlx[] = {  0, Ng, d->L_nint[0] + Ng };
-	int Qly[] = {  0, Ng, d->L_nint[1] + Ng };
-	int Qlz[] = {  0, Ng, d->L_nint[2] + Ng };
+	int Plx[] = { ng, ng, d->L_nint[0] };
+	int Ply[] = { ng, ng, d->L_nint[1] };
+	int Plz[] = { ng, ng, d->L_nint[2] };
+	int Qlx[] = {  0, ng, d->L_nint[0] + ng };
+	int Qly[] = {  0, ng, d->L_nint[1] + ng };
+	int Qlz[] = {  0, ng, d->L_nint[2] + ng };
 	int start_send[] = { Plx[i+1], Ply[j+1], Plz[k+1] };
 	int start_recv[] = { Qlx[i+1], Qly[j+1], Qlz[k+1] };
-	int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*Ng,
-			  (1-abs(j))*d->L_nint[1] + abs(j)*Ng,
-			  (1-abs(k))*d->L_nint[2] + abs(k)*Ng };
+	int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng,
+			  (1-abs(j))*d->L_nint[1] + abs(j)*ng,
+			  (1-abs(k))*d->L_nint[2] + abs(k)*ng };
 	MPI_Datatype send, recv, type;
 	MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
 	MPI_Type_create_subarray(3, d->L_ntot, subsize, start_send, c, type, &send);
