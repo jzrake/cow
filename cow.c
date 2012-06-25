@@ -52,7 +52,6 @@ struct cow_domain
   //  int field_iter; // index into data fields array used for iterating over them
   int committed; // true after cow_domain_commit called, locks out size changes
   //  cow_dfield **fields; // array of pointers to data fields
-
 #if (COW_MPI)
   int comm_rank; // rank with respect to MPI_COMM_WORLD communicator
   int comm_size; // size " "
@@ -254,16 +253,16 @@ struct cow_dfield
 cow_dfield *cow_dfield_new(cow_domain *domain, const char *name)
 {
   cow_dfield *f = (cow_dfield*) malloc(sizeof(cow_dfield));
-  f->name = NULL;
-  f->members = NULL;
-  f->n_members = 0;
-  f->member_iter = 0;
-  f->data = NULL;
-  f->stride[0] = 0;
-  f->stride[1] = 0;
-  f->stride[2] = 0;
-  f->committed = 0;
-  f->domain = domain;
+  cow_dfield field = {
+    .name = NULL,
+    .members = NULL,
+    .n_members = 0,
+    .member_iter = 0,
+    .data = NULL,
+    .stride = { 0, 0, 0 },
+    .domain = domain,
+  } ;
+  *f = field;
   cow_dfield_setname(f, name);
   return f;
 }
