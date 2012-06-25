@@ -12,16 +12,18 @@ struct cow_dfield; // forward declarations (for opaque data structure)
 struct cow_domain;
 typedef struct cow_dfield cow_dfield;
 typedef struct cow_domain cow_domain;
+typedef void (*cow_transform)(double *result, double **args, int **strides,
+			      cow_domain *d);
 
 cow_domain *cow_domain_new();
 void cow_domain_commit(cow_domain *d);
 void cow_domain_del(cow_domain *d);
 void cow_domain_setsize(cow_domain *d, int dim, int size);
-int cow_domain_getsize(cow_domain *d, int dim);
 void cow_domain_setndim(cow_domain *d, int ndim);
 void cow_domain_setguard(cow_domain *d, int guard);
-int cow_domain_getguard(cow_domain *d);
 void cow_domain_setprocsizes(cow_domain *d, int dim, int size);
+int cow_domain_getsize(cow_domain *d, int dim);
+int cow_domain_getguard(cow_domain *d);
 //cow_dfield *cow_domain_addfield(cow_domain *d, const char *name);
 //cow_dfield *cow_domain_iteratefields(cow_domain *d);
 //cow_dfield *cow_domain_nextfield(cow_domain *d);
@@ -34,6 +36,8 @@ void cow_dfield_addmember(cow_dfield *f, const char *name);
 void cow_dfield_setname(cow_dfield *f, const char *name);
 void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out);
 void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out);
+void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
+			  cow_transform op);
 
 int cow_dfield_getstride(cow_dfield *d, int dim);
 const char *cow_dfield_getname(cow_dfield *f);

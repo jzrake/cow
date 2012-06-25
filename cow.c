@@ -243,6 +243,7 @@ struct cow_dfield
   int member_iter;
   int n_members;
   void *data;
+  int stride[3];
   int committed;
   cow_domain *domain;
 #if (COW_MPI)
@@ -258,6 +259,9 @@ cow_dfield *cow_dfield_new(cow_domain *domain, const char *name)
   f->n_members = 0;
   f->member_iter = 0;
   f->data = NULL;
+  f->stride[0] = 0;
+  f->stride[1] = 0;
+  f->stride[2] = 0;
   f->committed = 0;
   f->domain = domain;
   cow_dfield_setname(f, name);
@@ -282,13 +286,8 @@ void cow_dfield_setname(cow_dfield *f, const char *name)
 }
 int cow_dfield_getstride(cow_dfield *f, int dim)
 {
-  int *N = f->domain->L_ntot;
-  switch (dim) {
-  case 0: return f->n_members * N[2] * N[1];
-  case 1: return f->n_members * N[2];
-  case 2: return f->n_members;
-  }
-  return 0;
+  if (dim > 3) return 0;
+  return f->stride[dim];
 }
 const char *cow_dfield_getname(cow_dfield *f)
 {
@@ -323,6 +322,24 @@ void cow_dfield_commit(cow_dfield *f)
 #endif
   const int n_zones = cow_domain_getnumlocalzones(f->domain);
   f->data = malloc(n_zones * f->n_members * sizeof(double));
+  int *N = f->domain->L_ntot;
+  switch (f->domain->n_dims) {
+  case 1:
+    f->stride[0] = f->n_members;
+    f->stride[1] = 0;
+    f->stride[2] = 0;
+    break;
+  case 2:
+    f->stride[0] = f->n_members * N[1];
+    f->stride[1] = f->n_members;
+    f->stride[2] = 0;
+    break;
+  case 3:
+    f->stride[0] = f->n_members * N[2] * N[1];
+    f->stride[1] = f->n_members * N[2];
+    f->stride[2] = f->n_members;
+    break;
+  }
   f->committed = 1;
 }
 void *cow_dfield_getdata(cow_dfield *f)
@@ -363,6 +380,58 @@ void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out)
 void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out)
 {
   _dfield_extractreplace(f, I0, I1, out, 'r');
+}
+void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
+			  cow_transform op)
+{
+  int ni = cow_domain_getsize(result->domain, 0);
+  int nj = cow_domain_getsize(result->domain, 1);
+  int nk = cow_domain_getsize(result->domain, 2);
+  int ng = cow_domain_getguard(result->domain);
+  int *rs = result->stride;
+  size_t sz = sizeof(double);
+  int **S = (int**) malloc(nargs * sizeof(int*));
+  double **x = (double**) malloc(nargs * sizeof(double*));
+  for (int n=0; n<nargs; ++n) {
+    S[n] = args[n]->stride;
+  }
+  switch (result->domain->n_dims) {
+  case 1:
+    for (int i=ng; i<ni+ng; ++i) {
+      for (int n=0; n<nargs; ++n) {
+	x[n] = args[n]->data + (S[n][0]*i)*sz;
+      }
+      int m1 = rs[0]*i;
+      op(result->data + m1*sz, x, S, result->domain);
+    }
+    break;
+  case 2:
+    for (int i=ng; i<ni+ng; ++i) {
+      for (int j=ng; j<nj+ng; ++j) {
+	for (int n=0; n<nargs; ++n) {
+	  x[n] = args[n]->data + (S[n][0]*i + S[n][1]*j)*sz;
+	}
+	int m1 = rs[0]*i + rs[1]*j;
+	op(result->data + m1*sz, x, S, result->domain);
+      }
+    }
+    break;
+  case 3:
+    for (int i=ng; i<ni+ng; ++i) {
+      for (int j=ng; j<nj+ng; ++j) {
+	for (int k=ng; k<nk+ng; ++k) {
+	  for (int n=0; n<nargs; ++n) {
+	    x[n] = args[n]->data + (S[n][0]*i + S[n][1]*j + S[n][2]*k)*sz;
+	  }
+	  int m1 = rs[0]*i + rs[1]*j + rs[2]*k;
+	  op(result->data + m1*sz, x, S, result->domain);
+	}
+      }
+    }
+    break;
+  }
+  free(S);
+  free(x);
 }
 
 void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,

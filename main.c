@@ -5,6 +5,13 @@
 #include <mpi.h>
 #endif
 
+void stencildiv(double *result, double **args, int **s, cow_domain *d)
+{
+  double *x = args[0];
+  double *y = result;
+  int si = s[0][0];
+  y[0] = x[+si] - x[-si];
+}
 
 int main(int argc, char **argv)
 {
@@ -52,10 +59,14 @@ int main(int argc, char **argv)
   int ng = cow_domain_getguard(domain);
 
   double *P = (double*) cow_dfield_getdata(prim);
+  double *B = (double*) cow_dfield_getdata(magf);
   for (int i=ng; i<cow_domain_getsize(domain, 0)+ng; ++i) {
     P[si*i + 0] = 1.0;
     P[si*i + 1] = 2.0;
     P[si*i + 2] = 3.0;
+    B[si*i + 0] = 1.0;
+    B[si*i + 1] = 2.0;
+    B[si*i + 2] = 3.0;
     printf("(%02d) %f %f %f\n", i, P[si*i + 0], P[si*i + 1], P[si*i + 2]);
   }
 
@@ -64,6 +75,14 @@ int main(int argc, char **argv)
   for (int i=0; i<cow_domain_getsize(domain, 0)+2*ng; ++i) {
     printf("(%02d) %f %f %f\n", i, P[si*i + 0], P[si*i + 1], P[si*i + 2]);
   }
+
+  cow_dfield *divB = cow_dfield_new(domain, "divB");
+  cow_dfield_addmember(divB, "divB");
+  cow_dfield_commit(divB);
+  cow_dfield_syncguard(magf);
+  cow_dfield_syncguard(divB);
+  cow_dfield_transform(divB, &magf, 1, stencildiv);
+  cow_dfield_del(divB);
 
   int I0[] = { 3, 0, 0 };
   int I1[] = { 5, 0, 0 };
