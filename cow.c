@@ -174,8 +174,8 @@ void cow_domain_commit(cow_domain *d)
   if (d->committed) return;
 
 #if (COW_MPI)
-  int w[3] = { 1, 1, 1 }; // `wrap`, periodic in all directions
-  int r = 1; // `reorder` allow MPI to choose a cart_rank != comm_rank
+  int w[3] = { 1, 1, 1 }; // 'wrap', periodic in all directions
+  int r = 1; // 'reorder' allow MPI to choose a cart_rank != comm_rank
 
   MPI_Comm_rank(MPI_COMM_WORLD, &d->comm_rank);
   MPI_Comm_size(MPI_COMM_WORLD, &d->comm_size);
@@ -355,8 +355,61 @@ void cow_dfield_syncguard(cow_dfield *f)
   MPI_Waitall(2*N, requests, statuses);
   free(requests);
   free(statuses);
+#else
+  // -> TODO <-
+  // implement serial periodic BC here
 #endif
 }
+
+
+void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out)
+{
+  int ng = cow_domain_getguard(f->domain);
+  int si = cow_dfield_getstride(f, 0);
+  int sj = cow_dfield_getstride(f, 1);
+  int sk = cow_dfield_getstride(f, 2);
+  size_t sz = sizeof(double);
+  switch (f->domain->n_dims) {
+  case 1: {
+    int ng = cow_domain_getguard(f->domain);
+    int ti = f->n_members;
+    for (int i=I0[0]; i<I1[0]; ++i) {
+      int m0 = (i+ng)*si;
+      int m1 = i*ti;
+      memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+    }
+  } break;
+  case 2: {
+    int mj = I1[1] - I0[1];
+    int ti = f->n_members * mj;
+    int tj = f->n_members;
+    for (int i=I0[0]; i<I1[0]; ++i) {
+      for (int j=I0[1]; j<I1[1]; ++j) {
+	int m0 = (i+ng)*si + (j+ng)*sj;
+	int m1 = i*ti + j*tj;
+	memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+      }
+    }
+  } break;
+  case 3: {
+    int mj = I1[1] - I0[1];
+    int mk = I1[2] - I0[2];
+    int ti = f->n_members * mj * mk;
+    int tj = f->n_members * mj;
+    int tk = f->n_members;
+    for (int i=I0[0]; i<I1[0]; ++i) {
+      for (int j=I0[1]; j<I1[1]; ++j) {
+	for (int k=I0[2]; k<I1[2]; ++k) {
+	  int m0 = (i+ng)*si + (j+ng)*sj + (k+ng)*sk;
+	  int m1 = i*ti + j*tj + k*tk;
+	  memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+	}
+      }
+    }
+  } break;
+  }
+}
+
 
 #if (COW_MPI)
 void _domain_maketags1d(cow_domain *d)

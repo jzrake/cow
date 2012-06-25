@@ -33,6 +33,8 @@ void cow_dfield_commit(cow_dfield *f);
 void cow_dfield_del(cow_dfield *f);
 void cow_dfield_addmember(cow_dfield *f, const char *name);
 void cow_dfield_setname(cow_dfield *f, const char *name);
+void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out);
+void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out);
 
 int cow_dfield_getstride(cow_dfield *d, int dim);
 const char *cow_dfield_getname(cow_dfield *f);
