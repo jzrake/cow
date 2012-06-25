@@ -82,7 +82,6 @@ int main(int argc, char **argv)
   cow_dfield_syncguard(magf);
   cow_dfield_syncguard(divB);
   cow_dfield_transform(divB, &magf, 1, stencildiv);
-  cow_dfield_del(divB);
 
   int I0[] = { 3, 0, 0 };
   int I1[] = { 5, 0, 0 };
@@ -96,6 +95,11 @@ int main(int argc, char **argv)
   printf("%f %f\n", subarray[0], subarray[1]);
   free(subarray);
 
+  //  cow_dfield_write(divB, "thefile.h5");
+  cow_dfield_write(magf, "thefile.h5");
+  cow_dfield_write(prim, "thefile.h5");
+
+  cow_dfield_del(divB);
   cow_dfield_del(prim);
   cow_dfield_del(magf);
   cow_domain_del(domain);
