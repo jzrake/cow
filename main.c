@@ -65,8 +65,8 @@ int main(int argc, char **argv)
     printf("(%02d) %f %f %f\n", i, P[si*i + 0], P[si*i + 1], P[si*i + 2]);
   }
 
-  int I0[] = { 0, 0, 0 };
-  int I1[] = { 2, 0, 0 };
+  int I0[] = { 3, 0, 0 };
+  int I1[] = { 5, 0, 0 };
   double *subarray = (double*) malloc(2 * 3 * sizeof(double));
   cow_dfield_extract(prim, I0, I1, subarray);
   printf("%f %f\n", subarray[0], subarray[3]);

@@ -368,7 +368,9 @@ void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out)
 void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
 			    void *out, char op)
 {
-  int ng = cow_domain_getguard(f->domain);
+  int mi = I1[0] - I0[0];
+  int mj = I1[1] - I0[1];
+  int mk = I1[2] - I0[2];
   int si = cow_dfield_getstride(f, 0);
   int sj = cow_dfield_getstride(f, 1);
   int sk = cow_dfield_getstride(f, 2);
@@ -376,8 +378,8 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
   switch (f->domain->n_dims) {
   case 1: {
     int ti = f->n_members;
-    for (int i=I0[0]; i<I1[0]; ++i) {
-      int m0 = (i+ng)*si;
+    for (int i=0; i<mi; ++i) {
+      int m0 = (i+I0[0])*si;
       int m1 = i*ti;
       if (op == 'e') {
 	memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
@@ -388,12 +390,11 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
     }
   } break;
   case 2: {
-    int mj = I1[1] - I0[1];
     int ti = f->n_members * mj;
     int tj = f->n_members;
-    for (int i=I0[0]; i<I1[0]; ++i) {
-      for (int j=I0[1]; j<I1[1]; ++j) {
-	int m0 = (i+ng)*si + (j+ng)*sj;
+    for (int i=0; i<mi; ++i) {
+      for (int j=0; j<mj; ++j) {
+	int m0 = (i+I0[0])*si + (j+I0[1])*sj;
 	int m1 = i*ti + j*tj;
 	if (op == 'e') {
 	  memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
@@ -405,15 +406,13 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
     }
   } break;
   case 3: {
-    int mj = I1[1] - I0[1];
-    int mk = I1[2] - I0[2];
     int ti = f->n_members * mj * mk;
     int tj = f->n_members * mj;
     int tk = f->n_members;
-    for (int i=I0[0]; i<I1[0]; ++i) {
-      for (int j=I0[1]; j<I1[1]; ++j) {
-	for (int k=I0[2]; k<I1[2]; ++k) {
-	  int m0 = (i+ng)*si + (j+ng)*sj + (k+ng)*sk;
+    for (int i=0; i<mi; ++i) {
+      for (int j=0; j<mj; ++j) {
+	for (int k=0; k<mk; ++k) {
+	  int m0 = (i+I0[0])*si + (j+I0[1])*sj + (k+I0[2])*sk;
 	  int m1 = i*ti + j*tj + k*tk;
 	  if (op == 'e') {
 	    memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
@@ -516,11 +515,11 @@ void _dfield_maketype1d(cow_dfield *f)
     int Qlx[] = {  0, ng, d->L_nint[0] + ng };
     int start_send[] = { Plx[i+1] };
     int start_recv[] = { Qlx[i+1] };
-    int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng };
+    int sub[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng };
     MPI_Datatype send, recv, type;
     MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
-    MPI_Type_create_subarray(1, d->L_ntot, subsize, start_send, c, type, &send);
-    MPI_Type_create_subarray(1, d->L_ntot, subsize, start_recv, c, type, &recv);
+    MPI_Type_create_subarray(1, d->L_ntot, sub, start_send, c, type, &send);
+    MPI_Type_create_subarray(1, d->L_ntot, sub, start_recv, c, type, &recv);
     MPI_Type_commit(&send);
     MPI_Type_commit(&recv);
     MPI_Type_free(&type);
@@ -546,12 +545,12 @@ void _dfield_maketype2d(cow_dfield *f)
       int Qly[] = {  0, ng, d->L_nint[1] + ng };
       int start_send[] = { Plx[i+1], Ply[j+1] };
       int start_recv[] = { Qlx[i+1], Qly[j+1] };
-      int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng,
-			(1-abs(j))*d->L_nint[1] + abs(j)*ng };
+      int sub[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng,
+		    (1-abs(j))*d->L_nint[1] + abs(j)*ng };
       MPI_Datatype send, recv, type;
       MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
-      MPI_Type_create_subarray(2, d->L_ntot, subsize, start_send, c, type, &send);
-      MPI_Type_create_subarray(2, d->L_ntot, subsize, start_recv, c, type, &recv);
+      MPI_Type_create_subarray(2, d->L_ntot, sub, start_send, c, type, &send);
+      MPI_Type_create_subarray(2, d->L_ntot, sub, start_recv, c, type, &recv);
       MPI_Type_commit(&send);
       MPI_Type_commit(&recv);
       MPI_Type_free(&type);
@@ -581,13 +580,13 @@ void _dfield_maketype3d(cow_dfield *f)
 	int Qlz[] = {  0, ng, d->L_nint[2] + ng };
 	int start_send[] = { Plx[i+1], Ply[j+1], Plz[k+1] };
 	int start_recv[] = { Qlx[i+1], Qly[j+1], Qlz[k+1] };
-	int subsize[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng,
-			  (1-abs(j))*d->L_nint[1] + abs(j)*ng,
-			  (1-abs(k))*d->L_nint[2] + abs(k)*ng };
+	int sub[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng,
+		      (1-abs(j))*d->L_nint[1] + abs(j)*ng,
+		      (1-abs(k))*d->L_nint[2] + abs(k)*ng };
 	MPI_Datatype send, recv, type;
 	MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
-	MPI_Type_create_subarray(3, d->L_ntot, subsize, start_send, c, type, &send);
-	MPI_Type_create_subarray(3, d->L_ntot, subsize, start_recv, c, type, &recv);
+	MPI_Type_create_subarray(3, d->L_ntot, sub, start_send, c, type, &send);
+	MPI_Type_create_subarray(3, d->L_ntot, sub, start_recv, c, type, &recv);
 	MPI_Type_commit(&send);
 	MPI_Type_commit(&recv);
 	MPI_Type_free(&type);
