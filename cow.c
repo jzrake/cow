@@ -26,9 +26,9 @@ static void _dfield_maketype2d(cow_dfield *f);
 static void _dfield_maketype3d(cow_dfield *f);
 static void _dfield_alloctype(cow_dfield *f);
 static void _dfield_freetype(cow_dfield *f);
+#endif
 static void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
 				   void *out, char op);
-#endif
 
 // -----------------------------------------------------------------------------
 //
@@ -48,10 +48,10 @@ struct cow_domain
   int G_strt[3]; // starting index into global domain
   int n_dims; // number of dimensions: 1, 2, 3
   int n_ghst; // number of guard zones: >= 0
-  int n_fields; // number of data fields (dynamically adjustable)
-  int field_iter; // index into data fields array used for iterating over them
-  int committed; // true after cow_domain_commit called, locks out most changes
-  cow_dfield **fields; // array of pointers to data fields
+  //  int n_fields; // number of data fields (dynamically adjustable)
+  //  int field_iter; // index into data fields array used for iterating over them
+  int committed; // true after cow_domain_commit called, locks out size changes
+  //  cow_dfield **fields; // array of pointers to data fields
 
 #if (COW_MPI)
   int comm_rank; // rank with respect to MPI_COMM_WORLD communicator
@@ -83,10 +83,10 @@ struct cow_domain *cow_domain_new()
     .G_strt = { 0, 0, 0 },
     .n_dims = 1,
     .n_ghst = 0,
-    .n_fields = 0,
-    .field_iter = 0,
+    //    .n_fields = 0,
+    //    .field_iter = 0,
     .committed = 0,
-    .fields = NULL,
+    //    .fields = NULL,
 #if (COW_MPI)
     .proc_sizes = { 0, 0, 0 },
     .proc_index = { 0, 0, 0 },
@@ -101,10 +101,11 @@ void cow_domain_del(cow_domain *d)
   MPI_Comm_free(&d->mpi_cart);
   _domain_freetags(d);
 #endif
-  for (int n=0; n<d->n_fields; ++n) cow_dfield_del(d->fields[n]);
-  free(d->fields);
+  //  for (int n=0; n<d->n_fields; ++n) cow_dfield_del(d->fields[n]);
+  //  free(d->fields);
   free(d);
 }
+/*
 cow_dfield *cow_domain_addfield(cow_domain *d, const char *name)
 {
   d->n_fields++;
@@ -122,15 +123,6 @@ cow_dfield *cow_domain_addfield(cow_domain *d, const char *name)
   }
   return d->fields[d->n_fields-1] = f;
 }
-cow_dfield *cow_domain_getfield(cow_domain *d, const char *name)
-{
-  for (int n=0; n<d->n_fields; ++n) {
-    if (strcmp(cow_dfield_getname(d->fields[n]), name) == 0) {
-      return d->fields[n];
-    }
-  }
-  return NULL;
-}
 cow_dfield *cow_domain_iteratefields(cow_domain *d)
 {
   d->field_iter = 0;
@@ -140,6 +132,7 @@ cow_dfield *cow_domain_nextfield(cow_domain *d)
 {
   return d->field_iter++ < d->n_fields ? d->fields[d->field_iter-1] : NULL;
 }
+*/
 void cow_domain_setsize(cow_domain *d, int dim, int size)
 {
   if (dim > 3 || d->committed) return;
@@ -215,8 +208,6 @@ void cow_domain_commit(cow_domain *d)
   }
   printf("[cow] subgrid layout is (%d %d %d)\n",
          d->proc_sizes[0], d->proc_sizes[1], d->proc_sizes[2]);
-  //  printf("[cow] this domain has size (%d %d %d)\n",
-  //         d->L_nint[0], d->L_nint[1], d->L_nint[2]);
 #else
   for (int i=0; i<d->n_dims; ++i) {
     d->L_nint[i] = d->G_ntot[i];
@@ -228,10 +219,11 @@ void cow_domain_commit(cow_domain *d)
     d->loc_upper[i] = d->glb_upper[i];
   }
 #endif
-
+  /*
   for (int n=0; n<d->n_fields; ++n) {
     cow_dfield_commit(d->fields[n]);
   }
+  */
   d->committed = 1;
 }
 int cow_domain_getnumlocalzones(cow_domain *d)
@@ -258,7 +250,7 @@ struct cow_dfield
   MPI_Datatype *recv_type; // " "                 received from " "
 #endif
 } ;
-cow_dfield *cow_dfield_new(cow_domain *domain)
+cow_dfield *cow_dfield_new(cow_domain *domain, const char *name)
 {
   cow_dfield *f = (cow_dfield*) malloc(sizeof(cow_dfield));
   f->name = NULL;
@@ -268,6 +260,7 @@ cow_dfield *cow_dfield_new(cow_domain *domain)
   f->data = NULL;
   f->committed = 0;
   f->domain = domain;
+  cow_dfield_setname(f, name);
   return f;
 }
 void cow_dfield_del(cow_dfield *f)

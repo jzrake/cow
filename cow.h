@@ -22,13 +22,12 @@ void cow_domain_setndim(cow_domain *d, int ndim);
 void cow_domain_setguard(cow_domain *d, int guard);
 int cow_domain_getguard(cow_domain *d);
 void cow_domain_setprocsizes(cow_domain *d, int dim, int size);
-cow_dfield *cow_domain_addfield(cow_domain *d, const char *name);
-cow_dfield *cow_domain_getfield(cow_domain *d, const char *name);
-cow_dfield *cow_domain_iteratefields(cow_domain *d);
-cow_dfield *cow_domain_nextfield(cow_domain *d);
+//cow_dfield *cow_domain_addfield(cow_domain *d, const char *name);
+//cow_dfield *cow_domain_iteratefields(cow_domain *d);
+//cow_dfield *cow_domain_nextfield(cow_domain *d);
 int cow_domain_getnumlocalzones(cow_domain *d);
 
-cow_dfield *cow_dfield_new();
+cow_dfield *cow_dfield_new(cow_domain *domain, const char *name);
 void cow_dfield_commit(cow_dfield *f);
 void cow_dfield_del(cow_dfield *f);
 void cow_dfield_addmember(cow_dfield *f, const char *name);

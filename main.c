@@ -19,29 +19,33 @@ int main(int argc, char **argv)
 #endif
 
   cow_domain *domain = cow_domain_new();
-  cow_dfield *prim = cow_domain_addfield(domain, "primitive");
-  cow_dfield *magf = cow_domain_addfield(domain, "magnetic");
-
-  cow_dfield_addmember(prim, "vx");
-  cow_dfield_addmember(prim, "vy");
-  cow_dfield_addmember(prim, "vz");
-
-  cow_dfield_addmember(magf, "Bx");
-  cow_dfield_addmember(magf, "By");
-  cow_dfield_addmember(magf, "Bz");
+  cow_dfield *prim = cow_dfield_new(domain, "primitive");
+  cow_dfield *magf = cow_dfield_new(domain, "magnetic");
 
   cow_domain_setndim(domain, 1);
   cow_domain_setguard(domain, 3);
   cow_domain_setsize(domain, 0, 10);
   cow_domain_commit(domain);
 
-  for (cow_dfield *d = cow_domain_iteratefields(domain);
-       d != NULL; d = cow_domain_nextfield(domain)) {
-    printf("%s\n", cow_dfield_getname(d));
-    for (const char *m = cow_dfield_iteratemembers(d);
-         m != NULL; m = cow_dfield_nextmember(d)) {
-      printf("\t%s\n", m);
-    }
+  cow_dfield_addmember(prim, "vx");
+  cow_dfield_addmember(prim, "vy");
+  cow_dfield_addmember(prim, "vz");
+  cow_dfield_commit(prim);
+
+  cow_dfield_addmember(magf, "Bx");
+  cow_dfield_addmember(magf, "By");
+  cow_dfield_addmember(magf, "Bz");
+  cow_dfield_commit(magf);
+
+  printf("%s\n", cow_dfield_getname(prim));
+  for (const char *m = cow_dfield_iteratemembers(magf);
+       m != NULL; m = cow_dfield_nextmember(magf)) {
+    printf("\t%s\n", m);
+  }
+  printf("%s\n", cow_dfield_getname(magf));
+  for (const char *m = cow_dfield_iteratemembers(magf);
+       m != NULL; m = cow_dfield_nextmember(magf)) {
+    printf("\t%s\n", m);
   }
 
   int si = cow_dfield_getstride(prim, 0);
@@ -73,6 +77,8 @@ int main(int argc, char **argv)
   printf("%f %f\n", subarray[0], subarray[1]);
   free(subarray);
 
+  cow_dfield_del(prim);
+  cow_dfield_del(magf);
   cow_domain_del(domain);
 #if (COW_MPI)
   MPI_Finalize();
