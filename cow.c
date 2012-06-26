@@ -353,7 +353,7 @@ void cow_dfield_syncguard(cow_dfield *f)
 	if (i <            ng) m0 += nint[0] * s[0];
 	if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
 	if (j <            ng) m0 += nint[1] * s[1];
-	if (j >= nint[2] + ng) m0 -= nint[1] * s[1];
+	if (j >= nint[1] + ng) m0 -= nint[1] * s[1];
 	if (k <            ng) m0 += nint[2] * s[2];
 	if (k >= nint[2] + ng) m0 -= nint[2] * s[2];
 	if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
