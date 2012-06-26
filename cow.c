@@ -320,8 +320,53 @@ void cow_dfield_syncguard(cow_dfield *f)
   free(requests);
   free(statuses);
 #else
-  // -> TODO <-
-  // implement serial periodic BC here
+  double *data = (double*) f->data;
+  int *nint = f->domain->L_nint;
+  int *ntot = f->domain->L_ntot;
+  int *s = f->stride;
+  int nq = f->n_members;
+  int ng = f->domain->n_ghst;
+  switch (f->domain->n_dims) {
+  case 1:
+    for (int i=0; i<ntot[0]; ++i) {
+      int m0 = i*s[0];
+      int m1 = i*s[0];
+      if (i <            ng) m0 += nint[0] * s[0];
+      if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
+      if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
+    }
+    break;
+  case 2:
+    for (int i=0; i<ntot[0]; ++i) {
+      for (int j=0; j<ntot[1]; ++j) {
+	int m0 = i*s[0] + j*s[1];
+	int m1 = i*s[0] + j*s[1];
+	if (i <            ng) m0 += nint[0] * s[0];
+	if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
+	if (j <            ng) m0 += nint[1] * s[1];
+	if (j >= nint[1] + ng) m0 -= nint[1] * s[1];
+	if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
+      }
+    }
+    break;
+  case 3:
+    for (int i=0; i<ntot[0]; ++i) {
+      for (int j=0; j<ntot[1]; ++j) {
+	for (int k=0; k<ntot[2]; ++k) {
+	int m0 = i*s[0] + j*s[1] + k*s[2];
+	int m1 = i*s[0] + j*s[1] + k*s[2];
+	if (i <            ng) m0 += nint[0] * s[0];
+	if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
+	if (j <            ng) m0 += nint[1] * s[1];
+	if (j >= nint[2] + ng) m0 -= nint[1] * s[1];
+	if (k <            ng) m0 += nint[2] * s[2];
+	if (k >= nint[2] + ng) m0 -= nint[2] * s[2];
+	if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
+	}
+      }
+    }
+    break;
+  }
 #endif
 }
 
@@ -351,20 +396,20 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
   case 1:
     for (int i=ng; i<ni+ng; ++i) {
       for (int n=0; n<nargs; ++n) {
-	x[n] = args[n]->data + (S[n][0]*i)*sz;
+	x[n] = (double*)args[n]->data + (S[n][0]*i);
       }
       int m1 = rs[0]*i;
-      op(result->data + m1*sz, x, S, result->domain);
+      op((double*)result->data + m1, x, S, result->domain);
     }
     break;
   case 2:
     for (int i=ng; i<ni+ng; ++i) {
       for (int j=ng; j<nj+ng; ++j) {
 	for (int n=0; n<nargs; ++n) {
-	  x[n] = args[n]->data + (S[n][0]*i + S[n][1]*j)*sz;
+	  x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j);
 	}
 	int m1 = rs[0]*i + rs[1]*j;
-	op(result->data + m1*sz, x, S, result->domain);
+	op((double*)result->data + m1, x, S, result->domain);
       }
     }
     break;
@@ -373,10 +418,10 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
       for (int j=ng; j<nj+ng; ++j) {
 	for (int k=ng; k<nk+ng; ++k) {
 	  for (int n=0; n<nargs; ++n) {
-	    x[n] = args[n]->data + (S[n][0]*i + S[n][1]*j + S[n][2]*k)*sz;
+	    x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j + S[n][2]*k);
 	  }
 	  int m1 = rs[0]*i + rs[1]*j + rs[2]*k;
-	  op(result->data + m1*sz, x, S, result->domain);
+	  op((double*)result->data + m1, x, S, result->domain);
 	}
       }
     }
@@ -396,6 +441,8 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
   int sj = cow_dfield_getstride(f, 1);
   int sk = cow_dfield_getstride(f, 2);
   size_t sz = sizeof(double);
+  double *dst = (double*) f->data;
+  double *src = (double*) out;
   switch (f->domain->n_dims) {
   case 1: {
     int ti = f->n_members;
@@ -403,10 +450,10 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
       int m0 = (i+I0[0])*si;
       int m1 = i*ti;
       if (op == 'e') {
-	memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+	memcpy(src + m1, dst + m0, f->n_members * sz);
       }
       else if (op == 'r') {
-	memcpy(f->data + m0*sz, out + m1*sz, f->n_members * sz);
+	memcpy(dst + m0, src + m1, f->n_members * sz);
       }
     }
   } break;
@@ -418,10 +465,10 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
 	int m0 = (i+I0[0])*si + (j+I0[1])*sj;
 	int m1 = i*ti + j*tj;
 	if (op == 'e') {
-	  memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+	  memcpy(src + m1, dst + m0, f->n_members * sz);
 	}
 	else if (op == 'r') {
-	  memcpy(f->data + m0*sz, out + m1*sz, f->n_members * sz);
+	  memcpy(dst + m0, src + m1, f->n_members * sz);
 	}
       }
     }
@@ -436,10 +483,10 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
 	  int m0 = (i+I0[0])*si + (j+I0[1])*sj + (k+I0[2])*sk;
 	  int m1 = i*ti + j*tj + k*tk;
 	  if (op == 'e') {
-	    memcpy(out + m1*sz, f->data + m0*sz, f->n_members * sz);
+	    memcpy(src + m1, dst + m0, f->n_members * sz);
 	  }
 	  else if (op == 'r') {
-	    memcpy(f->data + m0*sz, out + m1*sz, f->n_members * sz);
+	    memcpy(dst + m0, src + m1, f->n_members * sz);
 	  }
 	}
       }

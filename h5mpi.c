@@ -24,6 +24,8 @@
  *------------------------------------------------------------------------------
  */
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 #define COW_PRIVATE_DEFS
 #include "cow.h"
@@ -59,9 +61,11 @@ void _io_domain_commit(cow_domain *d)
 }
 void _io_domain_del(cow_domain *d)
 {
+#if (COW_HDF5)
   H5Pclose(d->fapl);
   H5Pclose(d->dcpl);
   H5Pclose(d->dxpl);
+#endif
 }
 
 void cow_domain_setcollective(cow_domain *d, int mode)
@@ -106,6 +110,7 @@ void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize)
 }
 void cow_dfield_write(cow_dfield *f, const char *fname)
 {
+#if (COW_HDF5)
   cow_domain *d = f->domain;
   if (f->domain->cart_rank == 0) {
     // -------------------------------------------------------------------------
@@ -134,9 +139,11 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
   fprintf(iolog, "[h5mpi] write to %s took %f minutes\n", fname, sec/60.0);
   fflush(iolog);
+#endif
 }
 void cow_dfield_read(cow_dfield *f, const char *fname)
 {
+#if (COW_HDF5)
   const clock_t start = clock();
   for (int n=0; n<f->n_members; ++n) {
     _io_read_h5mpi(f, fname, n);
@@ -144,6 +151,7 @@ void cow_dfield_read(cow_dfield *f, const char *fname)
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
   fprintf(iolog, "[h5mpi] read from %s took %f minutes\n", fname, sec/60.0);
   fflush(iolog);
+#endif
 }
 
 
@@ -165,7 +173,7 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
 // running on a strange number of cores, and subdomain sizes are non-uniform.
 // -----------------------------------------------------------------------------
 {
-#if (COW_HDF5_MPI)
+#if (COW_HDF5)
   cow_domain *d = f->domain;
   char **pnames = f->members;
   void *data = f->data;
@@ -223,7 +231,7 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
 
 void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb)
 {
-#if (COW_HDF5_MPI)
+#if (COW_HDF5)
   cow_domain *d = f->domain;
   char **pnames = f->members;
   void *data = f->data;

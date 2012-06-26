@@ -1,9 +1,9 @@
 
 CC = mpicc
-COW_HDF5 = 1
-COW_MPI = 1
-COW_HDF5_MPI = 1
-CFLAGS = -Wall -g -O0 -std=c99
+COW_HDF5 ?= 1
+COW_MPI ?= 1
+COW_HDF5_MPI ?= 1
+CFLAGS ?= -Wall -g -O0
 
 HDF5_HOME ?= usr/local
 INC = -I$(HDF5_HOME)/include
@@ -17,10 +17,10 @@ DEFINES = \
 default : main
 
 %.o : %.c
-	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
+	$(CC) -std=c99 $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
 
 main : main.o cow.o h5mpi.o
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) -std=c99 $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
 clean :
 	rm -rf main *.o *.dSYM
