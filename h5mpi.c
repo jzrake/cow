@@ -31,8 +31,8 @@
 #include "cow.h"
 #define iolog stdout
 
-static void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb);
-static void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb);
+static void _io_write_h5mpi(cow_dfield *f, const char *fname);
+static void _io_read_h5mpi(cow_dfield *f, const char *fname);
 
 void _io_domain_commit(cow_domain *d)
 {
@@ -139,9 +139,7 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
   H5Fclose(file);
 
   const clock_t start = clock();
-  for (int n=0; n<f->n_members; ++n) {
-    _io_write_h5mpi(f, fname, n);
-  }
+  _io_write_h5mpi(f, fname);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
   fprintf(iolog, "[h5mpi] write to %s took %f minutes\n", fname, sec/60.0);
   fflush(iolog);
@@ -151,9 +149,7 @@ void cow_dfield_read(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
   const clock_t start = clock();
-  for (int n=0; n<f->n_members; ++n) {
-    _io_read_h5mpi(f, fname, n);
-  }
+  _io_read_h5mpi(f, fname);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
   fprintf(iolog, "[h5mpi] read from %s took %f minutes\n", fname, sec/60.0);
   fflush(iolog);
@@ -161,7 +157,7 @@ void cow_dfield_read(cow_dfield *f, const char *fname)
 }
 
 
-void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
+void _io_write_h5mpi(cow_dfield *f, const char *fname)
 // -----------------------------------------------------------------------------
 // This function uses a collective MPI-IO procedure to write the contents of
 // 'data' to the HDF5 file named 'fname', which is assumed to have been created
@@ -191,10 +187,10 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
   hsize_t *G_ntot = d->G_ntot_h5;
 
   hsize_t ndp1 = n_dims + 1;
-  hsize_t *l_nint = (hsize_t*) malloc(ndp1*sizeof(hsize_t));
-  hsize_t *l_ntot = (hsize_t*) malloc(ndp1*sizeof(hsize_t));
-  hsize_t *l_strt = (hsize_t*) malloc(ndp1*sizeof(hsize_t));
-  hsize_t *stride = (hsize_t*) malloc(ndp1*sizeof(hsize_t));
+  hsize_t l_nint[4];
+  hsize_t l_ntot[4];
+  hsize_t l_strt[4];
+  hsize_t stride[4];
 
   for (int i=0; i<n_dims; ++i) {
     l_nint[i] = d->L_nint[i]; // Selection size, target and destination
@@ -213,18 +209,15 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
 
   // Call signature to H5Sselect_hyperslab is (start, stride, count, chunk)
   // ---------------------------------------------------------------------------
-  hid_t dset = H5Dcreate(memb, pnames[i_memb], H5T_NATIVE_DOUBLE, fspc,
-			 H5P_DEFAULT, d->dcpl, H5P_DEFAULT);
-  l_strt[ndp1 - 1] = i_memb;
-  H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
-  H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
-  H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
-  H5Dclose(dset);
-
-  free(l_nint);
-  free(l_ntot);
-  free(l_strt);
-  free(stride);
+  for (int n=0; n<n_memb; ++n) {
+    hid_t dset = H5Dcreate(memb, pnames[n], H5T_NATIVE_DOUBLE, fspc,
+			   H5P_DEFAULT, d->dcpl, H5P_DEFAULT);
+    l_strt[ndp1 - 1] = n;
+    H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
+    H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
+    H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
+    H5Dclose(dset);
+  }
 
   // Always close the hid_t handles in the reverse order they were opened in.
   // ---------------------------------------------------------------------------
@@ -235,7 +228,7 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
 #endif
 }
 
-void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb)
+void _io_read_h5mpi(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
   cow_domain *d = f->domain;
@@ -249,10 +242,10 @@ void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb)
   hsize_t *G_ntot = d->G_ntot_h5;
 
   hsize_t ndp1 = n_dims + 1;
-  hsize_t *l_nint = (hsize_t*) malloc(ndp1*sizeof(hsize_t));
-  hsize_t *l_ntot = (hsize_t*) malloc(ndp1*sizeof(hsize_t));
-  hsize_t *l_strt = (hsize_t*) malloc(ndp1*sizeof(hsize_t));
-  hsize_t *stride = (hsize_t*) malloc(ndp1*sizeof(hsize_t));
+  hsize_t l_nint[4];
+  hsize_t l_ntot[4];
+  hsize_t l_strt[4];
+  hsize_t stride[4];
 
   for (int i=0; i<n_dims; ++i) {
     l_nint[i] = d->L_nint[i]; // Selection size, target and destination
@@ -271,17 +264,14 @@ void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb)
 
   // Call signature to H5Sselect_hyperslab is (start, stride, count, chunk)
   // ---------------------------------------------------------------------------
-  hid_t dset = H5Dopen(memb, pnames[i_memb], H5P_DEFAULT);
-  l_strt[ndp1 - 1] = i_memb;
-  H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
-  H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
-  H5Dread(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
-  H5Dclose(dset);
-
-  free(l_nint);
-  free(l_ntot);
-  free(l_strt);
-  free(stride);
+  for (int n=0; n<n_memb; ++n) {
+    hid_t dset = H5Dopen(memb, pnames[n], H5P_DEFAULT);
+    l_strt[ndp1 - 1] = n;
+    H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
+    H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
+    H5Dread(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
+    H5Dclose(dset);
+  }
 
   // Always close the hid_t handles in the reverse order they were opened in.
   // ---------------------------------------------------------------------------
