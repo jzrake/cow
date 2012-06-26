@@ -14,7 +14,7 @@ DEFINES = \
 	-DCOW_HDF5=$(COW_HDF5) \
 	-DCOW_HDF5_MPI=$(COW_HDF5_MPI)
 
-default : main
+default : main milos
 
 %.o : %.c
 	$(CC) -std=c99 $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
@@ -22,5 +22,8 @@ default : main
 main : main.o cow.o io.o
 	$(CC) -std=c99 $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
+milos : milos.o cow.o io.o
+	$(CC) -std=c99 $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+
 clean :
-	rm -rf main *.o *.dSYM
+	rm -rf main milos *.o *.dSYM

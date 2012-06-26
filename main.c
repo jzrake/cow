@@ -21,7 +21,7 @@ int main(int argc, char **argv)
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if (rank != 0) freopen("/dev/null", "w", stdout);
-    printf("was compiled with COW_MPI\n");
+    printf("was compiled with MPI support\n");
   }
 #endif
 
@@ -97,7 +97,7 @@ int main(int argc, char **argv)
 
   cow_domain_setchunk(domain, 1);
   cow_domain_setcollective(domain, 1);
-  cow_domain_setalign(domain, 4*4096*4096, 4);
+  cow_domain_setalign(domain, 4096, 4*1024*1024);
 
   cow_dfield_write(divB, "thefile.h5");
   cow_dfield_write(magf, "thefile.h5");

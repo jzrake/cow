@@ -30,6 +30,7 @@
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 #define iolog stdout
+#define KILOBYTES (1<<10)
 
 static void _io_write(cow_dfield *f, const char *fname);
 static void _io_read(cow_dfield *f, const char *fname);
@@ -72,11 +73,11 @@ void cow_domain_setcollective(cow_domain *d, int mode)
 {
 #if (COW_HDF5 && COW_HDF5_MPI)
   if (mode) {
-    printf("[h5mpi] setting HDF5 io mode to collective\n");
+    printf("[hdf5] setting HDF5 io mode to collective\n");
     H5Pset_dxpl_mpio(d->dxpl, H5FD_MPIO_COLLECTIVE);
   }
   else {
-    printf("[h5mpi] setting HDF5 io mode to independent\n");
+    printf("[hdf5] setting HDF5 io mode to independent\n");
     H5Pset_dxpl_mpio(d->dxpl, H5FD_MPIO_INDEPENDENT);
   }
 #endif
@@ -86,16 +87,16 @@ void cow_domain_setchunk(cow_domain *d, int mode)
 #if (COW_HDF5)
   if (mode) {
     if (d->balanced) {
-      printf("[h5mpi] enabled chunking on HDF5 files\n");
+      printf("[hdf5] enabled chunking on HDF5 files\n");
       H5Pset_chunk(d->dcpl, d->n_dims, d->L_nint_h5);
     }
     else {
-      printf("[h5mpi] chunking could not be enabled because the domain is not "
+      printf("[hdf5] chunking could not be enabled because the domain is not "
 	     "balanced\n");
     }
   }
   else {
-    printf("[h5mpi] disabled chunking on HDF5 files\n");
+    printf("[hdf5] disabled chunking on HDF5 files\n");
     H5Pset_chunk(d->dcpl, d->n_dims, d->G_ntot_h5);
   }
 #endif
@@ -103,8 +104,8 @@ void cow_domain_setchunk(cow_domain *d, int mode)
 void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize)
 {
 #if (COW_HDF5)
-  printf("[h5mpi] align threshold: %d, disk block size: %d\n",
-	 alignthreshold, diskblocksize);
+  printf("[hdf5] align threshold: %d kB, disk block size: %d kB\n",
+	 alignthreshold/KILOBYTES, diskblocksize/KILOBYTES);
   H5Pset_alignment(d->fapl, alignthreshold, diskblocksize);
 #endif
 }
@@ -139,17 +140,26 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
   const clock_t start = clock();
   _io_write(f, fname);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
-  fprintf(iolog, "[h5mpi] write to %s took %f minutes\n", fname, sec/60.0);
+  fprintf(iolog, "[hdf5] write to %s took %f minutes\n", fname, sec/60.0);
   fflush(iolog);
 #endif
 }
 void cow_dfield_read(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
+  FILE *testf = fopen(fname, "r");
+  if (testf == NULL) {
+    printf("[hdf5] error: file dows not exist: %s\n", fname);
+    return;
+  }
+  else {
+    fclose(testf);
+  }
   const clock_t start = clock();
   _io_read(f, fname);
+  cow_dfield_syncguard(f);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
-  fprintf(iolog, "[h5mpi] read from %s took %f minutes\n", fname, sec/60.0);
+  fprintf(iolog, "[hdf5] read from %s took %f minutes\n", fname, sec/60.0);
   fflush(iolog);
 #endif
 }
