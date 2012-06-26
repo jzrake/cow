@@ -29,11 +29,12 @@
 #include "cow.h"
 #define iolog stdout
 
-static void _io_write_h5mpi(cow_dfield *f, const char *fname);
-static void _io_read_h5mpi(cow_dfield *f, const char *fname);
+static void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb);
+static void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb);
 
 void cow_dfield_write(cow_dfield *f, const char *fname)
 {
+  cow_domain *d = f->domain;
   if (f->domain->cart_rank == 0) {
     // -------------------------------------------------------------------------
     // The write functions assume the file is already created. Have master
@@ -46,15 +47,42 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
       fclose(testf);
     }
   }
-  _io_write_h5mpi(f, fname);
+
+  hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
+  if (d->EnableAlignment) {
+    H5Pset_alignment(fapl, d->AlignThreshold, d->DiskBlockSize);
+  }
+  H5Pset_fapl_mpio(fapl, d->mpi_cart, MPI_INFO_NULL);
+  hid_t file = H5Fopen(fname, H5F_ACC_RDWR, fapl);
+  if (H5Lexists(file, f->name, H5P_DEFAULT)) {
+    H5Gunlink(file, f->name);
+  }
+  hid_t memb = H5Gcreate(file, f->name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  H5Gclose(memb);
+  H5Fclose(file);
+  H5Pclose(fapl);
+
+  const clock_t start = clock();
+  for (int n=0; n<f->n_members; ++n) {
+    _io_write_h5mpi(f, fname, n);
+  }
+  const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
+  fprintf(iolog, "[h5mpi] write to %s took %f minutes\n", fname, sec/60.0);
+  fflush(iolog);
 }
 void cow_dfield_read(cow_dfield *f, const char *fname)
 {
-  _io_read_h5mpi(f, fname);
+  const clock_t start = clock();
+  for (int n=0; n<f->n_members; ++n) {
+    _io_read_h5mpi(f, fname, n);
+  }
+  const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
+  fprintf(iolog, "[h5mpi] read from %s took %f minutes\n", fname, sec/60.0);
+  fflush(iolog);
 }
 
 
-void _io_write_h5mpi(cow_dfield *f, const char *fname)
+void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
 // -----------------------------------------------------------------------------
 // This function uses a collective MPI-IO procedure to write the contents of
 // 'data' to the HDF5 file named 'fname', which is assumed to have been created
@@ -123,31 +151,19 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname)
   H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE);
 
   hid_t file = H5Fopen(fname, H5F_ACC_RDWR, fapl);
-  const int overwrite = H5Lexists(file, gname, H5P_DEFAULT);
-  hid_t memb = overwrite ? H5Gopen(file, gname, H5P_DEFAULT) :
-    H5Gcreate(file, gname, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+  hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
   hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
   hid_t fspc = H5Screate_simple(n_dims, G_ntot, NULL);
 
   // Call signature to H5Sselect_hyperslab is (start, stride, count, chunk)
   // ---------------------------------------------------------------------------
-  const clock_t start_all = clock();
-
-  for (int i=0; i<n_memb; ++i) {
-    hid_t dset = overwrite ? H5Dopen(memb, pnames[i], H5P_DEFAULT) : 
-      H5Dcreate(memb, pnames[i], H5T_NATIVE_DOUBLE, fspc,
-		H5P_DEFAULT, dcpl, H5P_DEFAULT);
-    l_strt[ndp1 - 1] = i;
-    H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
-    H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
-    H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, dxpl, data);
-    H5Dclose(dset);
-  }
-  if (iolog) {
-    const double sec = (double)(clock() - start_all) / CLOCKS_PER_SEC;
-    fprintf(iolog, "[h5mpi] write to %s took %f minutes\n", fname, sec/60.0);
-    fflush(iolog);
-  }
+  hid_t dset = H5Dcreate(memb, pnames[i_memb], H5T_NATIVE_DOUBLE, fspc,
+			 H5P_DEFAULT, dcpl, H5P_DEFAULT);
+  l_strt[ndp1 - 1] = i_memb;
+  H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
+  H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
+  H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, dxpl, data);
+  H5Dclose(dset);
 
   free(l_nint);
   free(l_ntot);
@@ -166,7 +182,7 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname)
 #endif
 }
 
-void _io_read_h5mpi(cow_dfield *f, const char *fname)
+void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb)
 {
 #if (COW_HDF5_MPI)
   cow_domain *d = f->domain;
@@ -217,21 +233,12 @@ void _io_read_h5mpi(cow_dfield *f, const char *fname)
 
   // Call signature to H5Sselect_hyperslab is (start, stride, count, chunk)
   // ---------------------------------------------------------------------------
-  const clock_t start_all = clock();
-
-  for (int i=0; i<n_memb; ++i) {
-    hid_t dset = H5Dopen(memb, pnames[i], H5P_DEFAULT);
-    l_strt[ndp1 - 1] = i;
-    H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
-    H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
-    H5Dread(dset, H5T_NATIVE_DOUBLE, mspc, fspc, dxpl, data);
-    H5Dclose(dset);
-  }
-  if (iolog) {
-    const double sec = (double)(clock() - start_all) / CLOCKS_PER_SEC;
-    fprintf(iolog, "[h5mpi] read from %s took %f minutes\n", fname, sec/60.0);
-    fflush(iolog);
-  }
+  hid_t dset = H5Dopen(memb, pnames[i_memb], H5P_DEFAULT);
+  l_strt[ndp1 - 1] = i_memb;
+  H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
+  H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
+  H5Dread(dset, H5T_NATIVE_DOUBLE, mspc, fspc, dxpl, data);
+  H5Dclose(dset);
 
   free(l_nint);
   free(l_ntot);
