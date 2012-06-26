@@ -19,7 +19,7 @@ default : main
 %.o : %.c
 	$(CC) -std=c99 $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
 
-main : main.o cow.o h5mpi.o
+main : main.o cow.o io.o
 	$(CC) -std=c99 $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
 clean :

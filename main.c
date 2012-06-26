@@ -96,8 +96,9 @@ int main(int argc, char **argv)
   free(subarray);
 
   cow_domain_setchunk(domain, 1);
-  //  cow_domain_setcollective(domain, 1);
-  //  cow_domain_setcollective(domain, 0);
+  cow_domain_setcollective(domain, 1);
+  cow_domain_setalign(domain, 4*4096*4096, 4);
+
   cow_dfield_write(divB, "thefile.h5");
   cow_dfield_write(magf, "thefile.h5");
   cow_dfield_write(prim, "thefile.h5");
