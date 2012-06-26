@@ -99,9 +99,8 @@ int main(int argc, char **argv)
   cow_domain_setcollective(domain, 1);
   //  cow_domain_setcollective(domain, 0);
   cow_dfield_write(divB, "thefile.h5");
-  cow_dfield_write(divB, "thefile.h5");
-  //  cow_dfield_write(magf, "thefile.h5");
-  //  cow_dfield_write(prim, "thefile.h5");
+  cow_dfield_write(magf, "thefile.h5");
+  cow_dfield_write(prim, "thefile.h5");
 
   //  cow_dfield_read(magf, "thefile.h5");
 
