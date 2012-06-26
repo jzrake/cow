@@ -31,8 +31,8 @@
 #include "cow.h"
 #define iolog stdout
 
-static void _io_write_h5mpi(cow_dfield *f, const char *fname);
-static void _io_read_h5mpi(cow_dfield *f, const char *fname);
+static void _io_write(cow_dfield *f, const char *fname);
+static void _io_read(cow_dfield *f, const char *fname);
 
 void _io_domain_commit(cow_domain *d)
 {
@@ -76,7 +76,7 @@ void cow_domain_setcollective(cow_domain *d, int mode)
     H5Pset_dxpl_mpio(d->dxpl, H5FD_MPIO_COLLECTIVE);
   }
   else {
-    printf("[h5mpi] setting HDF5 io mode to serial\n");
+    printf("[h5mpi] setting HDF5 io mode to independent\n");
     H5Pset_dxpl_mpio(d->dxpl, H5FD_MPIO_INDEPENDENT);
   }
 #endif
@@ -111,7 +111,6 @@ void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize)
 void cow_dfield_write(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
-  cow_domain *d = f->domain;
 #if (COW_MPI)
   if (f->domain->cart_rank == 0) {
 #endif
@@ -120,26 +119,25 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
     // create the file if it's not there already.
     // -------------------------------------------------------------------------
     FILE *testf = fopen(fname, "r");
+    hid_t fid;
     if (testf == NULL) {
-      hid_t fid = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
-      H5Fclose(fid);
+      fid = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
     }
     else {
       fclose(testf);
+      fid = H5Fopen(fname, H5F_ACC_RDWR, H5P_DEFAULT);
     }
+    if (H5Lexists(fid, f->name, H5P_DEFAULT)) {
+      H5Gunlink(fid, f->name);
+    }
+    hid_t memb = H5Gcreate(fid, f->name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    H5Gclose(memb);
+    H5Fclose(fid);
 #if (COW_MPI)
   }
 #endif
-  hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
-  if (H5Lexists(file, f->name, H5P_DEFAULT)) {
-    H5Gunlink(file, f->name);
-  }
-  hid_t memb = H5Gcreate(file, f->name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-  H5Gclose(memb);
-  H5Fclose(file);
-
   const clock_t start = clock();
-  _io_write_h5mpi(f, fname);
+  _io_write(f, fname);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
   fprintf(iolog, "[h5mpi] write to %s took %f minutes\n", fname, sec/60.0);
   fflush(iolog);
@@ -149,7 +147,7 @@ void cow_dfield_read(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
   const clock_t start = clock();
-  _io_read_h5mpi(f, fname);
+  _io_read(f, fname);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
   fprintf(iolog, "[h5mpi] read from %s took %f minutes\n", fname, sec/60.0);
   fflush(iolog);
@@ -157,7 +155,7 @@ void cow_dfield_read(cow_dfield *f, const char *fname)
 }
 
 
-void _io_write_h5mpi(cow_dfield *f, const char *fname)
+void _io_write(cow_dfield *f, const char *fname)
 // -----------------------------------------------------------------------------
 // This function uses a collective MPI-IO procedure to write the contents of
 // 'data' to the HDF5 file named 'fname', which is assumed to have been created
@@ -202,33 +200,46 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname)
   l_ntot[ndp1 - 1] = n_memb;
   stride[ndp1 - 1] = n_memb;
 
-  hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
-  hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
-  hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
-  hid_t fspc = H5Screate_simple(n_dims, G_ntot, NULL);
-
-  // Call signature to H5Sselect_hyperslab is (start, stride, count, chunk)
+  // The loop over processors is needed if COW_MPI support is enabled and
+  // COW_HDF5_MPI is not. If either COW_MPI is disabled, or COW_HDF5_MPI is
+  // enabled, then the write calls occur without the loop.
   // ---------------------------------------------------------------------------
-  for (int n=0; n<n_memb; ++n) {
-    hid_t dset = H5Dcreate(memb, pnames[n], H5T_NATIVE_DOUBLE, fspc,
+#if (!COW_HDF5_MPI && COW_MPI)
+  for (int rank=0; rank<d->cart_size; ++rank) {
+    if (rank == d->cart_rank) {
+#endif
+      hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
+      hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
+      hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
+      hid_t fspc = H5Screate_simple(n_dims, G_ntot, NULL);
+      hid_t dset;
+      for (int n=0; n<n_memb; ++n) {
+	if (H5Lexists(memb, pnames[n], H5P_DEFAULT)) {
+	  dset = H5Dopen(memb, pnames[n], H5P_DEFAULT);
+	}
+	else {
+	  dset = H5Dcreate(memb, pnames[n], H5T_NATIVE_DOUBLE, fspc,
 			   H5P_DEFAULT, d->dcpl, H5P_DEFAULT);
-    l_strt[ndp1 - 1] = n;
-    H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
-    H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
-    H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
-    H5Dclose(dset);
+	}
+	l_strt[ndp1 - 1] = n;
+	H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
+	H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
+	H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
+	H5Dclose(dset);
+      }
+      H5Sclose(fspc);
+      H5Sclose(mspc);
+      H5Gclose(memb);
+      H5Fclose(file);
+#if (!COW_HDF5_MPI && COW_MPI)
+    }
+    MPI_Barrier(d->mpi_cart);
   }
-
-  // Always close the hid_t handles in the reverse order they were opened in.
-  // ---------------------------------------------------------------------------
-  H5Sclose(fspc);
-  H5Sclose(mspc);
-  H5Gclose(memb);
-  H5Fclose(file);
+#endif // !COW_HDF5_MPI && COW_MPI
 #endif
 }
 
-void _io_read_h5mpi(cow_dfield *f, const char *fname)
+void _io_read(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
   cow_domain *d = f->domain;
@@ -257,28 +268,35 @@ void _io_read_h5mpi(cow_dfield *f, const char *fname)
   l_ntot[ndp1 - 1] = n_memb;
   stride[ndp1 - 1] = n_memb;
 
-  hid_t file = H5Fopen(fname, H5F_ACC_RDONLY, d->fapl);
-  hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
-  hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
-  hid_t fspc = H5Screate_simple(n_dims, G_ntot, NULL);
-
-  // Call signature to H5Sselect_hyperslab is (start, stride, count, chunk)
+  // The loop over processors is needed if COW_MPI support is enabled and
+  // COW_HDF5_MPI is not. If either COW_MPI is disabled, or COW_HDF5_MPI is
+  // enabled, then the write calls occur without the loop.
   // ---------------------------------------------------------------------------
-  for (int n=0; n<n_memb; ++n) {
-    hid_t dset = H5Dopen(memb, pnames[n], H5P_DEFAULT);
-    l_strt[ndp1 - 1] = n;
-    H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
-    H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
-    H5Dread(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
-    H5Dclose(dset);
+#if (!COW_HDF5_MPI && COW_MPI)
+  for (int rank=0; rank<d->cart_size; ++rank) {
+    if (rank == d->cart_rank) {
+#endif
+      hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
+      hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
+      hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
+      hid_t fspc = H5Screate_simple(n_dims, G_ntot, NULL);
+      for (int n=0; n<n_memb; ++n) {
+	hid_t dset = H5Dopen(memb, pnames[n], H5P_DEFAULT);
+	l_strt[ndp1 - 1] = n;
+	H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
+	H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
+	H5Dread(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
+	H5Dclose(dset);
+      }
+      H5Sclose(fspc);
+      H5Sclose(mspc);
+      H5Gclose(memb);
+      H5Fclose(file);
+#if (!COW_HDF5_MPI && COW_MPI)
+    }
+    MPI_Barrier(d->mpi_cart);
   }
-
-  // Always close the hid_t handles in the reverse order they were opened in.
-  // ---------------------------------------------------------------------------
-  H5Sclose(fspc);
-  H5Sclose(mspc);
-  H5Gclose(memb);
-  H5Fclose(file);
+#endif // !COW_HDF5_MPI && COW_MPI
 #endif
 }
 

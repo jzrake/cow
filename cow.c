@@ -47,10 +47,8 @@ struct cow_domain *cow_domain_new()
     .G_strt = { 0, 0, 0 },
     .n_dims = 1,
     .n_ghst = 0,
-    //    .n_fields = 0,
-    //    .field_iter = 0,
+    .balanced = 1,
     .committed = 0,
-    //    .fields = NULL,
 #if (COW_MPI)
     .proc_sizes = { 0, 0, 0 },
     .proc_index = { 0, 0, 0 },
@@ -132,7 +130,6 @@ void cow_domain_setprocsizes(cow_domain *d, int dim, int size)
 void cow_domain_commit(cow_domain *d)
 {
   if (d->committed) return;
-
 #if (COW_MPI)
   int w[3] = { 1, 1, 1 }; // 'wrap', periodic in all directions
   int r = 1; // 'reorder' allow MPI to choose a cart_rank != comm_rank
@@ -143,8 +140,6 @@ void cow_domain_commit(cow_domain *d)
   MPI_Cart_create(MPI_COMM_WORLD, d->n_dims, d->proc_sizes, w, r, &d->mpi_cart);
   MPI_Comm_rank(d->mpi_cart, &d->cart_rank);
   MPI_Cart_coords(d->mpi_cart, d->cart_rank, d->n_dims, d->proc_index);
-
-  d->balanced = 1;
 
   for (int i=0; i<d->n_dims; ++i) {
     // -------------------------------------------------------------------------

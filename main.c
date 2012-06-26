@@ -102,7 +102,7 @@ int main(int argc, char **argv)
   cow_dfield_write(magf, "thefile.h5");
   cow_dfield_write(prim, "thefile.h5");
 
-  //  cow_dfield_read(magf, "thefile.h5");
+  cow_dfield_read(magf, "thefile.h5");
 
   cow_dfield_del(divB);
   cow_dfield_del(prim);
