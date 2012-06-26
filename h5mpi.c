@@ -112,7 +112,9 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
   cow_domain *d = f->domain;
+#ifdef (COW_MPI)
   if (f->domain->cart_rank == 0) {
+#endif
     // -------------------------------------------------------------------------
     // The write functions assume the file is already created. Have master
     // create the file if it's not there already.
@@ -123,7 +125,9 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
       H5Fclose(fid);
       fclose(testf);
     }
+#ifdef (COW_MPI)
   }
+#endif
   hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
   if (H5Lexists(file, f->name, H5P_DEFAULT)) {
     H5Gunlink(file, f->name);

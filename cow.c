@@ -386,7 +386,6 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
   int nk = cow_domain_getsize(result->domain, 2);
   int ng = cow_domain_getguard(result->domain);
   int *rs = result->stride;
-  size_t sz = sizeof(double);
   int **S = (int**) malloc(nargs * sizeof(int*));
   double **x = (double**) malloc(nargs * sizeof(double*));
   for (int n=0; n<nargs; ++n) {
