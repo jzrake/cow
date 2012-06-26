@@ -65,8 +65,9 @@ void cow_domain_del(cow_domain *d)
   MPI_Comm_free(&d->mpi_cart);
   _domain_freetags(d);
 #endif
-  //  for (int n=0; n<d->n_fields; ++n) cow_dfield_del(d->fields[n]);
-  //  free(d->fields);
+#if (COW_HDF5)
+  _io_domain_del(d);
+#endif
   free(d);
 }
 /*
@@ -143,6 +144,8 @@ void cow_domain_commit(cow_domain *d)
   MPI_Comm_rank(d->mpi_cart, &d->cart_rank);
   MPI_Cart_coords(d->mpi_cart, d->cart_rank, d->n_dims, d->proc_index);
 
+  d->balanced = 1;
+
   for (int i=0; i<d->n_dims; ++i) {
     // -------------------------------------------------------------------------
     // The number of subgrid zones for dimension i needs to be non-uniform if
@@ -154,6 +157,8 @@ void cow_domain_commit(cow_domain *d)
     const int augmnt_size = normal_size + 1;
     const int thisdm_size = (d->proc_index[i]<R) ? augmnt_size : normal_size;
     const double dx = (d->glb_upper[i] - d->glb_lower[i]) / d->G_ntot[i];
+
+    if (R != 0) d->balanced = 0;
 
     d->L_nint[i] = thisdm_size;
     d->G_strt[i] = 0;
@@ -184,18 +189,7 @@ void cow_domain_commit(cow_domain *d)
   }
 #endif
 #if (COW_HDF5)
-  d->EnableChunking = 0;
-  d->EnableAlignment = 0;
-  d->DiskBlockSize = 1;
-  d->AlignThreshold = 0;
-  for (int n=0; n<d->n_dims; ++n) {
-    d->L_nint_h5[n] = d->L_nint[n]; // Selection size, target and destination
-    d->L_ntot_h5[n] = d->L_ntot[n]; // Memory space total size
-    d->L_strt_h5[n] = d->L_strt[n]; // Memory space selection start
-    d->G_ntot_h5[n] = d->G_ntot[n]; // Global space total size
-    d->G_strt_h5[n] = d->G_strt[n]; // Global space selection start
-    d->ChunkSize[n] = d->G_ntot[n]; // Chunk size defaults to no chunking
-  }
+  _io_domain_commit(d);
 #endif
   d->committed = 1;
 }

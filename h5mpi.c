@@ -32,6 +32,78 @@
 static void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb);
 static void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb);
 
+void _io_domain_commit(cow_domain *d)
+{
+#if (COW_HDF5)
+  for (int n=0; n<d->n_dims; ++n) {
+    d->L_nint_h5[n] = d->L_nint[n]; // Selection size, target and destination
+    d->L_ntot_h5[n] = d->L_ntot[n]; // Memory space total size
+    d->L_strt_h5[n] = d->L_strt[n]; // Memory space selection start
+    d->G_ntot_h5[n] = d->G_ntot[n]; // Global space total size
+    d->G_strt_h5[n] = d->G_strt[n]; // Global space selection start
+  }
+
+  // Here we create the following property lists:
+  //
+  // file access property list   ........ for the call to H5Fopen
+  // dset creation property list ........ for the call to H5Dcreate
+  // dset transfer property list ........ for the call to H5Dwrite
+  // ---------------------------------------------------------------------------
+  d->fapl = H5Pcreate(H5P_FILE_ACCESS);
+  d->dcpl = H5Pcreate(H5P_DATASET_CREATE);
+  d->dxpl = H5Pcreate(H5P_DATASET_XFER);
+#if (COW_HDF5_MPI)
+  H5Pset_fapl_mpio(d->fapl, d->mpi_cart, MPI_INFO_NULL);
+#endif
+#endif
+}
+void _io_domain_del(cow_domain *d)
+{
+  H5Pclose(d->fapl);
+  H5Pclose(d->dcpl);
+  H5Pclose(d->dxpl);
+}
+
+void cow_domain_setcollective(cow_domain *d, int mode)
+{
+#if (COW_HDF5 && COW_HDF5_MPI)
+  if (mode) {
+    printf("[h5mpi] setting HDF5 io mode to collective\n");
+    H5Pset_dxpl_mpio(d->dxpl, H5FD_MPIO_COLLECTIVE);
+  }
+  else {
+    printf("[h5mpi] setting HDF5 io mode to serial\n");
+    H5Pset_dxpl_mpio(d->dxpl, H5FD_MPIO_INDEPENDENT);
+  }
+#endif
+}
+void cow_domain_setchunk(cow_domain *d, int mode)
+{
+#if (COW_HDF5)
+  if (mode) {
+    if (d->balanced) {
+      printf("[h5mpi] enabled chunking on HDF5 files\n");
+      H5Pset_chunk(d->dcpl, d->n_dims, d->L_nint_h5);
+    }
+    else {
+      printf("[h5mpi] chunking could not be enabled because the domain is not "
+	     "balanced\n");
+    }
+  }
+  else {
+    printf("[h5mpi] disabled chunking on HDF5 files\n");
+    H5Pset_chunk(d->dcpl, d->n_dims, d->G_ntot_h5);
+  }
+#endif
+}
+void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize)
+{
+#if (COW_HDF5)
+  printf("[h5mpi] align threshold: %d, disk block size: %d\n",
+	 alignthreshold, diskblocksize);
+  H5Pset_alignment(d->fapl, alignthreshold, diskblocksize);
+#endif
+}
 void cow_dfield_write(cow_dfield *f, const char *fname)
 {
   cow_domain *d = f->domain;
@@ -47,20 +119,13 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
       fclose(testf);
     }
   }
-
-  hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
-  if (d->EnableAlignment) {
-    H5Pset_alignment(fapl, d->AlignThreshold, d->DiskBlockSize);
-  }
-  H5Pset_fapl_mpio(fapl, d->mpi_cart, MPI_INFO_NULL);
-  hid_t file = H5Fopen(fname, H5F_ACC_RDWR, fapl);
+  hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
   if (H5Lexists(file, f->name, H5P_DEFAULT)) {
     H5Gunlink(file, f->name);
   }
   hid_t memb = H5Gcreate(file, f->name, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
   H5Gclose(memb);
   H5Fclose(file);
-  H5Pclose(fapl);
 
   const clock_t start = clock();
   for (int n=0; n<f->n_members; ++n) {
@@ -87,11 +152,11 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
 // This function uses a collective MPI-IO procedure to write the contents of
 // 'data' to the HDF5 file named 'fname', which is assumed to have been created
 // already. The dataset with name 'dname', which is being written to, must not
-// exist already. Chunking is enabled as per the module-wide ChunkSize variable,
-// and is disabled by default. Recommended chunk size is local subdomain
-// size. This will result in optimized read/write on the same decomposition
-// layout, but poor performance for different access patterns, for example the
-// slabs used by cluster-FFT functions.
+// exist already. Chunking is enabled as per the ChunkSize variable, and is
+// disabled by default. Recommended chunk size is local subdomain size. This
+// will result in optimized read/write on the same decomposition layout, but
+// poor performance for different access patterns, for example the slabs used by
+// cluster-FFT functions.
 //
 //                                   WARNING!
 //
@@ -127,30 +192,7 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
   l_ntot[ndp1 - 1] = n_memb;
   stride[ndp1 - 1] = n_memb;
 
-  // Here we create the following property lists:
-  //
-  // file access property list   ........ for the call to H5Fopen
-  // dset creation property list ........ for the call to H5Dcreate
-  // dset transfer property list ........ for the call to H5Dwrite
-  // ---------------------------------------------------------------------------
-  hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
-  hid_t dcpl = H5Pcreate(H5P_DATASET_CREATE);
-  hid_t dxpl = H5Pcreate(H5P_DATASET_XFER);
-
-  // Here we define collective (MPI) access to the file with alignment
-  // properties optimized for the local file system, according to DiskBlockSize.
-  // ---------------------------------------------------------------------------
-  if (d->EnableChunking) {
-    H5Pset_chunk(dcpl, n_dims, d->ChunkSize);
-  }
-  if (d->EnableAlignment) {
-    H5Pset_alignment(fapl, d->AlignThreshold, d->DiskBlockSize);
-  }
-
-  H5Pset_fapl_mpio(fapl, d->mpi_cart, MPI_INFO_NULL);
-  H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE);
-
-  hid_t file = H5Fopen(fname, H5F_ACC_RDWR, fapl);
+  hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
   hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
   hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
   hid_t fspc = H5Screate_simple(n_dims, G_ntot, NULL);
@@ -158,11 +200,11 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
   // Call signature to H5Sselect_hyperslab is (start, stride, count, chunk)
   // ---------------------------------------------------------------------------
   hid_t dset = H5Dcreate(memb, pnames[i_memb], H5T_NATIVE_DOUBLE, fspc,
-			 H5P_DEFAULT, dcpl, H5P_DEFAULT);
+			 H5P_DEFAULT, d->dcpl, H5P_DEFAULT);
   l_strt[ndp1 - 1] = i_memb;
   H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
   H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
-  H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, dxpl, data);
+  H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
   H5Dclose(dset);
 
   free(l_nint);
@@ -176,9 +218,6 @@ void _io_write_h5mpi(cow_dfield *f, const char *fname, int i_memb)
   H5Sclose(mspc);
   H5Gclose(memb);
   H5Fclose(file);
-  H5Pclose(dxpl);
-  H5Pclose(dcpl);
-  H5Pclose(fapl);
 #endif
 }
 
@@ -211,22 +250,7 @@ void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb)
   l_ntot[ndp1 - 1] = n_memb;
   stride[ndp1 - 1] = n_memb;
 
-  // Here we create the following property lists:
-  //
-  // file access property list   ........ for the call to H5Fopen
-  // dset transfer property list ........ for the call to H5Dread
-  // ---------------------------------------------------------------------------
-  hid_t fapl = H5Pcreate(H5P_FILE_ACCESS);
-  hid_t dxpl = H5Pcreate(H5P_DATASET_XFER);
-
-  // Here we define collective (MPI) access to the file with alignment
-  // properties optimized for the local file system, according to DiskBlockSize.
-  // ---------------------------------------------------------------------------
-  H5Pset_alignment(fapl, d->AlignThreshold, d->DiskBlockSize);
-  H5Pset_fapl_mpio(fapl, d->mpi_cart, MPI_INFO_NULL);
-  H5Pset_dxpl_mpio(dxpl, H5FD_MPIO_COLLECTIVE);
-
-  hid_t file = H5Fopen(fname, H5F_ACC_RDONLY, fapl);
+  hid_t file = H5Fopen(fname, H5F_ACC_RDONLY, d->fapl);
   hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
   hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
   hid_t fspc = H5Screate_simple(n_dims, G_ntot, NULL);
@@ -237,7 +261,7 @@ void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb)
   l_strt[ndp1 - 1] = i_memb;
   H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
   H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
-  H5Dread(dset, H5T_NATIVE_DOUBLE, mspc, fspc, dxpl, data);
+  H5Dread(dset, H5T_NATIVE_DOUBLE, mspc, fspc, d->dxpl, data);
   H5Dclose(dset);
 
   free(l_nint);
@@ -251,8 +275,6 @@ void _io_read_h5mpi(cow_dfield *f, const char *fname, int i_memb)
   H5Sclose(mspc);
   H5Gclose(memb);
   H5Fclose(file);
-  H5Pclose(dxpl);
-  H5Pclose(fapl);
 #endif
 }
 

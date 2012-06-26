@@ -95,11 +95,15 @@ int main(int argc, char **argv)
   printf("%f %f\n", subarray[0], subarray[1]);
   free(subarray);
 
+  //  cow_domain_setchunk(domain, 1);
+  cow_domain_setcollective(domain, 1);
+  //  cow_domain_setcollective(domain, 0);
   cow_dfield_write(divB, "thefile.h5");
-  cow_dfield_write(magf, "thefile.h5");
-  cow_dfield_write(prim, "thefile.h5");
+  cow_dfield_write(divB, "thefile.h5");
+  //  cow_dfield_write(magf, "thefile.h5");
+  //  cow_dfield_write(prim, "thefile.h5");
 
-  cow_dfield_read(magf, "thefile.h5");
+  //  cow_dfield_read(magf, "thefile.h5");
 
   cow_dfield_del(divB);
   cow_dfield_del(prim);

@@ -28,6 +28,9 @@ int cow_domain_getguard(cow_domain *d);
 //cow_dfield *cow_domain_iteratefields(cow_domain *d);
 //cow_dfield *cow_domain_nextfield(cow_domain *d);
 int cow_domain_getnumlocalzones(cow_domain *d);
+void cow_domain_setcollective(cow_domain *d, int mode);
+void cow_domain_setchunk(cow_domain *d, int mode);
+void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize);
 
 cow_dfield *cow_dfield_new(cow_domain *domain, const char *name);
 void cow_dfield_commit(cow_dfield *f);
@@ -56,6 +59,10 @@ void cow_dfield_read(cow_dfield *f, const char *fname);
 #if (COW_HDF5)
 #include <hdf5.h>
 #endif
+
+void _io_domain_commit(cow_domain *d);
+void _io_domain_del(cow_domain *d);
+
 struct cow_domain
 {
   double glb_lower[3]; // lower coordinates of global physical domain
@@ -71,6 +78,7 @@ struct cow_domain
   int n_ghst; // number of guard zones: >= 0
   //  int n_fields; // number of data fields (dynamically adjustable)
   //  int field_iter; // index into data fields array used for iterating over them
+  int balanced; // true when all subgrids have the same size
   int committed; // true after cow_domain_commit called, locks out size changes
   //  cow_dfield **fields; // array of pointers to data fields
 #if (COW_MPI)
@@ -87,17 +95,14 @@ struct cow_domain
   MPI_Comm mpi_cart; // the cartesian communicator
 #endif
 #if (COW_HDF5)
-  hsize_t ChunkSize[3];
   hsize_t L_nint_h5[3];
   hsize_t L_ntot_h5[3];
   hsize_t L_strt_h5[3];
   hsize_t G_ntot_h5[3];
   hsize_t G_strt_h5[3];
-  int TotalLocalZones;
-  int EnableChunking;
-  int EnableAlignment;
-  int DiskBlockSize;
-  int AlignThreshold;
+  hid_t fapl;
+  hid_t dcpl;
+  hid_t dxpl;
 #endif
 } ;
 
