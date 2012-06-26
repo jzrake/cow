@@ -112,7 +112,7 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
   cow_domain *d = f->domain;
-#ifdef (COW_MPI)
+#if (COW_MPI)
   if (f->domain->cart_rank == 0) {
 #endif
     // -------------------------------------------------------------------------
@@ -123,9 +123,11 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
     if (testf == NULL) {
       hid_t fid = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
       H5Fclose(fid);
+    }
+    else {
       fclose(testf);
     }
-#ifdef (COW_MPI)
+#if (COW_MPI)
   }
 #endif
   hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
