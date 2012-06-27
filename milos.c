@@ -7,44 +7,31 @@
 #define KILOBYTES (1<<10)
 #define MEGABYTES (1<<20)
 
-static double diff5(double *f, int s)
-// http://en.wikipedia.org/wiki/Five-point_stencil
-{
-  return (-f[2*s] + 8*f[s] - 8*f[-s] + f[-2*s]) / 12.0;
-}
 static void divergence(double *result, double **args, int **s, cow_domain *d)
 {
-#define M(i,j,k) ((i)*si + (j)*sj + (k)*sk)
+#define M(i,j,k) ((i)*s[0][0] + (j)*s[0][1] + (k)*s[0][2])
   double *fx = &args[0][0];
   double *fy = &args[0][1];
   double *fz = &args[0][2];
-  int si = s[0][0];
-  int sj = s[0][1];
-  int sk = s[0][2];
-  int i = 0;
-  int j = 0;
-  int k = 0;
-  *result = ((fx[ M(i+1,j  ,k  ) ] + fx[ M(i+1,j+1,k  ) ] +
-	      fx[ M(i+1,j  ,k+1) ] + fx[ M(i+1,j+1,k+1) ]) -
-	     (fx[ M(i  ,j  ,k  ) ] + fx[ M(i  ,j+1,k  ) ] +
-	      fx[ M(i  ,j  ,k+1) ] + fx[ M(i  ,j+1,k+1) ])) / 4.0
-    +       ((fy[ M(i  ,j+1,k  ) ] + fy[ M(i  ,j+1,k+1) ] +
-	      fy[ M(i+1,j+1,k  ) ] + fy[ M(i+1,j+1,k+1) ]) -
-	     (fy[ M(i  ,j  ,k  ) ] + fy[ M(i  ,j  ,k+1) ] +
-	      fy[ M(i+1,j  ,k  ) ] + fy[ M(i+1,j  ,k+1) ])) / 4.0
-    +       ((fz[ M(i  ,j  ,k+1) ] + fz[ M(i+1,j  ,k+1) ] +
-	      fz[ M(i  ,j+1,k+1) ] + fz[ M(i+1,j+1,k+1) ]) -
-	     (fz[ M(i  ,j  ,k  ) ] + fz[ M(i+1,j  ,k  ) ] +
-	      fz[ M(i  ,j+1,k  ) ] + fz[ M(i+1,j+1,k  ) ])) / 4.0;
+  *result = ((fx[M(1,0,0)] + fx[M(1,1,0)] + fx[M(1,0,1)] + fx[M(1,1,1)]) -
+	     (fx[M(0,0,0)] + fx[M(0,1,0)] + fx[M(0,0,1)] + fx[M(0,1,1)])) / 4.0
+    +       ((fy[M(0,1,0)] + fy[M(0,1,1)] + fy[M(1,1,0)] + fy[M(1,1,1)]) -
+	     (fy[M(0,0,0)] + fy[M(0,0,1)] + fy[M(1,0,0)] + fy[M(1,0,1)])) / 4.0
+    +       ((fz[M(0,0,1)] + fz[M(1,0,1)] + fz[M(0,1,1)] + fz[M(1,1,1)]) -
+	     (fz[M(0,0,0)] + fz[M(1,0,0)] + fz[M(0,1,0)] + fz[M(1,1,0)])) / 4.0;
+#undef M
 }
 static void curl(double *result, double **args, int **s, cow_domain *d)
 {
+// http://en.wikipedia.org/wiki/Five-point_stencil
+#define diff5(f,s) ((-f[2*s] + 8*f[s] - 8*f[-s] + f[-2*s]) / 12.0)
   double *f0 = &args[0][0];
   double *f1 = &args[0][1];
   double *f2 = &args[0][2];
   result[0] = diff5(f2, s[0][1]) - diff5(f1, s[0][2]);
   result[1] = diff5(f0, s[0][2]) - diff5(f2, s[0][0]);
   result[2] = diff5(f1, s[0][0]) - diff5(f0, s[0][1]);
+#undef diff5
 }
 
 int main(int argc, char **argv)
