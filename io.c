@@ -34,6 +34,7 @@
 
 static void _io_write(cow_dfield *f, const char *fname);
 static void _io_read(cow_dfield *f, const char *fname);
+static int _io_check_file_exists(const char *fname);
 
 void _io_domain_commit(cow_domain *d)
 {
@@ -109,6 +110,25 @@ void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize)
   H5Pset_alignment(d->fapl, alignthreshold, diskblocksize);
 #endif
 }
+void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname)
+{
+#if (COW_HDF5)
+  if (_io_check_file_exists(fname)) return;
+  hid_t file = H5Fopen(fname, H5F_ACC_RDONLY, d->fapl);
+  hid_t dset = H5Dopen(file, dname, H5P_DEFAULT);
+  hid_t fspc = H5Dget_space(dset);
+  hsize_t dims[3];
+  int ndims = H5Sget_simple_extent_dims(fspc, dims, NULL);
+  H5Dclose(dset);
+  H5Fclose(file);
+  cow_domain_setndim(d, ndims);
+  for (int n=0; n<ndims; ++n) {
+    cow_domain_setsize(d, n, dims[n]);
+  }
+  printf("[hdf5] inferred global domain size of (%lld %lld %lld) from %s/%s\n",
+	dims[0], dims[1], dims[2], fname, dname);
+#endif
+}
 void cow_dfield_write(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
@@ -147,14 +167,7 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
 void cow_dfield_read(cow_dfield *f, const char *fname)
 {
 #if (COW_HDF5)
-  FILE *testf = fopen(fname, "r");
-  if (testf == NULL) {
-    printf("[hdf5] error: file dows not exist: %s\n", fname);
-    return;
-  }
-  else {
-    fclose(testf);
-  }
+  if (_io_check_file_exists(fname)) return;
   const clock_t start = clock();
   _io_read(f, fname);
   cow_dfield_syncguard(f);
@@ -286,7 +299,7 @@ void _io_read(cow_dfield *f, const char *fname)
   for (int rank=0; rank<d->cart_size; ++rank) {
     if (rank == d->cart_rank) {
 #endif
-      hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
+      hid_t file = H5Fopen(fname, H5F_ACC_RDONLY, d->fapl);
       hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
       hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
       hid_t fspc = H5Screate_simple(n_dims, G_ntot, NULL);
@@ -309,7 +322,18 @@ void _io_read(cow_dfield *f, const char *fname)
 #endif // !COW_HDF5_MPI && COW_MPI
 #endif
 }
-
+int _io_check_file_exists(const char *fname)
+{
+  FILE *testf = fopen(fname, "r");
+  if (testf == NULL) {
+    printf("[hdf5] error: file does not exist: %s\n", fname);
+    return 1;
+  }
+  else {
+    fclose(testf);
+    return 0;
+  }
+}
 
 
 

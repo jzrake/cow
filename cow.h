@@ -24,13 +24,11 @@ void cow_domain_setguard(cow_domain *d, int guard);
 void cow_domain_setprocsizes(cow_domain *d, int dim, int size);
 int cow_domain_getsize(cow_domain *d, int dim);
 int cow_domain_getguard(cow_domain *d);
-//cow_dfield *cow_domain_addfield(cow_domain *d, const char *name);
-//cow_dfield *cow_domain_iteratefields(cow_domain *d);
-//cow_dfield *cow_domain_nextfield(cow_domain *d);
 int cow_domain_getnumlocalzones(cow_domain *d);
 void cow_domain_setcollective(cow_domain *d, int mode);
 void cow_domain_setchunk(cow_domain *d, int mode);
 void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize);
+void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname);
 
 cow_dfield *cow_dfield_new(cow_domain *domain, const char *name);
 void cow_dfield_commit(cow_dfield *f);
@@ -50,6 +48,7 @@ void *cow_dfield_getdata(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
 void cow_dfield_write(cow_dfield *f, const char *fname);
 void cow_dfield_read(cow_dfield *f, const char *fname);
+
 
 
 #ifdef COW_PRIVATE_DEFS

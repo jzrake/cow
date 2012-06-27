@@ -7,7 +7,11 @@
 #define KILOBYTES (1<<10)
 #define MEGABYTES (1<<20)
 
-
+static double diff5(double *f, int s)
+// http://en.wikipedia.org/wiki/Five-point_stencil
+{
+  return (-f[2*s] + 8*f[s] - 8*f[-s] + f[-2*s]) / 12.0;
+}
 static void divergence(double *result, double **args, int **s, cow_domain *d)
 {
 #define M(i,j,k) ((i)*si + (j)*sj + (k)*sk)
@@ -33,7 +37,15 @@ static void divergence(double *result, double **args, int **s, cow_domain *d)
 	     (fz[ M(i  ,j  ,k  ) ] + fz[ M(i+1,j  ,k  ) ] +
 	      fz[ M(i  ,j+1,k  ) ] + fz[ M(i+1,j+1,k  ) ])) / 4.0;
 }
-
+static void curl(double *result, double **args, int **s, cow_domain *d)
+{
+  double *f0 = &args[0][0];
+  double *f1 = &args[0][1];
+  double *f2 = &args[0][2];
+  result[0] = diff5(f2, s[0][1]) - diff5(f1, s[0][2]);
+  result[1] = diff5(f0, s[0][2]) - diff5(f2, s[0][0]);
+  result[2] = diff5(f1, s[0][0]) - diff5(f0, s[0][1]);
+}
 
 int main(int argc, char **argv)
 {
@@ -46,20 +58,32 @@ int main(int argc, char **argv)
     printf("was compiled with MPI support\n");
   }
 #endif
+
+  if (argc == 3) {
+    printf("running on input file %s\n", argv[1]);
+  }
+  else {
+    printf("usage: $> milos infile.h5 outfile.h5\n");
+    goto done;
+  }
+
   cow_domain *domain = cow_domain_new();
   cow_dfield *vel = cow_dfield_new(domain, "prim");
   cow_dfield *mag = cow_dfield_new(domain, "prim");
-  cow_dfield *div = cow_dfield_new(domain, "divergence");
+  cow_dfield *divB = cow_dfield_new(domain, "divB");
+  cow_dfield *divV = cow_dfield_new(domain, "divV");
+  cow_dfield *curlB = cow_dfield_new(domain, "curlB");
+  cow_dfield *curlV = cow_dfield_new(domain, "curlV");
 
-  cow_domain_setndim(domain, 3);
+  int collective = getenv("COW_HDF5_COLLECTIVE") ? atoi(getenv("COW_HDF5_COLLECTIVE")) : 0;
+  printf("COW_HDF5_COLLECTIVE: %d\n", collective);
+
+  cow_domain_readsize(domain, argv[1], "prim/vx");
   cow_domain_setguard(domain, 2);
-  cow_domain_setsize(domain, 0, 16);
-  cow_domain_setsize(domain, 1, 16);
-  cow_domain_setsize(domain, 2, 16);
   cow_domain_commit(domain);
 
   cow_domain_setchunk(domain, 1);
-  cow_domain_setcollective(domain, 0);
+  cow_domain_setcollective(domain, collective);
   cow_domain_setalign(domain, 4*KILOBYTES, 4*MEGABYTES);
 
   cow_dfield_addmember(vel, "vx");
@@ -68,25 +92,45 @@ int main(int argc, char **argv)
   cow_dfield_addmember(mag, "Bx");
   cow_dfield_addmember(mag, "By");
   cow_dfield_addmember(mag, "Bz");
-  cow_dfield_addmember(div, "divB");
+
+  cow_dfield_addmember(divB, "divB");
+  cow_dfield_addmember(divV, "divV");
+  cow_dfield_addmember(curlB, "fx");
+  cow_dfield_addmember(curlB, "fy");
+  cow_dfield_addmember(curlB, "fz");
+  cow_dfield_addmember(curlV, "fx");
+  cow_dfield_addmember(curlV, "fy");
+  cow_dfield_addmember(curlV, "fz");
 
   cow_dfield_commit(vel);
   cow_dfield_commit(mag);
-  cow_dfield_commit(div);
+  cow_dfield_commit(divB);
+  cow_dfield_commit(divV);
+  cow_dfield_commit(curlB);
+  cow_dfield_commit(curlV);
 
-  if (argc > 1) {
-    printf("running on input file %s\n", argv[1]);
-  }
   cow_dfield_read(vel, argv[1]);
   cow_dfield_read(mag, argv[1]);
 
-  cow_dfield_transform(div, &mag, 1, divergence);
+  cow_dfield_transform(divB, &mag, 1, divergence);
+  cow_dfield_transform(divV, &vel, 1, divergence);
+  cow_dfield_transform(curlB, &mag, 1, curl);
+  cow_dfield_transform(curlV, &vel, 1, curl);
 
-  cow_dfield_write(div, "output.h5");
+  cow_dfield_write(divB, argv[2]);
+  cow_dfield_write(divV, argv[2]);
+  cow_dfield_write(curlB, argv[2]);
+  cow_dfield_write(curlV, argv[2]);
 
   cow_dfield_del(vel);
   cow_dfield_del(mag);
+  cow_dfield_del(divB);
+  cow_dfield_del(divV);
+  cow_dfield_del(curlB);
+  cow_dfield_del(curlV);
   cow_domain_del(domain);
+
+ done:
 #if (COW_MPI)
   MPI_Finalize();
 #endif
