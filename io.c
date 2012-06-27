@@ -160,7 +160,8 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
   const clock_t start = clock();
   _io_write(f, fname);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
-  fprintf(iolog, "[hdf5] write to %s took %f minutes\n", fname, sec/60.0);
+  fprintf(iolog, "[hdf5] write to %s/%s took %f minutes\n", fname, f->name,
+	  sec/60.0);
   fflush(iolog);
 #endif
 }
@@ -172,7 +173,8 @@ void cow_dfield_read(cow_dfield *f, const char *fname)
   _io_read(f, fname);
   cow_dfield_syncguard(f);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
-  fprintf(iolog, "[hdf5] read from %s took %f minutes\n", fname, sec/60.0);
+  fprintf(iolog, "[hdf5] read from %s/%s took %f minutes\n", fname, f->name,
+	  sec/60.0);
   fflush(iolog);
 #endif
 }

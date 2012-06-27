@@ -3,15 +3,19 @@
 #ifndef COW_HEADER_INCLUDED
 #define COW_HEADER_INCLUDED
 #include <stdlib.h>
+
 // -----------------------------------------------------------------------------
 //
 // These prototypes constitute the C.O.W. interface
 //
 // -----------------------------------------------------------------------------
-struct cow_dfield; // forward declarations (for opaque data structure)
-struct cow_domain;
-typedef struct cow_dfield cow_dfield;
+
+#define COW_ALL_DIMS -10
+
+struct cow_domain; // forward declarations (for opaque data structure)
+struct cow_dfield;
 typedef struct cow_domain cow_domain;
+typedef struct cow_dfield cow_dfield;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      cow_domain *d);
 
@@ -22,13 +26,16 @@ void cow_domain_setsize(cow_domain *d, int dim, int size);
 void cow_domain_setndim(cow_domain *d, int ndim);
 void cow_domain_setguard(cow_domain *d, int guard);
 void cow_domain_setprocsizes(cow_domain *d, int dim, int size);
-int cow_domain_getsize(cow_domain *d, int dim);
-int cow_domain_getguard(cow_domain *d);
-int cow_domain_getnumlocalzones(cow_domain *d);
 void cow_domain_setcollective(cow_domain *d, int mode);
 void cow_domain_setchunk(cow_domain *d, int mode);
 void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize);
 void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname);
+int cow_domain_getsize(cow_domain *d, int dim);
+int cow_domain_getguard(cow_domain *d);
+int cow_domain_getnumlocalzonesincguard(cow_domain *d, int dim);
+int cow_domain_getnumlocalzonesinterior(cow_domain *d, int dim);
+int cow_domain_getnumglobalzones(cow_domain *d, int dim);
+int cow_domain_getglobalstartindex(cow_domain *d, int dim);
 
 cow_dfield *cow_dfield_new(cow_domain *domain, const char *name);
 void cow_dfield_commit(cow_dfield *f);
@@ -40,16 +47,15 @@ void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out);
 void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
 			  cow_transform op);
 
-int cow_dfield_getstride(cow_dfield *d, int dim);
-const char *cow_dfield_getname(cow_dfield *f);
 const char *cow_dfield_iteratemembers(cow_dfield *f);
 const char *cow_dfield_nextmember(cow_dfield *f);
+const char *cow_dfield_getname(cow_dfield *f);
+int cow_dfield_getstride(cow_dfield *d, int dim);
+size_t cow_dfield_getdatabytes(cow_dfield *f);
 void *cow_dfield_getdata(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
 void cow_dfield_write(cow_dfield *f, const char *fname);
 void cow_dfield_read(cow_dfield *f, const char *fname);
-
-
 
 #ifdef COW_PRIVATE_DEFS
 #if (COW_MPI)
@@ -120,6 +126,6 @@ struct cow_dfield
   MPI_Datatype *recv_type; // " "                 received from " "
 #endif
 } ;
-#endif // COW_PRIVATE_DEFS
 
+#endif // COW_PRIVATE_DEFS
 #endif // COW_HEADER_INCLUDED

@@ -188,9 +188,44 @@ void cow_domain_commit(cow_domain *d)
 #endif
   d->committed = 1;
 }
-int cow_domain_getnumlocalzones(cow_domain *d)
+int cow_domain_getnumlocalzonesincguard(cow_domain *d, int dim)
 {
-  return d->L_ntot[0] * d->L_ntot[1] * d->L_ntot[2];
+  switch (dim) {
+  case COW_ALL_DIMS: return d->L_ntot[0] * d->L_ntot[1] * d->L_ntot[2];
+  case 0: return d->L_ntot[0];
+  case 1: return d->L_ntot[1];
+  case 2: return d->L_ntot[2];
+  default: return 0;
+  }
+}
+int cow_domain_getnumlocalzonesinterior(cow_domain *d, int dim)
+{
+  switch (dim) {
+  case COW_ALL_DIMS: return d->L_nint[0] * d->L_nint[1] * d->L_nint[2];
+  case 0: return d->L_nint[0];
+  case 1: return d->L_nint[1];
+  case 2: return d->L_nint[2];
+  default: return 0;
+  }
+}
+int cow_domain_getnumglobalzones(cow_domain *d, int dim)
+{
+  switch (dim) {
+  case COW_ALL_DIMS: return d->G_ntot[0] * d->G_ntot[1] * d->G_ntot[2];
+  case 0: return d->G_ntot[0];
+  case 1: return d->G_ntot[1];
+  case 2: return d->G_ntot[2];
+  default: return 0;
+  }
+}
+int cow_domain_getglobalstartindex(cow_domain *d, int dim)
+{
+  switch (dim) {
+  case 0: return d->G_strt[0];
+  case 1: return d->G_strt[1];
+  case 2: return d->G_strt[2];
+  default: return 0;
+  }
 }
 
 // -----------------------------------------------------------------------------
@@ -240,6 +275,11 @@ const char *cow_dfield_getname(cow_dfield *f)
 {
   return f->name;
 }
+size_t cow_dfield_getdatabytes(cow_dfield *f)
+{
+  return cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS) *
+    f->n_members * sizeof(double);
+}
 void cow_dfield_addmember(cow_dfield *f, const char *name)
 {
   if (f->committed) return;
@@ -267,8 +307,8 @@ void cow_dfield_commit(cow_dfield *f)
   case 3: _dfield_maketype3d(f); break;
   }
 #endif
-  const int n_zones = cow_domain_getnumlocalzones(f->domain);
-  f->data = malloc(n_zones * f->n_members * sizeof(double));
+  const int nz = cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS);
+  f->data = malloc(nz * f->n_members * sizeof(double));
   int *N = f->domain->L_ntot;
   switch (f->domain->n_dims) {
   case 1:
@@ -373,59 +413,6 @@ void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out)
 {
   _dfield_extractreplace(f, I0, I1, out, 'r');
 }
-void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
-			  cow_transform op)
-{
-  int ni = cow_domain_getsize(result->domain, 0);
-  int nj = cow_domain_getsize(result->domain, 1);
-  int nk = cow_domain_getsize(result->domain, 2);
-  int ng = cow_domain_getguard(result->domain);
-  int *rs = result->stride;
-  int **S = (int**) malloc(nargs * sizeof(int*));
-  double **x = (double**) malloc(nargs * sizeof(double*));
-  for (int n=0; n<nargs; ++n) {
-    S[n] = args[n]->stride;
-  }
-  switch (result->domain->n_dims) {
-  case 1:
-    for (int i=ng; i<ni+ng; ++i) {
-      for (int n=0; n<nargs; ++n) {
-	x[n] = (double*)args[n]->data + (S[n][0]*i);
-      }
-      int m1 = rs[0]*i;
-      op((double*)result->data + m1, x, S, result->domain);
-    }
-    break;
-  case 2:
-    for (int i=ng; i<ni+ng; ++i) {
-      for (int j=ng; j<nj+ng; ++j) {
-	for (int n=0; n<nargs; ++n) {
-	  x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j);
-	}
-	int m1 = rs[0]*i + rs[1]*j;
-	op((double*)result->data + m1, x, S, result->domain);
-      }
-    }
-    break;
-  case 3:
-    for (int i=ng; i<ni+ng; ++i) {
-      for (int j=ng; j<nj+ng; ++j) {
-	for (int k=ng; k<nk+ng; ++k) {
-	  for (int n=0; n<nargs; ++n) {
-	    x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j + S[n][2]*k);
-	  }
-	  int m1 = rs[0]*i + rs[1]*j + rs[2]*k;
-	  op((double*)result->data + m1, x, S, result->domain);
-	}
-      }
-    }
-    break;
-  }
-  free(S);
-  free(x);
-  cow_dfield_syncguard(result);
-}
-
 void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
 			    void *out, char op)
 {
@@ -488,6 +475,59 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
     }
   } break;
   }
+}
+
+void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
+			  cow_transform op)
+{
+  int ni = cow_domain_getsize(result->domain, 0);
+  int nj = cow_domain_getsize(result->domain, 1);
+  int nk = cow_domain_getsize(result->domain, 2);
+  int ng = cow_domain_getguard(result->domain);
+  int *rs = result->stride;
+  int **S = (int**) malloc(nargs * sizeof(int*));
+  double **x = (double**) malloc(nargs * sizeof(double*));
+  for (int n=0; n<nargs; ++n) {
+    S[n] = args[n]->stride;
+  }
+  switch (result->domain->n_dims) {
+  case 1:
+    for (int i=ng; i<ni+ng; ++i) {
+      for (int n=0; n<nargs; ++n) {
+	x[n] = (double*)args[n]->data + (S[n][0]*i);
+      }
+      int m1 = rs[0]*i;
+      op((double*)result->data + m1, x, S, result->domain);
+    }
+    break;
+  case 2:
+    for (int i=ng; i<ni+ng; ++i) {
+      for (int j=ng; j<nj+ng; ++j) {
+	for (int n=0; n<nargs; ++n) {
+	  x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j);
+	}
+	int m1 = rs[0]*i + rs[1]*j;
+	op((double*)result->data + m1, x, S, result->domain);
+      }
+    }
+    break;
+  case 3:
+    for (int i=ng; i<ni+ng; ++i) {
+      for (int j=ng; j<nj+ng; ++j) {
+	for (int k=ng; k<nk+ng; ++k) {
+	  for (int n=0; n<nargs; ++n) {
+	    x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j + S[n][2]*k);
+	  }
+	  int m1 = rs[0]*i + rs[1]*j + rs[2]*k;
+	  op((double*)result->data + m1, x, S, result->domain);
+	}
+      }
+    }
+    break;
+  }
+  free(S);
+  free(x);
+  cow_dfield_syncguard(result);
 }
 
 #if (COW_MPI)
