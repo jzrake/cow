@@ -423,6 +423,7 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
   }
   free(S);
   free(x);
+  cow_dfield_syncguard(result);
 }
 
 void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
