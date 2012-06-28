@@ -18,7 +18,7 @@ DEFINES = \
 OBJ = cow.o histogram.o fft_3d.c io.o pack_3d.o remap_3d.o
 
 
-default : main milos
+default : main milos cowpy
 
 %.o : %.c
 	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c -std=c99
@@ -27,10 +27,22 @@ default : main milos
 	$(CXX) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
 
 main : main.o $(OBJ)
-	$(CXX) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CXX) $(CFLAGS) -o $@ $^ $(LIB)
 
 milos : milos.o $(OBJ)
-	$(CXX) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CXX) $(CFLAGS) -o $@ $^ $(LIB)
+
+cow_wrap.c : cow.i
+	swig -python $^
+
+cowpy.o : cowpy.c
+	$(CC) $(CFLAGS) -o $@ $< -c $(DEFINES) -I/Library/Frameworks/Python.framework/Headers -std=c99
+
+cow_wrap.o : cow_wrap.c
+	$(CC) $(CFLAGS) -o $@ $< -c -I/Library/Frameworks/Python.framework/Headers
+
+cowpy : cowpy.o cow_wrap.o $(OBJ)
+	$(CXX) $(CFLAGS) -o $@ $^ $(LIB) -lpython
 
 clean :
-	rm -rf main milos *.o *.dSYM
+	rm -rf main milos cowpy cow_wrap.c cow.py *.o *.dSYM
