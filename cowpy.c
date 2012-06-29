@@ -18,6 +18,8 @@ int main(int argc, char **argv)
   }
 #endif
   Py_Initialize();
+  PySys_SetArgv(argc, argv);
+  Py_SetProgramName("/Users/jzrake/Work/cow/cowpy");
   init_cow();
 
   if (argc > 1) {

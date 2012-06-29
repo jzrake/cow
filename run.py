@@ -1,15 +1,16 @@
 
+from cow import *
+import os, sys
 
-import _cow
-import os
-print os.getcwd()
-d = _cow.cow_domain_new()
-f = _cow.cow_dfield_new(d, "primitive")
+print sys.argv
 
-_cow.cow_domain_commit(d)
-_cow.cow_dfield_commit(f)
+d = cow_domain_new()
+f = cow_dfield_new(d, "primitive")
 
-print _cow.cow_dfield_getname(f)
+cow_domain_commit(d)
+cow_dfield_commit(f)
 
-_cow.cow_dfield_del(f)
-_cow.cow_domain_del(d)
+print cow_dfield_getname(f)
+
+cow_dfield_del(f)
+cow_domain_del(d)
