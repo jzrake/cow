@@ -6,6 +6,8 @@
 #define MODULE "hist"
 
 
+static int H5Lexists_safe(hid_t base, const char *path);
+
 cow_histogram *cow_histogram_new()
 {
   cow_histogram *h = (cow_histogram*) malloc(sizeof(cow_histogram));
@@ -22,8 +24,8 @@ cow_histogram *cow_histogram_new()
     .counts = NULL,
     .nickname = NULL,
     .fullname = NULL,
-    .binmode = COW_HIST_SPACING_LINEAR,
-    .spacing = COW_HIST_BINMODE_AVERAGE,
+    .binmode = COW_HIST_BINMODE_AVERAGE,
+    .spacing = COW_HIST_SPACING_LINEAR,
     .n_dims = 0,
     .committed = 0
   } ;
@@ -94,11 +96,24 @@ void cow_histogram_del(cow_histogram *h)
   free(h->fullname);
   free(h);
 }
-
 void cow_histogram_setbinmode(cow_histogram *h, int binmode)
 {
   if (h->committed) return;
-  h->binmode = binmode;
+  switch (binmode) {
+  case COW_HIST_BINMODE_DENSITY: h->binmode = binmode; break;
+  case COW_HIST_BINMODE_AVERAGE: h->binmode = binmode; break;
+  case COW_HIST_BINMODE_COUNTS: h->binmode = binmode; break;
+  default: printf("[%s] error: no such bin mode\n", MODULE); break;
+  }
+}
+void cow_histogram_setspacing(cow_histogram *h, int spacing)
+{
+  if (h->committed) return;
+  switch (spacing) {
+  case COW_HIST_SPACING_LINEAR: h->spacing = spacing; break;
+  case COW_HIST_SPACING_LOG: h->spacing = spacing; break;
+  default: printf("[%s] error: no such spacing\n", MODULE); break;
+  }
 }
 void cow_histogram_setnbins(cow_histogram *h, int dim, int nbins)
 {
@@ -195,6 +210,7 @@ void cow_histogram_synchronize(cow_histogram *h)
 
 double cow_histogram_getbinval(cow_histogram *h, int i, int j)
 {
+  if (!h->committed) return 0.0;
   if (i > h->nbinsx || j > h->nbinsy) return 0.0;
   int c = h->counts[i*h->nbinsy + j];
   double w = h->weight[i*h->nbinsy + j];
@@ -239,6 +255,9 @@ void cow_histogram_dumpascii(cow_histogram *h, const char *fn)
     printf("[%s] could not open file %s\n", __FILE__, fn);
     return;
   }
+  else {
+    printf("[%s] writing histogram as ASCII table to %s\n", MODULE, fn);
+  }
   if (h->n_dims == 1) {
     for (int n=0; n<h->nbinsx; ++n) {
       fprintf(file, "%f %f\n", 0.5*(h->bedgesx[n] + h->bedgesx[n+1]),
@@ -258,29 +277,31 @@ void cow_histogram_dumpascii(cow_histogram *h, const char *fn)
   fclose(file);
 }
 
-
 void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
+// -----------------------------------------------------------------------------
+// Dumps the histogram to the HDF5 file named `fn`, under the group
+// `gn`/h->fullname. Synchronizes it across processes before doing so. All MPI
+// processes must participate, the function uses rank 0 to do the write.
+// -----------------------------------------------------------------------------
 {
 #if (COW_HDF5)
   if (!h->committed) return;
+  char gname[1024];
+  int rank = 0;
+  snprintf(gname, 1024, "%s/%s", gn, h->nickname);
+  cow_histogram_synchronize(h);
 #if (COW_MPI)
   int run_uses_mpi;
-  int rank = 0;
   MPI_Initialized(&run_uses_mpi);
-  if (run_uses_mpi) {
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-  }
-  if (rank == 0) {
+  if (run_uses_mpi) MPI_Comm_rank(MPI_COMM_WORLD, &rank);
 #endif
+  if (rank == 0) {
     // -------------------------------------------------------------------------
     // The write functions assume the file is already created. Have master
     // create the file if it's not there already.
     // -------------------------------------------------------------------------
     FILE *testf = fopen(fn, "r");
     hid_t fid;
-    char gname[1024];
-    snprintf(gname, 1024, "%s/%s", gn, h->nickname);
-    printf("[%s] writing histogram to %s/%s\n", MODULE, fn, gname);
     if (testf == NULL) {
       fid = H5Fcreate(fn, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
     }
@@ -288,19 +309,28 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
       fclose(testf);
       fid = H5Fopen(fn, H5F_ACC_RDWR, H5P_DEFAULT);
     }
+    if (H5Lexists_safe(fid, gname)) {
+      printf("[%s] writing histogram as HDF5 to %s/%s (clobber existing)\n",
+	     MODULE, fn, gname);
+      H5Gunlink(fid, gname);
+    }
+    else {
+      printf("[%s] writing histogram as HDF5 to %s/%s\n", MODULE, fn, gname);
+    }
     hid_t gcpl = H5Pcreate(H5P_LINK_CREATE);
     H5Pset_create_intermediate_group(gcpl, 1);
     hid_t memb = H5Gcreate(fid, gname, gcpl, H5P_DEFAULT, H5P_DEFAULT);
     H5Pclose(gcpl);
     H5Gclose(memb);
     H5Fclose(fid);
-#if (COW_MPI)
   }
-#endif
+  else {
+    return;
+  }
   // Create a group to represent this histogram, and an attribute to name it
   // ---------------------------------------------------------------------------
   hid_t fid = H5Fopen(fn, H5F_ACC_RDWR, H5P_DEFAULT);
-  hid_t grp = H5Gopen(fid, h->nickname, H5P_DEFAULT);
+  hid_t grp = H5Gopen(fid, gname, H5P_DEFAULT);
   if (h->fullname != NULL) {
     hid_t aspc = H5Screate(H5S_SCALAR);
     hid_t strn = H5Tcopy(H5T_C_S1);
@@ -360,5 +390,39 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
   free(binlocX);
   free(binlocY);
   free(binvalV);
+#endif
+}
+
+
+int H5Lexists_safe(hid_t base, const char *path)
+// -----------------------------------------------------------------------------
+// The HDF5 specification only allows H5Lexists to be called on an immediate
+// child of the current object. However, you may wish to see whether a whole
+// relative path exists, returning false if any of the intermediate links are
+// not present. This function does that.
+// http://www.hdfgroup.org/HDF5/doc/RM/RM_H5L.html#Link-Exists
+// -----------------------------------------------------------------------------
+{
+#if (COW_HDF5)
+  hid_t last = base, next;
+  char *pch;
+  char pathc[2048];
+  strcpy(pathc, path);
+  pch = strtok(pathc, "/");
+  while (pch != NULL) {
+    int exists = H5Lexists(last, pch, H5P_DEFAULT);
+    if (!exists) {
+      if (last != base) H5Gclose(last);
+      return 0;
+    }
+    else {
+      next = H5Gopen(last, pch, H5P_DEFAULT);
+      if (last != base) H5Gclose(last);
+      last = next;
+    }
+    pch = strtok(NULL, "/");
+  }
+  if (last != base) H5Gclose(last);
+  return 1;
 #endif
 }
