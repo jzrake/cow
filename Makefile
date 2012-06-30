@@ -15,7 +15,7 @@ DEFINES = \
 	-DCOW_HDF5=$(COW_HDF5) \
 	-DCOW_HDF5_MPI=$(COW_HDF5_MPI)
 
-OBJ = cow.o histogram.o fft_3d.c io.o pack_3d.o remap_3d.o
+OBJ = cow.o hist.o fft_3d.c io.o pack_3d.o remap_3d.o
 
 
 default : main milos
@@ -24,13 +24,13 @@ default : main milos
 	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c -std=c99
 
 %.o : %.cpp
-	$(CXX) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
+	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
 
 main : main.o $(OBJ)
-	$(CXX) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
 milos : milos.o $(OBJ)
-	$(CXX) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
 clean :
 	rm -rf main milos *.o *.dSYM

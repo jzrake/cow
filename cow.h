@@ -12,10 +12,15 @@
 
 #define COW_ALL_DIMS -10
 
+#define COW_BINNING_LINSPACE -33
+#define COW_BINNING_LOGSPACE -34
+
 struct cow_domain; // forward declarations (for opaque data structure)
 struct cow_dfield;
 typedef struct cow_domain cow_domain;
 typedef struct cow_dfield cow_dfield;
+typedef struct cow_histogram cow_histogram;
+
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      cow_domain *d);
 
@@ -56,6 +61,21 @@ void *cow_dfield_getdata(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
 void cow_dfield_write(cow_dfield *f, const char *fname);
 void cow_dfield_read(cow_dfield *f, const char *fname);
+
+cow_histogram *cow_histogram_new();
+void cow_histogram_commit(cow_histogram *h);
+void cow_histogram_del(cow_histogram *h);
+void cow_histogram_setbinsx(cow_histogram *h, int binsx);
+void cow_histogram_setbinsy(cow_histogram *h, int binsy);
+void cow_histogram_setbinmode(cow_histogram *h, int binmode);
+void cow_histogram_setlower(cow_histogram *h, int dim, double v0);
+void cow_histogram_setupper(cow_histogram *h, int dim, double v1);
+void cow_histogram_setfullname(cow_histogram *h, const char *fullname);
+void cow_histogram_setnickname(cow_histogram *h, const char *nickname);
+void cow_histogram_addsample(cow_histogram *h, double x, double w);
+void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
+void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
+void cow_histogram_synchronize(cow_histogram *h);
 
 #ifdef COW_PRIVATE_DEFS
 #if (COW_MPI)
@@ -125,6 +145,24 @@ struct cow_dfield
   MPI_Datatype *send_type; // chunk of data to be sent to respective neighbor
   MPI_Datatype *recv_type; // " "                 received from " "
 #endif
+} ;
+
+struct cow_histogram
+{
+  int nbinsx;
+  int nbinsy;
+  int x0;
+  int x1;
+  int y0;
+  int y1;
+  double *bedgesx;
+  double *bedgesy;
+  double *weight;
+  long *counts;
+  char *nickname;
+  char *fullname;
+  int binmode;
+  int n_dims;
 } ;
 
 #endif // COW_PRIVATE_DEFS
