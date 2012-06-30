@@ -65,14 +65,14 @@ void cow_dfield_read(cow_dfield *f, const char *fname);
 cow_histogram *cow_histogram_new();
 void cow_histogram_commit(cow_histogram *h);
 void cow_histogram_del(cow_histogram *h);
-void cow_histogram_setbinsx(cow_histogram *h, int binsx);
-void cow_histogram_setbinsy(cow_histogram *h, int binsy);
 void cow_histogram_setbinmode(cow_histogram *h, int binmode);
+void cow_histogram_setnbins(cow_histogram *h, int dim, int nbinsx);
 void cow_histogram_setlower(cow_histogram *h, int dim, double v0);
 void cow_histogram_setupper(cow_histogram *h, int dim, double v1);
 void cow_histogram_setfullname(cow_histogram *h, const char *fullname);
 void cow_histogram_setnickname(cow_histogram *h, const char *nickname);
-void cow_histogram_addsample(cow_histogram *h, double x, double w);
+void cow_histogram_addsample1(cow_histogram *h, double x, double w);
+void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w);
 void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
 void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
 void cow_histogram_synchronize(cow_histogram *h);
@@ -125,9 +125,9 @@ struct cow_domain
   hsize_t L_strt_h5[3];
   hsize_t G_ntot_h5[3];
   hsize_t G_strt_h5[3];
-  hid_t fapl;
-  hid_t dcpl;
-  hid_t dxpl;
+  hid_t fapl; // file access property list
+  hid_t dcpl; // data set creation property list
+  hid_t dxpl; // data set transfer property list
 #endif
 } ;
 

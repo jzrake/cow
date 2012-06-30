@@ -1,4 +1,5 @@
 
+#include <string.h>
 #include <math.h>
 #define COW_PRIVATE_DEFS
 #include "cow.h"
@@ -82,11 +83,91 @@ void cow_histogram_commit(cow_histogram *h)
 }
 void cow_histogram_del(cow_histogram *h)
 {
-
+  free(h->bedgesx);
+  free(h->bedgesy);
+  free(h->weight);
+  free(h->counts);
+  free(h->nickname);
+  free(h->fullname);
+  free(h);
 }
 
+void cow_histogram_setbinmode(cow_histogram *h, int binmode)
+{
+  h->binmode = binmode;
+}
+void cow_histogram_setnbins(cow_histogram *h, int dim, int nbins)
+{
+  switch (dim) {
+  case 0: h->nbinsx = nbins; break;
+  case 1: h->nbinsy = nbins; break;
+  case COW_ALL_DIMS: h->nbinsx = h->nbinsy = nbins; break;
+  default: break;
+  }
+}
+void cow_histogram_setlower(cow_histogram *h, int dim, double v0)
+{
+  switch (dim) {
+  case 0: h->x0 = v0; break;
+  case 1: h->y0 = v0; break;
+  case COW_ALL_DIMS: h->x0 = h->y0 = v0; break;
+  default: break;
+  }
+}
+void cow_histogram_setupper(cow_histogram *h, int dim, double v1)
+{
+  switch (dim) {
+  case 0: h->x1 = v1; break;
+  case 1: h->y1 = v1; break;
+  case COW_ALL_DIMS: h->x1 = h->y1 = v1; break;
+  default: break;
+  }
+}
+void cow_histogram_setfullname(cow_histogram *h, const char *fullname)
+{
+  h->fullname = (char*) realloc(h->fullname, strlen(fullname)+1);
+  strcpy(h->fullname, fullname);
+}
+void cow_histogram_setnickname(cow_histogram *h, const char *nickname)
+{
+  h->nickname = (char*) realloc(h->nickname, strlen(nickname)+1);
+  strcpy(h->nickname, nickname);
+}
 
-
+void cow_histogram_addsample1(cow_histogram *h, double x, double w)
+{
+  for (int n=0; n<h->nbinsx; ++n) {
+    if (h->bedgesx[n] < x && x < h->bedgesx[n+1]) {
+      h->weight[n] += w;
+      h->counts[n] += 1;
+      return;
+    }
+  }
+}
+void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w)
+{
+  int nx=-1, ny=-1;
+  for (int n=0; n<h->nbinsx; ++n) {
+    if (h->bedgesx[n] < x && x < h->bedgesx[n+1]) {
+      nx = n;
+      break;
+    }
+  }
+  for (int n=0; n<h->nbinsy; ++n) {
+    if (h->bedgesy[n] < y && y < h->bedgesy[n+1]) {
+      ny = n;
+      break;
+    }
+  }
+  if (nx == -1 || ny == -1) {
+    return;
+  }
+  else {
+    h->counts[nx * h->nbinsy + ny] += 1;
+    h->weight[nx * h->nbinsy + ny] += w;
+    return;
+  }
+}
 void cow_histogram_dumpascii(cow_histogram *h, const char *fn)
 {
   FILE *file = fopen(fn, "w");
