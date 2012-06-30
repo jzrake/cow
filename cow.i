@@ -9,6 +9,10 @@
 }
 
 %inline %{
+  extern "C"{
 #include "cow.h"
+#include "histogram.hpp"
+  }
 %}
 %include "cow.h"
+%include "histogram.hpp"

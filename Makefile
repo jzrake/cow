@@ -32,17 +32,17 @@ main : main.o $(OBJ)
 milos : milos.o $(OBJ)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LIB)
 
-cow_wrap.c : cow.i
-	swig -python $^
+cow_wrap.cpp : cow.i
+	swig -c++ -python -o $@ $^
 
 cowpy.o : cowpy.c
 	$(CC) $(CFLAGS) -o $@ $< -c $(DEFINES) -I/Library/Frameworks/Python.framework/Headers -std=c99
 
-cow_wrap.o : cow_wrap.c
-	$(CC) $(CFLAGS) -o $@ $< -c -I/Library/Frameworks/Python.framework/Headers
+cow_wrap.o : cow_wrap.cpp
+	$(CXX) $(CFLAGS) -o $@ $< -c -I/Library/Frameworks/Python.framework/Headers
 
 cowpy : cowpy.o cow_wrap.o $(OBJ)
 	$(CXX) $(CFLAGS) -o $@ $^ $(LIB) -lpython
 
 clean :
-	rm -rf main milos cowpy cow_wrap.c cow.py *.o *.dSYM
+	rm -rf main milos cowpy cow_wrap.cpp cow.py *.o *.dSYM
