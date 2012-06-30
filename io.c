@@ -31,6 +31,7 @@
 #include "cow.h"
 #define iolog stdout
 #define KILOBYTES (1<<10)
+#define MODULE "hdf5"
 
 static void _io_write(cow_dfield *f, const char *fname);
 static void _io_read(cow_dfield *f, const char *fname);
@@ -74,11 +75,11 @@ void cow_domain_setcollective(cow_domain *d, int mode)
 {
 #if (COW_HDF5 && COW_HDF5_MPI)
   if (mode) {
-    printf("[hdf5] setting HDF5 io mode to collective\n");
+    printf("[%s] setting HDF5 io mode to collective\n", MODULE);
     H5Pset_dxpl_mpio(d->dxpl, H5FD_MPIO_COLLECTIVE);
   }
   else {
-    printf("[hdf5] setting HDF5 io mode to independent\n");
+    printf("[%s] setting HDF5 io mode to independent\n", MODULE);
     H5Pset_dxpl_mpio(d->dxpl, H5FD_MPIO_INDEPENDENT);
   }
 #endif
@@ -88,16 +89,16 @@ void cow_domain_setchunk(cow_domain *d, int mode)
 #if (COW_HDF5)
   if (mode) {
     if (d->balanced) {
-      printf("[hdf5] enabled chunking on HDF5 files\n");
+      printf("[%s] enabled chunking on HDF5 files\n", MODULE);
       H5Pset_chunk(d->dcpl, d->n_dims, d->L_nint_h5);
     }
     else {
-      printf("[hdf5] chunking could not be enabled because the domain is not "
-	     "balanced\n");
+      printf("[%s] chunking could not be enabled because the domain is not "
+	     "balanced\n", MODULE);
     }
   }
   else {
-    printf("[hdf5] disabled chunking on HDF5 files\n");
+    printf("[%s] disabled chunking on HDF5 files\n", MODULE);
     H5Pset_chunk(d->dcpl, d->n_dims, d->G_ntot_h5);
   }
 #endif
@@ -105,8 +106,8 @@ void cow_domain_setchunk(cow_domain *d, int mode)
 void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize)
 {
 #if (COW_HDF5)
-  printf("[hdf5] align threshold: %d kB, disk block size: %d kB\n",
-	 alignthreshold/KILOBYTES, diskblocksize/KILOBYTES);
+  printf("[%s] align threshold: %d kB, disk block size: %d kB\n",
+	 MODULE, alignthreshold/KILOBYTES, diskblocksize/KILOBYTES);
   H5Pset_alignment(d->fapl, alignthreshold, diskblocksize);
 #endif
 }
@@ -125,8 +126,8 @@ void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname)
   for (int n=0; n<ndims; ++n) {
     cow_domain_setsize(d, n, dims[n]);
   }
-  printf("[hdf5] inferred global domain size of (%lld %lld %lld) from %s/%s\n",
-	dims[0], dims[1], dims[2], fname, dname);
+  printf("[%s] inferred global domain size of (%lld %lld %lld) from %s/%s\n",
+	 MODULE, dims[0], dims[1], dims[2], fname, dname);
 #endif
 }
 void cow_dfield_write(cow_dfield *f, const char *fname)
@@ -160,9 +161,9 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
   const clock_t start = clock();
   _io_write(f, fname);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
-  fprintf(iolog, "[hdf5] write to %s/%s took %f minutes\n", fname, f->name,
-	  sec/60.0);
-  fflush(iolog);
+  printf("[%s] write to %s/%s took %f minutes\n", MODULE, fname, f->name,
+	 sec/60.0);
+  fflush(stdout);
 #endif
 }
 void cow_dfield_read(cow_dfield *f, const char *fname)
@@ -173,9 +174,9 @@ void cow_dfield_read(cow_dfield *f, const char *fname)
   _io_read(f, fname);
   cow_dfield_syncguard(f);
   const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
-  fprintf(iolog, "[hdf5] read from %s/%s took %f minutes\n", fname, f->name,
-	  sec/60.0);
-  fflush(iolog);
+  printf("[%s] read from %s/%s took %f minutes\n", MODULE, fname, f->name,
+	 sec/60.0);
+  fflush(stdout);
 #endif
 }
 
@@ -328,7 +329,7 @@ int _io_check_file_exists(const char *fname)
 {
   FILE *testf = fopen(fname, "r");
   if (testf == NULL) {
-    printf("[hdf5] error: file does not exist: %s\n", fname);
+    printf("[%s] error: file does not exist: %s\n", MODULE, fname);
     return 1;
   }
   else {

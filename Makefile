@@ -17,8 +17,8 @@ DEFINES = \
 
 OBJ = cow.o hist.o fft_3d.c io.o pack_3d.o remap_3d.o
 
-
-default : main milos
+EXE = main testhist milos
+default : $(EXE)
 
 %.o : %.c
 	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c -std=c99
@@ -29,8 +29,11 @@ default : main milos
 main : main.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
+testhist : testhist.o $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+
 milos : milos.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
 clean :
-	rm -rf main milos *.o *.dSYM
+	rm -rf $(EXE) $(OBJ)

@@ -151,10 +151,10 @@ struct cow_histogram
 {
   int nbinsx;
   int nbinsy;
-  int x0;
-  int x1;
-  int y0;
-  int y1;
+  double x0;
+  double x1;
+  double y0;
+  double y1;
   double *bedgesx;
   double *bedgesy;
   double *weight;
@@ -163,6 +163,7 @@ struct cow_histogram
   char *fullname;
   int binmode;
   int n_dims;
+  int committed;
 } ;
 
 #endif // COW_PRIVATE_DEFS
