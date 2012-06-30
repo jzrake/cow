@@ -12,8 +12,12 @@
 
 #define COW_ALL_DIMS -10
 
-#define COW_BINNING_LINSPACE -33
-#define COW_BINNING_LOGSPACE -34
+#define COW_HIST_SPACING_LINEAR -42
+#define COW_HIST_SPACING_LOG -43
+#define COW_HIST_BINMODE_DENSITY -44
+#define COW_HIST_BINMODE_AVERAGE -45
+#define COW_HIST_BINMODE_COUNTS -46
+
 
 struct cow_domain; // forward declarations (for opaque data structure)
 struct cow_dfield;
@@ -66,6 +70,7 @@ cow_histogram *cow_histogram_new();
 void cow_histogram_commit(cow_histogram *h);
 void cow_histogram_del(cow_histogram *h);
 void cow_histogram_setbinmode(cow_histogram *h, int binmode);
+void cow_histogram_setspacing(cow_histogram *h, int spacing);
 void cow_histogram_setnbins(cow_histogram *h, int dim, int nbinsx);
 void cow_histogram_setlower(cow_histogram *h, int dim, double v0);
 void cow_histogram_setupper(cow_histogram *h, int dim, double v1);
@@ -76,6 +81,7 @@ void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w);
 void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
 void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
 void cow_histogram_synchronize(cow_histogram *h);
+double cow_histogram_getbinval(cow_histogram *h, int i, int j);
 
 #ifdef COW_PRIVATE_DEFS
 #if (COW_MPI)
@@ -162,6 +168,7 @@ struct cow_histogram
   char *nickname;
   char *fullname;
   int binmode;
+  int spacing;
   int n_dims;
   int committed;
 } ;
