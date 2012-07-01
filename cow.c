@@ -6,6 +6,12 @@
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 
+void test_trans(double *result, double **args, int **strides,
+		void *udata)
+{
+  printf("in test_trans\n");
+}
+
 // -----------------------------------------------------------------------------
 //
 // private helper functions
