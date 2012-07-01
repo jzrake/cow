@@ -81,7 +81,7 @@ int main(int argc, char **argv)
   cow_dfield_commit(divB);
   cow_dfield_syncguard(magf);
   cow_dfield_syncguard(divB);
-  cow_dfield_transform(divB, &magf, 1, stencildiv);
+  cow_dfield_transform(divB, &magf, 1, stencildiv, NULL);
 
   int I0[] = { 3, 0, 0 };
   int I1[] = { 5, 0, 0 };

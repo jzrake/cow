@@ -59,7 +59,7 @@ int main(int argc, char **argv)
   for (int n=0; n<10000; ++n) {
     double samp = 2.0 * ((double) rand() / RAND_MAX - 0.5);
     double weight = (double) rand() / RAND_MAX;
-    //    cow_histogram_addsample1(hist, samp, weight);
+    cow_histogram_addsample1(hist, samp, weight);
   }
   // test writing it to an ASCII file
   cow_histogram_dumpascii(hist, "thehist.dat");
