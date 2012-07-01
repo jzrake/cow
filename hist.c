@@ -27,7 +27,12 @@ cow_histogram *cow_histogram_new()
     .binmode = COW_HIST_BINMODE_AVERAGE,
     .spacing = COW_HIST_SPACING_LINEAR,
     .n_dims = 0,
-    .committed = 0
+    .committed = 0,
+#if (COW_MPI)
+    .comm = MPI_COMM_WORLD,
+#else
+    .comm = 0,
+#endif
   } ;
   *h = hist;
   cow_histogram_setnickname(h, "histogram");
@@ -84,10 +89,16 @@ void cow_histogram_commit(cow_histogram *h)
       h->weight[n] = 0.0;
     }
   }
+#if (COW_MPI)
+  MPI_Comm_dup(h->comm, &h->comm);
+#endif
   h->committed = 1;
 }
 void cow_histogram_del(cow_histogram *h)
 {
+#if (COW_MPI)
+  MPI_Comm_free(&h->comm);
+#endif
   free(h->bedgesx);
   free(h->bedgesy);
   free(h->weight);
@@ -95,6 +106,11 @@ void cow_histogram_del(cow_histogram *h)
   free(h->nickname);
   free(h->fullname);
   free(h);
+}
+void cow_histogram_setcomm(cow_histogram *h, cow_comm comm)
+{
+  if (h->committed) return;
+  h->comm = comm;
 }
 void cow_histogram_setbinmode(cow_histogram *h, int binmode)
 {
@@ -202,7 +218,7 @@ void cow_histogram_synchronize(cow_histogram *h)
     return;
   }
   int nbins = h->nbinsx * h->nbinsy;
-  MPI_Comm c = MPI_COMM_WORLD;
+  MPI_Comm c = h->comm;
   MPI_Allreduce(MPI_IN_PLACE, h->weight, nbins, MPI_DOUBLE, MPI_SUM, c);
   MPI_Allreduce(MPI_IN_PLACE, h->counts, nbins, MPI_LONG, MPI_SUM, c);
 #endif
@@ -243,7 +259,7 @@ void cow_histogram_dumpascii(cow_histogram *h, const char *fn)
     int rank;
     MPI_Initialized(&run_uses_mpi);
     if (run_uses_mpi) {
-      MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+      MPI_Comm_rank(h->comm, &rank);
       if (rank != 0) {
 	return;
       }
@@ -293,7 +309,7 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
 #if (COW_MPI)
   int run_uses_mpi;
   MPI_Initialized(&run_uses_mpi);
-  if (run_uses_mpi) MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+  if (run_uses_mpi) MPI_Comm_rank(h->comm, &rank);
 #endif
   if (rank == 0) {
     // -------------------------------------------------------------------------

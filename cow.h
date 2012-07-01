@@ -4,14 +4,23 @@
 #define COW_HEADER_INCLUDED
 #include <stdlib.h>
 
-// -----------------------------------------------------------------------------
-//
-// These prototypes constitute the C.O.W. interface
-//
-// -----------------------------------------------------------------------------
+#ifdef COW_PRIVATE_DEFS
+#if (COW_MPI)
+#include <mpi.h>
+#endif
+#if (COW_HDF5)
+#include <hdf5.h>
+#endif
+
+#if (COW_MPI)
+typedef MPI_Comm cow_comm;
+#else
+typedef int cow_comm;
+#endif
+#endif // COW_PRIVATE_DEFS
+
 
 #define COW_ALL_DIMS -10
-
 #define COW_HIST_SPACING_LINEAR -42
 #define COW_HIST_SPACING_LOG -43
 #define COW_HIST_BINMODE_DENSITY -44
@@ -19,12 +28,16 @@
 #define COW_HIST_BINMODE_COUNTS -46
 
 
+// -----------------------------------------------------------------------------
+//
+// These prototypes constitute the C.O.W. interface
+//
+// -----------------------------------------------------------------------------
 struct cow_domain; // forward declarations (for opaque data structure)
 struct cow_dfield;
 typedef struct cow_domain cow_domain;
 typedef struct cow_dfield cow_dfield;
 typedef struct cow_histogram cow_histogram;
-
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      cow_domain *d);
 
@@ -76,6 +89,7 @@ void cow_histogram_setlower(cow_histogram *h, int dim, double v0);
 void cow_histogram_setupper(cow_histogram *h, int dim, double v1);
 void cow_histogram_setfullname(cow_histogram *h, const char *fullname);
 void cow_histogram_setnickname(cow_histogram *h, const char *nickname);
+void cow_histogram_setcomm(cow_histogram *h, cow_comm comm);
 void cow_histogram_addsample1(cow_histogram *h, double x, double w);
 void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w);
 void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
@@ -83,13 +97,9 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
 void cow_histogram_synchronize(cow_histogram *h);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
 
+
+
 #ifdef COW_PRIVATE_DEFS
-#if (COW_MPI)
-#include <mpi.h>
-#endif
-#if (COW_HDF5)
-#include <hdf5.h>
-#endif
 
 void _io_domain_commit(cow_domain *d);
 void _io_domain_del(cow_domain *d);
@@ -171,6 +181,7 @@ struct cow_histogram
   int spacing;
   int n_dims;
   int committed;
+  cow_comm comm;
 } ;
 
 #endif // COW_PRIVATE_DEFS
