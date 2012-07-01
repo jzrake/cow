@@ -15,7 +15,7 @@ DEFINES = \
 	-DCOW_HDF5=$(COW_HDF5) \
 	-DCOW_HDF5_MPI=$(COW_HDF5_MPI)
 
-OBJ = cow.o hist.o fft_3d.c io.o pack_3d.o remap_3d.o
+OBJ = cow.o hist.o fft_3d.o io.o pack_3d.o remap_3d.o
 
 EXE = main testhist milos cowpy
 default : $(EXE)
@@ -24,28 +24,19 @@ default : $(EXE)
 %.o : %.c
 	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c -std=c99
 
-%.o : %.cpp
-	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
-
-main : main.o $(OBJ)
-
-	$(CXX) $(CFLAGS) -o $@ $^ $(LIB)
-
-milos : milos.o $(OBJ)
-	$(CXX) $(CFLAGS) -o $@ $^ $(LIB)
-
-cow_wrap.cpp : cow.i
+cow_wrap.c : cow.i
 	swig -python -o $@ $^
 
 cowpy.o : cowpy.c
 	$(CC) $(CFLAGS) -o $@ $< -c $(DEFINES) -I/Library/Frameworks/Python.framework/Headers -std=c99
 
-cow_wrap.o : cow_wrap.cpp
+cow_wrap.o : cow_wrap.c
 	$(CC) $(CFLAGS) -o $@ $< -c -I/Library/Frameworks/Python.framework/Headers
 
 cowpy : cowpy.o cow_wrap.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(LIB) -lpython
+	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB) -lpython
 
+main : main.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
 testhist : testhist.o $(OBJ)
@@ -55,5 +46,5 @@ milos : milos.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
 clean :
-	rm -rf $(EXE) $(OBJ)
+	rm -rf $(EXE) $(OBJ) cow_wrap.* cow.py
 

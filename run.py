@@ -14,8 +14,5 @@ cow_dfield_commit(f)
 
 print cow_dfield_getname(f)
 
-print cow.Histogram1d((100, 0.0, 1.0, Linspace))
-
-
 cow_dfield_del(f)
 cow_domain_del(d)

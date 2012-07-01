@@ -9,9 +9,7 @@
 }
 
 %inline %{
-  extern "C"{
 #include "cow.h"
-  }
 %}
 %include "cow.h"
 
