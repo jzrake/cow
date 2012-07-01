@@ -6,7 +6,6 @@
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 
-
 // -----------------------------------------------------------------------------
 //
 // private helper functions
