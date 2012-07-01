@@ -71,6 +71,7 @@ int cow_dfield_getstride(cow_dfield *d, int dim);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
 void *cow_dfield_getdata(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
+void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result);
 void cow_dfield_write(cow_dfield *f, const char *fname);
 void cow_dfield_read(cow_dfield *f, const char *fname);
 
@@ -153,6 +154,7 @@ struct cow_dfield
   int stride[3];
   int committed;
   cow_domain *domain;
+  cow_transform transform;
 #if (COW_MPI)
   MPI_Datatype *send_type; // chunk of data to be sent to respective neighbor
   MPI_Datatype *recv_type; // " "                 received from " "
