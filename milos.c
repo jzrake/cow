@@ -9,7 +9,7 @@
 #define GETENVINT(a,dflt) (getenv(a) ? atoi(getenv(a)) : dflt)
 #define GETENVDBL(a,dflt) (getenv(a) ? atof(getenv(a)) : dflt)
 
-static void divcorner(double *result, double **args, int **s, cow_domain *d)
+static void divcorner(double *result, double **args, int **s, void *u)
 {
 #define M(i,j,k) ((i)*s[0][0] + (j)*s[0][1] + (k)*s[0][2])
   double *fx = &args[0][0];
@@ -23,7 +23,7 @@ static void divcorner(double *result, double **args, int **s, cow_domain *d)
              (fz[M(0,0,0)] + fz[M(1,0,0)] + fz[M(0,1,0)] + fz[M(1,1,0)])) / 4.0;
 #undef M
 }
-static void div5(double *result, double **args, int **s, cow_domain *d)
+static void div5(double *result, double **args, int **s, void *u)
 {
 #define diff5(f,s) ((-f[2*s] + 8*f[s] - 8*f[-s] + f[-2*s]) / 12.0)
   double *f0 = &args[0][0];
@@ -32,7 +32,7 @@ static void div5(double *result, double **args, int **s, cow_domain *d)
   *result = diff5(f0, s[0][0]) + diff5(f1, s[0][1]) + diff5(f2, s[0][2]);
 #undef diff5
 }
-static void curl(double *result, double **args, int **s, cow_domain *d)
+static void curl(double *result, double **args, int **s, void *u)
 {
   // http://en.wikipedia.org/wiki/Five-point_stencil
 #define diff5(f,s) ((-f[2*s] + 8*f[s] - 8*f[-s] + f[-2*s]) / 12.0)
@@ -44,7 +44,7 @@ static void curl(double *result, double **args, int **s, cow_domain *d)
   result[2] = diff5(f1, s[0][0]) - diff5(f0, s[0][1]);
 #undef diff5
 }
-static void crossprod(double *result, double **args, int **s, cow_domain *d)
+static void crossprod(double *result, double **args, int **s, void *u)
 {
   double a0 = args[0][0];
   double a1 = args[0][1];
@@ -56,7 +56,7 @@ static void crossprod(double *result, double **args, int **s, cow_domain *d)
   result[1] = a2 * b0 - a0 * b2;
   result[2] = a0 * b1 - a1 * b0;
 }
-static void dotprod(double *result, double **args, int **s, cow_domain *d)
+static void dotprod(double *result, double **args, int **s, void *u)
 {
   double a0 = args[0][0];
   double a1 = args[0][1];
@@ -138,10 +138,10 @@ int main(int argc, char **argv)
   cow_dfield *vcrossBcrossB = cow_vectorfield(domain, "vcrossBcrossB");
   cow_dfield *divvcrossBcrossB = cow_scalarfield(domain, "divvcrossBcrossB");
 
-  cow_dfield_transform(divB, &mag, 1, divcorner);
-  cow_dfield_transform(divV, &vel, 1, divcorner);
-  cow_dfield_transform(curlB, &mag, 1, curl);
-  cow_dfield_transform(curlV, &vel, 1, curl);
+  cow_dfield_transform(divB, &mag, 1, divcorner, NULL);
+  cow_dfield_transform(divV, &vel, 1, divcorner, NULL);
+  cow_dfield_transform(curlB, &mag, 1, curl, NULL);
+  cow_dfield_transform(curlV, &vel, 1, curl, NULL);
 
   cow_dfield_write(divB, fout);
   cow_dfield_write(divV, fout);
@@ -154,12 +154,12 @@ int main(int argc, char **argv)
   struct cow_dfield *curlBdotBargs[2] = { curlB, mag };
   struct cow_dfield *curlBdotvcrossBargs[2] = { curlB, vcrossB };
 
-  cow_dfield_transform(vcrossB, vcrossBargs, 2, crossprod);
-  cow_dfield_transform(vcrossBcrossB, vcrossBcrossBargs, 2, crossprod);
+  cow_dfield_transform(vcrossB, vcrossBargs, 2, crossprod, NULL);
+  cow_dfield_transform(vcrossBcrossB, vcrossBcrossBargs, 2, crossprod, NULL);
 
-  cow_dfield_transform(curlBdotvcrossB, curlBdotvcrossBargs, 2, dotprod);
-  cow_dfield_transform(curlBdotB, curlBdotBargs, 2, dotprod);
-  cow_dfield_transform(divvcrossBcrossB, &vcrossBcrossB, 1, div5);
+  cow_dfield_transform(curlBdotvcrossB, curlBdotvcrossBargs, 2, dotprod, NULL);
+  cow_dfield_transform(curlBdotB, curlBdotBargs, 2, dotprod, NULL);
+  cow_dfield_transform(divvcrossBcrossB, &vcrossBcrossB, 1, div5, NULL);
 
   cow_dfield_write(curlBdotvcrossB, fout);
   cow_dfield_write(curlBdotB, fout);

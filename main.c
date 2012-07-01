@@ -5,7 +5,7 @@
 #include <mpi.h>
 #endif
 
-void stencildiv(double *result, double **args, int **s, cow_domain *d)
+void stencildiv(double *result, double **args, int **s, void *u)
 {
   double *x = args[0];
   double *y = result;

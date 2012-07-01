@@ -476,9 +476,42 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
   } break;
   }
 }
-
+void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
+{
+  int *S = f->stride;
+  int ni = cow_domain_getsize(f->domain, 0);
+  int nj = cow_domain_getsize(f->domain, 1);
+  int nk = cow_domain_getsize(f->domain, 2);
+  int ng = cow_domain_getguard(f->domain);
+  switch (f->domain->n_dims) {
+  case 1:
+    for (int i=ng; i<ni+ng; ++i) {
+      double *x = (double*)f->data + (S[0]*i);
+      op(NULL, &x, &S, udata);
+    }
+    break;
+  case 2:
+    for (int i=ng; i<ni+ng; ++i) {
+      for (int j=ng; j<nj+ng; ++j) {
+	double *x = (double*)f->data + (S[0]*i + S[1]*j);
+	op(NULL, &x, &S, udata);
+      }
+    }
+    break;
+  case 3:
+    for (int i=ng; i<ni+ng; ++i) {
+      for (int j=ng; j<nj+ng; ++j) {
+	for (int k=ng; k<nk+ng; ++k) {
+	  double *x = (double*)f->data + (S[0]*i + S[1]*j + S[2]*k);
+	  op(NULL, &x, &S, udata);
+	}
+      }
+    }
+    break;
+  }
+}
 void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
-			  cow_transform op)
+			  cow_transform op, void *udata)
 {
   int ni = cow_domain_getsize(result->domain, 0);
   int nj = cow_domain_getsize(result->domain, 1);
@@ -497,7 +530,7 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
 	x[n] = (double*)args[n]->data + (S[n][0]*i);
       }
       int m1 = rs[0]*i;
-      op((double*)result->data + m1, x, S, result->domain);
+      op((double*)result->data + m1, x, S, udata);
     }
     break;
   case 2:
@@ -507,7 +540,7 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
 	  x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j);
 	}
 	int m1 = rs[0]*i + rs[1]*j;
-	op((double*)result->data + m1, x, S, result->domain);
+	op((double*)result->data + m1, x, S, udata);
       }
     }
     break;
@@ -519,7 +552,7 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
 	    x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j + S[n][2]*k);
 	  }
 	  int m1 = rs[0]*i + rs[1]*j + rs[2]*k;
-	  op((double*)result->data + m1, x, S, result->domain);
+	  op((double*)result->data + m1, x, S, udata);
 	}
       }
     }

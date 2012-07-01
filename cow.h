@@ -7,16 +7,10 @@
 #ifdef COW_PRIVATE_DEFS
 #if (COW_MPI)
 #include <mpi.h>
-#endif
+#endif // COW_MPI
 #if (COW_HDF5)
 #include <hdf5.h>
-#endif
-
-#if (COW_MPI)
-typedef MPI_Comm cow_comm;
-#else
-typedef int cow_comm;
-#endif
+#endif // COW_HDF5
 #endif // COW_PRIVATE_DEFS
 
 
@@ -39,7 +33,7 @@ typedef struct cow_domain cow_domain;
 typedef struct cow_dfield cow_dfield;
 typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
-			      cow_domain *d);
+			      void *udata);
 
 cow_domain *cow_domain_new();
 void cow_domain_commit(cow_domain *d);
@@ -66,8 +60,9 @@ void cow_dfield_addmember(cow_dfield *f, const char *name);
 void cow_dfield_setname(cow_dfield *f, const char *name);
 void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out);
 void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out);
+void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata);
 void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
-			  cow_transform op);
+			  cow_transform op, void *udata);
 
 const char *cow_dfield_iteratemembers(cow_dfield *f);
 const char *cow_dfield_nextmember(cow_dfield *f);
@@ -89,12 +84,13 @@ void cow_histogram_setlower(cow_histogram *h, int dim, double v0);
 void cow_histogram_setupper(cow_histogram *h, int dim, double v1);
 void cow_histogram_setfullname(cow_histogram *h, const char *fullname);
 void cow_histogram_setnickname(cow_histogram *h, const char *nickname);
-void cow_histogram_setcomm(cow_histogram *h, cow_comm comm);
+void cow_histogram_setdomaincomm(cow_histogram *h, cow_domain *d);
 void cow_histogram_addsample1(cow_histogram *h, double x, double w);
 void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w);
 void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
 void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
 void cow_histogram_synchronize(cow_histogram *h);
+void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
 
 
@@ -181,7 +177,10 @@ struct cow_histogram
   int spacing;
   int n_dims;
   int committed;
-  cow_comm comm;
+  cow_transform transform;
+#if (COW_MPI)
+  MPI_Comm comm;
+#endif
 } ;
 
 #endif // COW_PRIVATE_DEFS

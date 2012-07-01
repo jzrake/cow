@@ -28,10 +28,9 @@ cow_histogram *cow_histogram_new()
     .spacing = COW_HIST_SPACING_LINEAR,
     .n_dims = 0,
     .committed = 0,
+    .transform = NULL,
 #if (COW_MPI)
     .comm = MPI_COMM_WORLD,
-#else
-    .comm = 0,
 #endif
   } ;
   *h = hist;
@@ -107,10 +106,10 @@ void cow_histogram_del(cow_histogram *h)
   free(h->fullname);
   free(h);
 }
-void cow_histogram_setcomm(cow_histogram *h, cow_comm comm)
+void cow_histogram_setdomaincomm(cow_histogram *h, cow_domain *d)
 {
   if (h->committed) return;
-  h->comm = comm;
+  h->comm = d->mpi_cart;
 }
 void cow_histogram_setbinmode(cow_histogram *h, int binmode)
 {
@@ -171,7 +170,25 @@ void cow_histogram_setnickname(cow_histogram *h, const char *nickname)
   h->nickname = (char*) realloc(h->nickname, strlen(nickname)+1);
   strcpy(h->nickname, nickname);
 }
-
+static void popcb(double *result, double **args, int **s, void *u)
+{
+  cow_histogram *h = (cow_histogram*) u;
+  double y[2];
+  h->transform(y, args, s, u);
+  if (h->n_dims == 1) {
+    cow_histogram_addsample1(h, y[0], 1.0);
+  }
+  else if (h->n_dims == 2) {
+    cow_histogram_addsample2(h, y[0], y[1], 1.0);
+  }
+}
+void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op)
+{
+  cow_domain *d = f->domain;
+  h->transform = op;
+  cow_histogram_setdomaincomm(h, d);
+  cow_dfield_loop(f, popcb, h);
+}
 void cow_histogram_addsample1(cow_histogram *h, double x, double w)
 {
   if (!h->committed) return;
