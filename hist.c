@@ -30,8 +30,6 @@ cow_histogram *cow_histogram_new()
     .committed = 0,
 #if (COW_MPI)
     .comm = MPI_COMM_WORLD,
-#else
-    .comm = 0,
 #endif
   } ;
   *h = hist;
@@ -107,10 +105,10 @@ void cow_histogram_del(cow_histogram *h)
   free(h->fullname);
   free(h);
 }
-void cow_histogram_setcomm(cow_histogram *h, cow_comm comm)
+void cow_histogram_setdomaincomm(cow_histogram *h, cow_domain *d)
 {
   if (h->committed) return;
-  h->comm = comm;
+  h->comm = d->mpi_cart;
 }
 void cow_histogram_setbinmode(cow_histogram *h, int binmode)
 {
@@ -171,7 +169,20 @@ void cow_histogram_setnickname(cow_histogram *h, const char *nickname)
   h->nickname = (char*) realloc(h->nickname, strlen(nickname)+1);
   strcpy(h->nickname, nickname);
 }
-
+static void pop(double *result, double **args, int **s, cow_domain *d)
+{
+  //  cow_histogram_addsample1();
+}
+void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op)
+{
+  cow_domain *d = f->domain;
+  cow_dfield *t = cow_dfield_new(d, "histdata");
+  cow_dfield_addmember(t, "t");
+  cow_dfield_commit(t);
+  cow_dfield_transform(t, &f, 1, op);
+  cow_dfield_transform(t, &t, 1, pop);
+  cow_dfield_del(t);
+}
 void cow_histogram_addsample1(cow_histogram *h, double x, double w)
 {
   if (!h->committed) return;
