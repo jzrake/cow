@@ -4,20 +4,36 @@
 #define COW_HEADER_INCLUDED
 #include <stdlib.h>
 
+#ifdef COW_PRIVATE_DEFS
+#if (COW_MPI)
+#include <mpi.h>
+#endif // COW_MPI
+#if (COW_HDF5)
+#include <hdf5.h>
+#endif // COW_HDF5
+#endif // COW_PRIVATE_DEFS
+
+
+#define COW_ALL_DIMS -10
+#define COW_HIST_SPACING_LINEAR -42
+#define COW_HIST_SPACING_LOG -43
+#define COW_HIST_BINMODE_DENSITY -44
+#define COW_HIST_BINMODE_AVERAGE -45
+#define COW_HIST_BINMODE_COUNTS -46
+
+
 // -----------------------------------------------------------------------------
 //
 // These prototypes constitute the C.O.W. interface
 //
 // -----------------------------------------------------------------------------
-
-#define COW_ALL_DIMS -10
-
 struct cow_domain; // forward declarations (for opaque data structure)
 struct cow_dfield;
 typedef struct cow_domain cow_domain;
 typedef struct cow_dfield cow_dfield;
+typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
-			      cow_domain *d);
+			      void *udata);
 
 cow_domain *cow_domain_new();
 void cow_domain_commit(cow_domain *d);
@@ -44,8 +60,9 @@ void cow_dfield_addmember(cow_dfield *f, const char *name);
 void cow_dfield_setname(cow_dfield *f, const char *name);
 void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out);
 void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out);
+void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata);
 void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
-			  cow_transform op);
+			  cow_transform op, void *udata);
 
 const char *cow_dfield_iteratemembers(cow_dfield *f);
 const char *cow_dfield_nextmember(cow_dfield *f);
@@ -57,13 +74,28 @@ void cow_dfield_syncguard(cow_dfield *f);
 void cow_dfield_write(cow_dfield *f, const char *fname);
 void cow_dfield_read(cow_dfield *f, const char *fname);
 
+cow_histogram *cow_histogram_new();
+void cow_histogram_commit(cow_histogram *h);
+void cow_histogram_del(cow_histogram *h);
+void cow_histogram_setbinmode(cow_histogram *h, int binmode);
+void cow_histogram_setspacing(cow_histogram *h, int spacing);
+void cow_histogram_setnbins(cow_histogram *h, int dim, int nbinsx);
+void cow_histogram_setlower(cow_histogram *h, int dim, double v0);
+void cow_histogram_setupper(cow_histogram *h, int dim, double v1);
+void cow_histogram_setfullname(cow_histogram *h, const char *fullname);
+void cow_histogram_setnickname(cow_histogram *h, const char *nickname);
+void cow_histogram_setdomaincomm(cow_histogram *h, cow_domain *d);
+void cow_histogram_addsample1(cow_histogram *h, double x, double w);
+void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w);
+void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
+void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
+void cow_histogram_synchronize(cow_histogram *h);
+void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op);
+double cow_histogram_getbinval(cow_histogram *h, int i, int j);
+
+
+
 #ifdef COW_PRIVATE_DEFS
-#if (COW_MPI)
-#include <mpi.h>
-#endif
-#if (COW_HDF5)
-#include <hdf5.h>
-#endif
 
 void _io_domain_commit(cow_domain *d);
 void _io_domain_del(cow_domain *d);
@@ -105,9 +137,9 @@ struct cow_domain
   hsize_t L_strt_h5[3];
   hsize_t G_ntot_h5[3];
   hsize_t G_strt_h5[3];
-  hid_t fapl;
-  hid_t dcpl;
-  hid_t dxpl;
+  hid_t fapl; // file access property list
+  hid_t dcpl; // data set creation property list
+  hid_t dxpl; // data set transfer property list
 #endif
 } ;
 
@@ -124,6 +156,30 @@ struct cow_dfield
 #if (COW_MPI)
   MPI_Datatype *send_type; // chunk of data to be sent to respective neighbor
   MPI_Datatype *recv_type; // " "                 received from " "
+#endif
+} ;
+
+struct cow_histogram
+{
+  int nbinsx;
+  int nbinsy;
+  double x0;
+  double x1;
+  double y0;
+  double y1;
+  double *bedgesx;
+  double *bedgesy;
+  double *weight;
+  long *counts;
+  char *nickname;
+  char *fullname;
+  int binmode;
+  int spacing;
+  int n_dims;
+  int committed;
+  cow_transform transform;
+#if (COW_MPI)
+  MPI_Comm comm;
 #endif
 } ;
 
