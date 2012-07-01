@@ -15,7 +15,7 @@ DEFINES = \
 	-DCOW_HDF5=$(COW_HDF5) \
 	-DCOW_HDF5_MPI=$(COW_HDF5_MPI)
 
-OBJ = cow.o hist.o fft_3d.c io.o pack_3d.o remap_3d.o
+OBJ = cow.o hist.o fft_3d.o io.o pack_3d.o remap_3d.o
 
 EXE = main testhist milos
 default : $(EXE)
