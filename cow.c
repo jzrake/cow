@@ -498,6 +498,12 @@ void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result)
   result[2] = 0.0; // sum
   f->transform = op;
   cow_dfield_loop(f, reduce, udata);
+#if (COW_MPI)
+  cow_domain *d = f->domain;
+  MPI_Allreduce(MPI_IN_PLACE, &result[0], 1, MPI_DOUBLE, MPI_MIN, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &result[1], 1, MPI_DOUBLE, MPI_MAX, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &result[2], 1, MPI_DOUBLE, MPI_SUM, d->mpi_cart);
+#endif
 }
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
 {
