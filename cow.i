@@ -8,6 +8,7 @@
 %module cow
 %{
 #include "cow.h"
+void test_trans(double *result, double **args, int **strides, void *udata);
 %}
 
 %include "cow.h"

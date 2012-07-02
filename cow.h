@@ -35,9 +35,6 @@ typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
 
-void test_trans(double *result, double **args, int **strides, void *udata);
-
-
 cow_domain *cow_domain_new();
 void cow_domain_commit(cow_domain *d);
 void cow_domain_del(cow_domain *d);
@@ -95,7 +92,6 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
 void cow_histogram_synchronize(cow_histogram *h);
 void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
-
 
 
 #ifdef COW_PRIVATE_DEFS
