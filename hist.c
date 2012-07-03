@@ -61,8 +61,8 @@ void cow_histogram_commit(cow_histogram *h)
   }
   else if (h->n_dims == 2) {
     const int nbins = h->nbinsx * h->nbinsy;
-    const double dx = (y1-y0) / h->nbinsx;
-    const double dy = (y1-y0) / h->nbinsy;
+    const double dx = (h->y1 - h->y0) / h->nbinsx;
+    const double dy = (h->y1 - h->y0) / h->nbinsy;
     h->bedgesx = (double*) malloc((h->nbinsx+1)*sizeof(double));
     h->bedgesy = (double*) malloc((h->nbinsy+1)*sizeof(double));
     h->weight = (double*) malloc(nbins*sizeof(double));
