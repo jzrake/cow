@@ -80,7 +80,7 @@ int cow_domain_getsize(cow_domain *d, int dim)
 }
 void cow_domain_setndim(cow_domain *d, int ndim)
 {
-  if (ndim >= 3 || d->committed) return;
+  if (ndim > 3 || d->committed) return;
   d->n_dims = ndim;
 }
 void cow_domain_setguard(cow_domain *d, int guard)
