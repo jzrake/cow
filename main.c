@@ -12,6 +12,10 @@ void stencildiv(double *result, double **args, int **s, void *u)
   int si = s[0][0];
   y[0] = x[+si] - x[-si];
 }
+void pickmember1(double *result, double **args, int **s, void *u)
+{
+  *result = args[0][0];
+}
 
 int main(int argc, char **argv)
 {
@@ -90,21 +94,32 @@ int main(int argc, char **argv)
   printf("%f %f\n", subarray[0], subarray[3]);
   printf("%f %f\n", subarray[1], subarray[4]);
   printf("%f %f\n", subarray[2], subarray[5]);
-  subarray[0] = 10.0;
-  cow_dfield_replace(prim, I0, I1, subarray);
+  if (cow_domain_getglobalstartindex(domain, 0) == 0) {
+    subarray[0] = 10.0;
+    cow_dfield_replace(prim, I0, I1, subarray);
+  }
   printf("%f %f\n", subarray[0], subarray[1]);
   free(subarray);
+  cow_dfield *divB_copy = cow_dfield_dup(divB);
+  cow_dfield_setname(divB_copy, "divB_copy");
+
+  double reduction[3];
+  cow_dfield_reduce(prim, pickmember1, reduction);
+  printf("(min max sum): %f %f %f\n", reduction[0], reduction[1], reduction[2]);
 
   cow_domain_setchunk(domain, 1);
-  cow_domain_setcollective(domain, 1);
+  cow_domain_setcollective(domain, 0);
   cow_domain_setalign(domain, 4096, 4*1024*1024);
 
+
+  cow_dfield_write(divB_copy, "thefile.h5");
   cow_dfield_write(divB, "thefile.h5");
   cow_dfield_write(magf, "thefile.h5");
   cow_dfield_write(prim, "thefile.h5");
 
   cow_dfield_read(magf, "thefile.h5");
 
+  cow_dfield_del(divB_copy);
   cow_dfield_del(divB);
   cow_dfield_del(prim);
   cow_dfield_del(magf);

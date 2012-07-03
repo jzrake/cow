@@ -17,7 +17,8 @@ DEFINES = \
 
 OBJ = cow.o hist.o fft_3d.o io.o pack_3d.o remap_3d.o
 
-EXE = main testhist milos cowpy
+EXE = main makehist testhist milos cowpy
+
 default : $(EXE)
 
 
@@ -40,6 +41,9 @@ main : main.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
 testhist : testhist.o $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+
+makehist : makehist.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
 
 milos : milos.o $(OBJ)

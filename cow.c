@@ -30,7 +30,7 @@ static void _dfield_alloctype(cow_dfield *f);
 static void _dfield_freetype(cow_dfield *f);
 #endif
 static void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
-				   void *out, char op);
+                                   void *out, char op);
 
 // -----------------------------------------------------------------------------
 //
@@ -73,42 +73,14 @@ void cow_domain_del(cow_domain *d)
 #endif
   free(d);
 }
-/*
-cow_dfield *cow_domain_addfield(cow_domain *d, const char *name)
-{
-  d->n_fields++;
-  d->fields = (cow_dfield**) realloc(d->fields,
-                                     d->n_fields*sizeof(cow_dfield*));
-  cow_dfield *f = cow_dfield_new(d);
-  cow_dfield_setname(f, name);
-  if (d->committed) {
-    // -------------------------------------------------------------------------
-    // If the domain has already been committed, then also commit the new data
-    // field. This way new fields may be added and removed dynamically to an
-    // already committed domain.
-    // -------------------------------------------------------------------------
-    cow_dfield_commit(f);
-  }
-  return d->fields[d->n_fields-1] = f;
-}
-cow_dfield *cow_domain_iteratefields(cow_domain *d)
-{
-  d->field_iter = 0;
-  return cow_domain_nextfield(d);
-}
-cow_dfield *cow_domain_nextfield(cow_domain *d)
-{
-  return d->field_iter++ < d->n_fields ? d->fields[d->field_iter-1] : NULL;
-}
-*/
 void cow_domain_setsize(cow_domain *d, int dim, int size)
 {
-  if (dim > 3 || d->committed) return;
+  if (dim >= 3 || d->committed) return;
   d->G_ntot[dim] = size;
 }
 int cow_domain_getsize(cow_domain *d, int dim)
 {
-  if (dim > 3) return 0;
+  if (dim >= 3) return 0;
   return d->L_nint[dim];
 }
 void cow_domain_setndim(cow_domain *d, int ndim)
@@ -128,7 +100,7 @@ int cow_domain_getguard(cow_domain *d)
 void cow_domain_setprocsizes(cow_domain *d, int dim, int size)
 {
 #if (COW_MPI)
-  if (dim > 3 || d->committed) return;
+  if (dim >= 3 || d->committed) return;
   d->proc_sizes[dim] = size;
 #endif
 }
@@ -249,6 +221,7 @@ cow_dfield *cow_dfield_new(cow_domain *domain, const char *name)
     .data = NULL,
     .stride = { 0, 0, 0 },
     .domain = domain,
+    .transform = NULL,
   } ;
   *f = field;
   cow_dfield_setname(f, name);
@@ -265,15 +238,26 @@ void cow_dfield_del(cow_dfield *f)
   free(f->data);
   free(f);
 }
+cow_dfield *cow_dfield_dup(cow_dfield *f)
+{
+  cow_dfield *g = cow_dfield_new(f->domain, f->name);
+  for (int n=0; n<f->n_members; ++n) {
+    cow_dfield_addmember(g, f->members[n]);
+  }
+  cow_dfield_commit(g);
+  memcpy(g->data, f->data, cow_dfield_getdatabytes(f));
+  g->member_iter = f->member_iter;
+  g->transform = f->transform;
+  return g;
+}
 void cow_dfield_setname(cow_dfield *f, const char *name)
 {
-  if (f->committed) return;
   f->name = (char*) realloc(f->name, strlen(name)+1);
   strcpy(f->name, name);
 }
 int cow_dfield_getstride(cow_dfield *f, int dim)
 {
-  if (dim > 3) return 0;
+  if (dim >= 3 || !f->committed) return 0;
   return f->stride[dim];
 }
 const char *cow_dfield_getname(cow_dfield *f)
@@ -282,6 +266,7 @@ const char *cow_dfield_getname(cow_dfield *f)
 }
 size_t cow_dfield_getdatabytes(cow_dfield *f)
 {
+  if (!f->committed) return 0;
   return cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS) *
     f->n_members * sizeof(double);
 }
@@ -379,30 +364,30 @@ void cow_dfield_syncguard(cow_dfield *f)
   case 2:
     for (int i=0; i<ntot[0]; ++i) {
       for (int j=0; j<ntot[1]; ++j) {
-	int m0 = i*s[0] + j*s[1];
-	int m1 = i*s[0] + j*s[1];
-	if (i <            ng) m0 += nint[0] * s[0];
-	if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
-	if (j <            ng) m0 += nint[1] * s[1];
-	if (j >= nint[1] + ng) m0 -= nint[1] * s[1];
-	if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
+        int m0 = i*s[0] + j*s[1];
+        int m1 = i*s[0] + j*s[1];
+        if (i <            ng) m0 += nint[0] * s[0];
+        if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
+        if (j <            ng) m0 += nint[1] * s[1];
+        if (j >= nint[1] + ng) m0 -= nint[1] * s[1];
+        if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
       }
     }
     break;
   case 3:
     for (int i=0; i<ntot[0]; ++i) {
       for (int j=0; j<ntot[1]; ++j) {
-	for (int k=0; k<ntot[2]; ++k) {
-	int m0 = i*s[0] + j*s[1] + k*s[2];
-	int m1 = i*s[0] + j*s[1] + k*s[2];
-	if (i <            ng) m0 += nint[0] * s[0];
-	if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
-	if (j <            ng) m0 += nint[1] * s[1];
-	if (j >= nint[1] + ng) m0 -= nint[1] * s[1];
-	if (k <            ng) m0 += nint[2] * s[2];
-	if (k >= nint[2] + ng) m0 -= nint[2] * s[2];
-	if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
-	}
+        for (int k=0; k<ntot[2]; ++k) {
+          int m0 = i*s[0] + j*s[1] + k*s[2];
+          int m1 = i*s[0] + j*s[1] + k*s[2];
+          if (i <            ng) m0 += nint[0] * s[0];
+          if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
+          if (j <            ng) m0 += nint[1] * s[1];
+          if (j >= nint[1] + ng) m0 -= nint[1] * s[1];
+          if (k <            ng) m0 += nint[2] * s[2];
+          if (k >= nint[2] + ng) m0 -= nint[2] * s[2];
+          if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
+        }
       }
     }
     break;
@@ -419,7 +404,7 @@ void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out)
   _dfield_extractreplace(f, I0, I1, out, 'r');
 }
 void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
-			    void *out, char op)
+                            void *out, char op)
 {
   int mi = I1[0] - I0[0];
   int mj = I1[1] - I0[1];
@@ -437,10 +422,10 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
       int m0 = (i+I0[0])*si;
       int m1 = i*ti;
       if (op == 'e') {
-	memcpy(src + m1, dst + m0, f->n_members * sz);
+        memcpy(src + m1, dst + m0, f->n_members * sz);
       }
       else if (op == 'r') {
-	memcpy(dst + m0, src + m1, f->n_members * sz);
+        memcpy(dst + m0, src + m1, f->n_members * sz);
       }
     }
   } break;
@@ -449,14 +434,14 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
     int tj = f->n_members;
     for (int i=0; i<mi; ++i) {
       for (int j=0; j<mj; ++j) {
-	int m0 = (i+I0[0])*si + (j+I0[1])*sj;
-	int m1 = i*ti + j*tj;
-	if (op == 'e') {
-	  memcpy(src + m1, dst + m0, f->n_members * sz);
-	}
-	else if (op == 'r') {
-	  memcpy(dst + m0, src + m1, f->n_members * sz);
-	}
+        int m0 = (i+I0[0])*si + (j+I0[1])*sj;
+        int m1 = i*ti + j*tj;
+        if (op == 'e') {
+          memcpy(src + m1, dst + m0, f->n_members * sz);
+        }
+        else if (op == 'r') {
+          memcpy(dst + m0, src + m1, f->n_members * sz);
+        }
       }
     }
   } break;
@@ -466,20 +451,48 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
     int tk = f->n_members;
     for (int i=0; i<mi; ++i) {
       for (int j=0; j<mj; ++j) {
-	for (int k=0; k<mk; ++k) {
-	  int m0 = (i+I0[0])*si + (j+I0[1])*sj + (k+I0[2])*sk;
-	  int m1 = i*ti + j*tj + k*tk;
-	  if (op == 'e') {
-	    memcpy(src + m1, dst + m0, f->n_members * sz);
-	  }
-	  else if (op == 'r') {
-	    memcpy(dst + m0, src + m1, f->n_members * sz);
-	  }
-	}
+        for (int k=0; k<mk; ++k) {
+          int m0 = (i+I0[0])*si + (j+I0[1])*sj + (k+I0[2])*sk;
+          int m1 = i*ti + j*tj + k*tk;
+          if (op == 'e') {
+            memcpy(src + m1, dst + m0, f->n_members * sz);
+          }
+          else if (op == 'r') {
+            memcpy(dst + m0, src + m1, f->n_members * sz);
+          }
+        }
       }
     }
   } break;
   }
+}
+static void _reduce(double *result, double **args, int **strides, void *udata)
+{
+  void **u = (void**)udata;
+  cow_dfield *f = (cow_dfield*) u[0];
+  double *min = &((double*)u[1])[0];
+  double *max = &((double*)u[1])[1];
+  double *sum = &((double*)u[1])[2];
+  double y;
+  f->transform(&y, args, strides, NULL);
+  if (y > *max) *max = y;
+  if (y < *min) *min = y;
+  *sum += y;
+}
+void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result)
+{
+  void *udata[2] = { f, result };
+  result[0] = 1e10; // min
+  result[1] =-1e10; // max
+  result[2] = 0.0; // sum
+  f->transform = op;
+  cow_dfield_loop(f, _reduce, udata);
+#if (COW_MPI)
+  cow_domain *d = f->domain;
+  MPI_Allreduce(MPI_IN_PLACE, &result[0], 1, MPI_DOUBLE, MPI_MIN, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &result[1], 1, MPI_DOUBLE, MPI_MAX, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &result[2], 1, MPI_DOUBLE, MPI_SUM, d->mpi_cart);
+#endif
 }
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
 {
@@ -498,25 +511,25 @@ void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
   case 2:
     for (int i=ng; i<ni+ng; ++i) {
       for (int j=ng; j<nj+ng; ++j) {
-	double *x = (double*)f->data + (S[0]*i + S[1]*j);
-	op(NULL, &x, &S, udata);
+        double *x = (double*)f->data + (S[0]*i + S[1]*j);
+        op(NULL, &x, &S, udata);
       }
     }
     break;
   case 3:
     for (int i=ng; i<ni+ng; ++i) {
       for (int j=ng; j<nj+ng; ++j) {
-	for (int k=ng; k<nk+ng; ++k) {
-	  double *x = (double*)f->data + (S[0]*i + S[1]*j + S[2]*k);
-	  op(NULL, &x, &S, udata);
-	}
+        for (int k=ng; k<nk+ng; ++k) {
+          double *x = (double*)f->data + (S[0]*i + S[1]*j + S[2]*k);
+          op(NULL, &x, &S, udata);
+        }
       }
     }
     break;
   }
 }
 void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
-			  cow_transform op, void *udata)
+                          cow_transform op, void *udata)
 {
   int ni = cow_domain_getsize(result->domain, 0);
   int nj = cow_domain_getsize(result->domain, 1);
@@ -532,7 +545,7 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
   case 1:
     for (int i=ng; i<ni+ng; ++i) {
       for (int n=0; n<nargs; ++n) {
-	x[n] = (double*)args[n]->data + (S[n][0]*i);
+        x[n] = (double*)args[n]->data + (S[n][0]*i);
       }
       int m1 = rs[0]*i;
       op((double*)result->data + m1, x, S, udata);
@@ -541,24 +554,24 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
   case 2:
     for (int i=ng; i<ni+ng; ++i) {
       for (int j=ng; j<nj+ng; ++j) {
-	for (int n=0; n<nargs; ++n) {
-	  x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j);
-	}
-	int m1 = rs[0]*i + rs[1]*j;
-	op((double*)result->data + m1, x, S, udata);
+        for (int n=0; n<nargs; ++n) {
+          x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j);
+        }
+        int m1 = rs[0]*i + rs[1]*j;
+        op((double*)result->data + m1, x, S, udata);
       }
     }
     break;
   case 3:
     for (int i=ng; i<ni+ng; ++i) {
       for (int j=ng; j<nj+ng; ++j) {
-	for (int k=ng; k<nk+ng; ++k) {
-	  for (int n=0; n<nargs; ++n) {
-	    x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j + S[n][2]*k);
-	  }
-	  int m1 = rs[0]*i + rs[1]*j + rs[2]*k;
-	  op((double*)result->data + m1, x, S, udata);
-	}
+        for (int k=ng; k<nk+ng; ++k) {
+          for (int n=0; n<nargs; ++n) {
+            x[n] = (double*)args[n]->data + (S[n][0]*i + S[n][1]*j + S[n][2]*k);
+          }
+          int m1 = rs[0]*i + rs[1]*j + rs[2]*k;
+          op((double*)result->data + m1, x, S, udata);
+        }
       }
     }
     break;
@@ -596,7 +609,7 @@ void _domain_maketags2d(cow_domain *d)
       if (i == 0 && j == 0) continue; // don't include self
       int rel_index [] = { i, j };
       int index[] = { d->proc_index[0] + rel_index[0],
-		      d->proc_index[1] + rel_index[1] };
+                      d->proc_index[1] + rel_index[1] };
       int their_rank;
       MPI_Cart_rank(d->mpi_cart, index, &their_rank);
       d->neighbors[n] = their_rank;
@@ -614,17 +627,17 @@ void _domain_maketags3d(cow_domain *d)
   for (int i=-1; i<=1; ++i) {
     for (int j=-1; j<=1; ++j) {
       for (int k=-1; k<=1; ++k) {
-	if (i == 0 && j == 0 && k == 0) continue; // don't include self
-	int rel_index [] = { i, j, k };
-	int index[] = { d->proc_index[0] + rel_index[0],
-			d->proc_index[1] + rel_index[1],
-			d->proc_index[2] + rel_index[2] };
-	int their_rank;
-	MPI_Cart_rank(d->mpi_cart, index, &their_rank);
-	d->neighbors[n] = their_rank;
-	d->send_tags[n] = 100*(+i+5) + 10*(+j+5) + 1*(+k+5);
-	d->recv_tags[n] = 100*(-i+5) + 10*(-j+5) + 1*(-k+5);
-	++n;
+        if (i == 0 && j == 0 && k == 0) continue; // don't include self
+        int rel_index [] = { i, j, k };
+        int index[] = { d->proc_index[0] + rel_index[0],
+                        d->proc_index[1] + rel_index[1],
+                        d->proc_index[2] + rel_index[2] };
+        int their_rank;
+        MPI_Cart_rank(d->mpi_cart, index, &their_rank);
+        d->neighbors[n] = their_rank;
+        d->send_tags[n] = 100*(+i+5) + 10*(+j+5) + 1*(+k+5);
+        d->recv_tags[n] = 100*(-i+5) + 10*(-j+5) + 1*(-k+5);
+        ++n;
       }
     }
   }
@@ -687,7 +700,7 @@ void _dfield_maketype2d(cow_dfield *f)
       int start_send[] = { Plx[i+1], Ply[j+1] };
       int start_recv[] = { Qlx[i+1], Qly[j+1] };
       int sub[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng,
-		    (1-abs(j))*d->L_nint[1] + abs(j)*ng };
+                    (1-abs(j))*d->L_nint[1] + abs(j)*ng };
       MPI_Datatype send, recv, type;
       MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
       MPI_Type_create_subarray(2, d->L_ntot, sub, start_send, c, type, &send);
@@ -712,28 +725,28 @@ void _dfield_maketype3d(cow_dfield *f)
   for (int i=-1; i<=1; ++i) {
     for (int j=-1; j<=1; ++j) {
       for (int k=-1; k<=1; ++k) {
-	if (i == 0 && j == 0 && k == 0) continue; // don't include self
-	int Plx[] = { ng, ng, d->L_nint[0] };
-	int Ply[] = { ng, ng, d->L_nint[1] };
-	int Plz[] = { ng, ng, d->L_nint[2] };
-	int Qlx[] = {  0, ng, d->L_nint[0] + ng };
-	int Qly[] = {  0, ng, d->L_nint[1] + ng };
-	int Qlz[] = {  0, ng, d->L_nint[2] + ng };
-	int start_send[] = { Plx[i+1], Ply[j+1], Plz[k+1] };
-	int start_recv[] = { Qlx[i+1], Qly[j+1], Qlz[k+1] };
-	int sub[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng,
-		      (1-abs(j))*d->L_nint[1] + abs(j)*ng,
-		      (1-abs(k))*d->L_nint[2] + abs(k)*ng };
-	MPI_Datatype send, recv, type;
-	MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
-	MPI_Type_create_subarray(3, d->L_ntot, sub, start_send, c, type, &send);
-	MPI_Type_create_subarray(3, d->L_ntot, sub, start_recv, c, type, &recv);
-	MPI_Type_commit(&send);
-	MPI_Type_commit(&recv);
-	MPI_Type_free(&type);
-	f->send_type[n] = send;
-	f->recv_type[n] = recv;
-	++n;
+        if (i == 0 && j == 0 && k == 0) continue; // don't include self
+        int Plx[] = { ng, ng, d->L_nint[0] };
+        int Ply[] = { ng, ng, d->L_nint[1] };
+        int Plz[] = { ng, ng, d->L_nint[2] };
+        int Qlx[] = {  0, ng, d->L_nint[0] + ng };
+        int Qly[] = {  0, ng, d->L_nint[1] + ng };
+        int Qlz[] = {  0, ng, d->L_nint[2] + ng };
+        int start_send[] = { Plx[i+1], Ply[j+1], Plz[k+1] };
+        int start_recv[] = { Qlx[i+1], Qly[j+1], Qlz[k+1] };
+        int sub[] = { (1-abs(i))*d->L_nint[0] + abs(i)*ng,
+                      (1-abs(j))*d->L_nint[1] + abs(j)*ng,
+                      (1-abs(k))*d->L_nint[2] + abs(k)*ng };
+        MPI_Datatype send, recv, type;
+        MPI_Type_contiguous(f->n_members, MPI_DOUBLE, &type);
+        MPI_Type_create_subarray(3, d->L_ntot, sub, start_send, c, type, &send);
+        MPI_Type_create_subarray(3, d->L_ntot, sub, start_recv, c, type, &recv);
+        MPI_Type_commit(&send);
+        MPI_Type_commit(&recv);
+        MPI_Type_free(&type);
+        f->send_type[n] = send;
+        f->recv_type[n] = recv;
+        ++n;
       }
     }
   }

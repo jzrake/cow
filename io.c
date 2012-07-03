@@ -126,8 +126,8 @@ void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname)
   for (int n=0; n<ndims; ++n) {
     cow_domain_setsize(d, n, dims[n]);
   }
-  printf("[%s] inferred global domain size of (%lld %lld %lld) from %s/%s\n",
-	 MODULE, dims[0], dims[1], dims[2], fname, dname);
+  printf("[%s] inferred %dd global domain size of (%lld %lld %lld) from %s/%s\n",
+	 MODULE, ndims, dims[0], dims[1], dims[2], fname, dname);
 #endif
 }
 void cow_dfield_write(cow_dfield *f, const char *fname)
