@@ -24,7 +24,7 @@ cow_histogram *cow_histogram_new()
     .counts = NULL,
     .nickname = NULL,
     .fullname = NULL,
-    .binmode = COW_HIST_BINMODE_AVERAGE,
+    .binmode = COW_HIST_BINMODE_COUNTS,
     .spacing = COW_HIST_SPACING_LINEAR,
     .n_dims = 0,
     .committed = 0,
@@ -193,12 +193,13 @@ void cow_histogram_addsample1(cow_histogram *h, double x, double w)
 {
   if (!h->committed) return;
   for (int n=0; n<h->nbinsx; ++n) {
-    if (h->bedgesx[n] < x && x < h->bedgesx[n+1]) {
+    if (h->bedgesx[n] - 1e-14 < x && x < h->bedgesx[n+1] + 1e-14) {
       h->weight[n] += w;
       h->counts[n] += 1;
       return;
     }
   }
+  //  printf("value %16.14f not in range (%16.14f %16.14f)\n", x, h->x0, h->x1);
 }
 void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w)
 {

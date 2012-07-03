@@ -17,9 +17,9 @@
 #define COW_ALL_DIMS -10
 #define COW_HIST_SPACING_LINEAR -42
 #define COW_HIST_SPACING_LOG -43
-#define COW_HIST_BINMODE_DENSITY -44
-#define COW_HIST_BINMODE_AVERAGE -45
-#define COW_HIST_BINMODE_COUNTS -46
+#define COW_HIST_BINMODE_COUNTS -44 // traditional histogram
+#define COW_HIST_BINMODE_DENSITY -45 // divides by bin width
+#define COW_HIST_BINMODE_AVERAGE -46 // useful for e.g. power spectrum
 
 
 // -----------------------------------------------------------------------------
