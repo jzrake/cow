@@ -68,47 +68,19 @@ void cow_domain_del(cow_domain *d)
 #endif
   free(d);
 }
-/*
-  cow_dfield *cow_domain_addfield(cow_domain *d, const char *name)
-  {
-  d->n_fields++;
-  d->fields = (cow_dfield**) realloc(d->fields,
-  d->n_fields*sizeof(cow_dfield*));
-  cow_dfield *f = cow_dfield_new(d);
-  cow_dfield_setname(f, name);
-  if (d->committed) {
-  // -------------------------------------------------------------------------
-  // If the domain has already been committed, then also commit the new data
-  // field. This way new fields may be added and removed dynamically to an
-  // already committed domain.
-  // -------------------------------------------------------------------------
-  cow_dfield_commit(f);
-  }
-  return d->fields[d->n_fields-1] = f;
-  }
-  cow_dfield *cow_domain_iteratefields(cow_domain *d)
-  {
-  d->field_iter = 0;
-  return cow_domain_nextfield(d);
-  }
-  cow_dfield *cow_domain_nextfield(cow_domain *d)
-  {
-  return d->field_iter++ < d->n_fields ? d->fields[d->field_iter-1] : NULL;
-  }
-*/
 void cow_domain_setsize(cow_domain *d, int dim, int size)
 {
-  if (dim > 3 || d->committed) return;
+  if (dim >= 3 || d->committed) return;
   d->G_ntot[dim] = size;
 }
 int cow_domain_getsize(cow_domain *d, int dim)
 {
-  if (dim > 3) return 0;
+  if (dim >= 3) return 0;
   return d->L_nint[dim];
 }
 void cow_domain_setndim(cow_domain *d, int ndim)
 {
-  if (ndim > 3 || d->committed) return;
+  if (ndim >= 3 || d->committed) return;
   d->n_dims = ndim;
 }
 void cow_domain_setguard(cow_domain *d, int guard)
@@ -123,7 +95,7 @@ int cow_domain_getguard(cow_domain *d)
 void cow_domain_setprocsizes(cow_domain *d, int dim, int size)
 {
 #if (COW_MPI)
-  if (dim > 3 || d->committed) return;
+  if (dim >= 3 || d->committed) return;
   d->proc_sizes[dim] = size;
 #endif
 }
@@ -261,15 +233,26 @@ void cow_dfield_del(cow_dfield *f)
   free(f->data);
   free(f);
 }
+cow_dfield *cow_dfield_dup(cow_dfield *f)
+{
+  cow_dfield *g = cow_dfield_new(f->domain, f->name);
+  for (int n=0; n<f->n_members; ++n) {
+    cow_dfield_addmember(g, f->members[n]);
+  }
+  cow_dfield_commit(g);
+  memcpy(g->data, f->data, cow_dfield_getdatabytes(f));
+  g->member_iter = f->member_iter;
+  g->transform = f->transform;
+  return g;
+}
 void cow_dfield_setname(cow_dfield *f, const char *name)
 {
-  if (f->committed) return;
   f->name = (char*) realloc(f->name, strlen(name)+1);
   strcpy(f->name, name);
 }
 int cow_dfield_getstride(cow_dfield *f, int dim)
 {
-  if (dim > 3) return 0;
+  if (dim >= 3 || !f->committed) return 0;
   return f->stride[dim];
 }
 const char *cow_dfield_getname(cow_dfield *f)
@@ -278,6 +261,7 @@ const char *cow_dfield_getname(cow_dfield *f)
 }
 size_t cow_dfield_getdatabytes(cow_dfield *f)
 {
+  if (!f->committed) return 0;
   return cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS) *
     f->n_members * sizeof(double);
 }
@@ -477,7 +461,7 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
   } break;
   }
 }
-static void reduce(double *result, double **args, int **strides, void *udata)
+static void _reduce(double *result, double **args, int **strides, void *udata)
 {
   void **u = (void**)udata;
   cow_dfield *f = (cow_dfield*) u[0];
@@ -497,7 +481,7 @@ void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result)
   result[1] =-1e10; // max
   result[2] = 0.0; // sum
   f->transform = op;
-  cow_dfield_loop(f, reduce, udata);
+  cow_dfield_loop(f, _reduce, udata);
 #if (COW_MPI)
   cow_domain *d = f->domain;
   MPI_Allreduce(MPI_IN_PLACE, &result[0], 1, MPI_DOUBLE, MPI_MIN, d->mpi_cart);

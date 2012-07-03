@@ -100,6 +100,8 @@ int main(int argc, char **argv)
   }
   printf("%f %f\n", subarray[0], subarray[1]);
   free(subarray);
+  cow_dfield *divB_copy = cow_dfield_dup(divB);
+  cow_dfield_setname(divB_copy, "divB_copy");
 
   double reduction[3];
   cow_dfield_reduce(prim, pickmember1, reduction);
@@ -109,12 +111,15 @@ int main(int argc, char **argv)
   cow_domain_setcollective(domain, 0);
   cow_domain_setalign(domain, 4096, 4*1024*1024);
 
+
+  cow_dfield_write(divB_copy, "thefile.h5");
   cow_dfield_write(divB, "thefile.h5");
   cow_dfield_write(magf, "thefile.h5");
   cow_dfield_write(prim, "thefile.h5");
 
   cow_dfield_read(magf, "thefile.h5");
 
+  cow_dfield_del(divB_copy);
   cow_dfield_del(divB);
   cow_dfield_del(prim);
   cow_dfield_del(magf);

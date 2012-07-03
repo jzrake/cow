@@ -54,6 +54,7 @@ int cow_domain_getnumglobalzones(cow_domain *d, int dim);
 int cow_domain_getglobalstartindex(cow_domain *d, int dim);
 
 cow_dfield *cow_dfield_new(cow_domain *domain, const char *name);
+cow_dfield *cow_dfield_dup(cow_dfield *f);
 void cow_dfield_commit(cow_dfield *f);
 void cow_dfield_del(cow_dfield *f);
 void cow_dfield_addmember(cow_dfield *f, const char *name);
@@ -63,7 +64,6 @@ void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out);
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata);
 void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
 			  cow_transform op, void *udata);
-
 const char *cow_dfield_iteratemembers(cow_dfield *f);
 const char *cow_dfield_nextmember(cow_dfield *f);
 const char *cow_dfield_getname(cow_dfield *f);

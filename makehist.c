@@ -28,10 +28,10 @@ int main(int argc, char **argv)
     printf("was compiled with MPI support\n");
   }
 #endif
-  char *finp = argc >= 2 ? argv[1] : NULL;
-  char *grou = argc >= 3 ? argv[2] : NULL;
-  char *memb = argc >= 4 ? argv[3] : NULL;
-  char *fout = argc >= 5 ? argv[4] : NULL;
+  char *finp = argc > 1 ? argv[1] : NULL;
+  char *grou = argc > 2 ? argv[2] : NULL;
+  char *memb = argc > 3 ? argv[3] : NULL;
+  char *fout = argc > 4 ? argv[4] : NULL;
 
   if (finp && grou && memb && fout) {
     printf("opening data set '%s/%s' from input file '%s'\n", grou, memb, finp);
