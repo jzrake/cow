@@ -108,8 +108,10 @@ void cow_histogram_del(cow_histogram *h)
 }
 void cow_histogram_setdomaincomm(cow_histogram *h, cow_domain *d)
 {
+#if (COW_MPI)
   if (h->committed) return;
   h->comm = d->mpi_cart;
+#endif
 }
 void cow_histogram_setbinmode(cow_histogram *h, int binmode)
 {
