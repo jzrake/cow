@@ -6,6 +6,9 @@ COW_MPI ?= 1
 COW_HDF5_MPI ?= 1
 CFLAGS ?= -Wall -g -O0
 
+PY_INC ?= /usr/include
+PY_LIB ?= python
+
 HDF5_HOME ?= /usr/local
 INC = -I$(HDF5_HOME)/include
 LIB = -L$(HDF5_HOME)/lib -lz -lhdf5
@@ -29,25 +32,25 @@ cow_wrap.c : cow.i
 	swig -python -o $@ $^
 
 cowpy.o : cowpy.c
-	$(CC) $(CFLAGS) -o $@ $< -c $(DEFINES) -I/Library/Frameworks/Python.framework/Headers -std=c99
+	$(CC) $(CFLAGS) -o $@ $< -c -I$(PY_INC) $(DEFINES) -std=c99
 
 cow_wrap.o : cow_wrap.c
-	$(CC) $(CFLAGS) -o $@ $< -c -I/Library/Frameworks/Python.framework/Headers
+	$(CC) $(CFLAGS) -o $@ $< -c -I$(PY_INC)
 
 cowpy : cowpy.o cow_wrap.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB) -lpython
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB) -l$(PY_LIB)
 
 main : main.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 testhist : testhist.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 makehist : makehist.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 milos : milos.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 clean :
 	rm -rf $(EXE) $(OBJ) cow_wrap.* cow.py
