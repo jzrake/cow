@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "cow.h"
 #if (COW_MPI)
 #include <mpi.h>
@@ -15,6 +16,12 @@ void take_elem0(double *result, double **args, int **s, void *u)
 {
   ++ncalls;
   *result = args[0][0];
+}
+void take_mag3(double *result, double **args, int **s, void *u)
+{
+  ++ncalls;
+  double *m = args[0];
+  *result = sqrt(m[0]*m[0] + m[1]*m[1] + m[2]*m[2]);
 }
 
 int main(int argc, char **argv)

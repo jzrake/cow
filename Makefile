@@ -27,16 +27,16 @@ default : $(EXE)
 	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
 
 main : main.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 testhist : testhist.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 makehist : makehist.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 milos : milos.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(DEFINES) $(LIB)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 clean :
 	rm -rf $(EXE) $(OBJ)
