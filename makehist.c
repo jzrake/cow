@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include "cow.h"
 #if (COW_MPI)
 #include <mpi.h>
@@ -15,6 +16,12 @@ void take_elem0(double *result, double **args, int **s, void *u)
 {
   ++ncalls;
   *result = args[0][0];
+}
+void take_mag3(double *result, double **args, int **s, void *u)
+{
+  ++ncalls;
+  double *m = args[0];
+  *result = sqrt(m[0]*m[0] + m[1]*m[1] + m[2]*m[2]);
 }
 
 int main(int argc, char **argv)
@@ -40,14 +47,16 @@ int main(int argc, char **argv)
     printf("usage: $> makehist infile.h5 group member outfile.h5\n");
     goto done;
   }
-  char wholedset[1024];
-  snprintf(wholedset, 1024, "%s/%s", grou, memb);
+  char wholedset1[1024];
+  char wholedset2[1024];
+  snprintf(wholedset1, 1024, "%s/%s", grou, memb);
+  snprintf(wholedset2, 1024, "%s-hist", grou);
 
   int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
   printf("COW_HDF5_COLLECTIVE: %d\n", collective);
 
   cow_domain *domain = cow_domain_new();
-  cow_domain_readsize(domain, finp, wholedset);
+  cow_domain_readsize(domain, finp, wholedset1);
   cow_domain_setguard(domain, 2);
   cow_domain_commit(domain);
   cow_domain_setchunk(domain, 1);
@@ -65,10 +74,10 @@ int main(int argc, char **argv)
   cow_histogram *hist = cow_histogram_new();
   cow_histogram_setlower(hist, 0, reduc[0]);
   cow_histogram_setupper(hist, 0, reduc[1]);
-  cow_histogram_setnbins(hist, 0, 100);
+  cow_histogram_setnbins(hist, 0, 500);
   cow_histogram_setbinmode(hist, COW_HIST_BINMODE_COUNTS);
   cow_histogram_commit(hist);
-  cow_histogram_setnickname(hist, memb);
+  cow_histogram_setnickname(hist, wholedset2);
   cow_histogram_populate(hist, f, take_elem0);
   cow_histogram_dumphdf5(hist, fout, "");
   cow_histogram_del(hist);
