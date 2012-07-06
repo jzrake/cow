@@ -67,6 +67,7 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
 const char *cow_dfield_iteratemembers(cow_dfield *f);
 const char *cow_dfield_nextmember(cow_dfield *f);
 const char *cow_dfield_getname(cow_dfield *f);
+cow_domain *cow_dfield_getdomain(cow_dfield *f);
 int cow_dfield_getstride(cow_dfield *d, int dim);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
 void *cow_dfield_getdata(cow_dfield *f);

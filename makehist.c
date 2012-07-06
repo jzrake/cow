@@ -76,6 +76,7 @@ int main(int argc, char **argv)
   cow_histogram_setupper(hist, 0, reduc[1]);
   cow_histogram_setnbins(hist, 0, 500);
   cow_histogram_setbinmode(hist, COW_HIST_BINMODE_COUNTS);
+  cow_histogram_setdomaincomm(hist, domain);
   cow_histogram_commit(hist);
   cow_histogram_setnickname(hist, wholedset2);
   cow_histogram_populate(hist, f, take_elem0);

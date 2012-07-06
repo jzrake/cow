@@ -264,6 +264,10 @@ const char *cow_dfield_getname(cow_dfield *f)
 {
   return f->name;
 }
+cow_domain *cow_dfield_getdomain(cow_dfield *f)
+{
+  return f->domain;
+}
 size_t cow_dfield_getdatabytes(cow_dfield *f)
 {
   if (!f->committed) return 0;

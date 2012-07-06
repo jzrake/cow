@@ -1,4 +1,52 @@
 
-C.O.W.
+----------------------------------------------
+                  C.O.W.
 
-parallel analysis tools for the Cube Of Wonder
+parallel analysis tools for the Cube of Wonder
+
+Author: Jonathan Zrake, NYU CCPP
+----------------------------------------------
+
+The functions provided in this library are written to do analysis of
+hydrodynamic and magnetohydrodynamic turbulence, especially on the unigrid
+periodic cube, A.K.A. the swirly cube or Cube of Wonder.
+
+Everything here is written in C. Optional libraries are MPI, HDF5, and FFTW.
+
+
+Features planned or implemented
+-------------------------------
+[+] ... finished
+[-] ... started
+[ ] ... planned
+-------------------------------
+
+[+] Support for 1d, 2d, and 3d data domains with as many named data fields as
+    you want
+
+[+] Domain decomposition: with arbitrary depth guard cell synchronization
+
+[+] Parallel data I/O routines: read/write with or without MPI collective HDF5
+
+[+] Histograms: in 1d and 2d, linear/logarithmic spacing with weights, HDF5
+    writable
+
+[+] Transforms (including stencils) via C callback functions
+
+[-] Vector field derivative operations: div, grad, curl, etc.
+
+[-] Parallel FFT functions: allows arbitrary data layout, no need to keep 3d
+    data in 2d slabs
+
+[-] Sampling of data points on remote processors: by global index or
+    interpolated to physical locations
+
+[ ] Support for domains with complex-valued data
+
+[ ] Two-point correlations, structure functions
+
+[ ] Bi-spectra
+
+[ ] Tracer particles
+
+[ ] Vector field streamline integration
