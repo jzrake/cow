@@ -29,7 +29,6 @@
 #include <time.h>
 #define COW_PRIVATE_DEFS
 #include "cow.h"
-#define iolog stdout
 #define KILOBYTES (1<<10)
 #define MODULE "hdf5"
 

@@ -12,7 +12,7 @@
    See the README file in the top-level directory of the distribution.
 */
 
-#if (COW_FFTW && COW_USE_MPI)
+#if (COW_FFTW && COW_MPI)
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
