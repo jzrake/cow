@@ -35,6 +35,9 @@ typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
 
+void cow_init();
+void cow_finalize();
+
 cow_domain *cow_domain_new();
 void cow_domain_commit(cow_domain *d);
 void cow_domain_del(cow_domain *d);

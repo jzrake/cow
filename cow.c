@@ -32,6 +32,30 @@ static void _dfield_freetype(cow_dfield *f);
 static void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
                                    void *out, char op);
 
+void cow_init()
+{
+#if (COW_MPI)
+  int mpi_started;
+  int argc = 1;
+  char *argv_[1] = {"cow"};
+  char **argv = &argv_[0];
+  MPI_Initialized(&mpi_started);
+  if (!mpi_started) {
+    MPI_Init(&argc, &argv);
+  }
+#endif
+}
+void cow_finalize()
+{
+#if (COW_MPI)
+  int mpi_started;
+  MPI_Initialized(&mpi_started);
+  if (mpi_started) {
+    MPI_Finalize();
+  }
+#endif
+}
+
 // -----------------------------------------------------------------------------
 //
 // cow_domain interface functions

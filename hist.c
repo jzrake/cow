@@ -1,4 +1,5 @@
 
+#include <stdio.h>
 #include <string.h>
 #include <math.h>
 #define COW_PRIVATE_DEFS
@@ -6,7 +7,9 @@
 #define MODULE "hist"
 
 
+#if (COW_HDF5)
 static int H5Lexists_safe(hid_t base, const char *path);
+#endif
 
 cow_histogram *cow_histogram_new()
 {
@@ -429,7 +432,7 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
 #endif
 }
 
-
+#if (COW_HDF5)
 int H5Lexists_safe(hid_t base, const char *path)
 // -----------------------------------------------------------------------------
 // The HDF5 specification only allows H5Lexists to be called on an immediate
@@ -439,7 +442,6 @@ int H5Lexists_safe(hid_t base, const char *path)
 // http://www.hdfgroup.org/HDF5/doc/RM/RM_H5L.html#Link-Exists
 // -----------------------------------------------------------------------------
 {
-#if (COW_HDF5)
   hid_t last = base, next;
   char *pch;
   char pathc[2048];
@@ -460,5 +462,5 @@ int H5Lexists_safe(hid_t base, const char *path)
   }
   if (last != base) H5Gclose(last);
   return 1;
-#endif
 }
+#endif
