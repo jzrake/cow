@@ -27,7 +27,7 @@ DEFINES = \
 	-DFFT_FFTW
 
 OBJ = cow.o hist.o io.o fft.o fft_3d.o pack_3d.o remap_3d.o factor.o
-EXE = main makehist testhist milos mhdstats
+EXE = main makehist testhist testfft milos mhdstats
 
 default : $(EXE)
 
@@ -41,6 +41,9 @@ main : main.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 testhist : testhist.o $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
+
+testfft : testfft.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 makehist : makehist.o $(OBJ)

@@ -10,18 +10,14 @@
  *
  * NOTES:
  *
- * This code makes the parallel FFT and remapping routines of Steve Plimpton at
- * Sandia National Labs available to lua code.
+ * This code wraps the parallel FFT and remapping routines of Steve Plimpton at
+ * Sandia National Labs.
  *
  * - The option to 'SCALED_YES' to divide by N is only regarded for forward
  *   transforms.
  *
  * - The order of indices provided to the FFT's is fast,mid,slow varying. For C
  *   arrays, this means it gets called with Nz, Ny, Nx.
- *
- * - All of the input data is expected to be without ghost zones, in other words
- *   of dimension domain.GetLocalShape().
- *
  *
  *------------------------------------------------------------------------------
  */
@@ -55,301 +51,69 @@ static double k_at(cow_domain *d, int i, int j, int k, double *khat);
 static double khat_at(cow_domain *d, int i, int j, int k, double *khat);
 static double cnorm(FFT_DATA z);
 
-
-/*
-int luaC_fft_forward(lua_State *L)
+void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
 {
-  int nbuf;
-  struct fft_plan_3d *plan = call_fft_plan_3d(&nbuf);
-
-  if (lunum_upcast(L, 1, ARRAY_TYPE_COMPLEX, nbuf)) {
-    lua_replace(L, 1);
+  if (!f->committed) return;
+  if (f->n_members != 3) {
+    printf("[%s] error: need a 3-component field for pspecvectorfield", MODULE);
+    return;
   }
 
-  struct Array *Fx = lunum_checkarray1(L, 1);
-  struct Array Fk = array_new_zeros(nbuf, ARRAY_TYPE_COMPLEX);
-
-  fft_3d((FFT_DATA*)Fx->data, (FFT_DATA*)Fk.data, FFT_FWD, plan);
-  fft_3d_destroy_plan(plan);
-
-  lunum_pusharray1(L, &Fk);
-  return 1;
-}
-*/
-
- /*
-int luaC_fft_reverse(lua_State *L)
-{
-  int nbuf;
-  struct fft_plan_3d *plan = call_fft_plan_3d(&nbuf);
-
-  if (lunum_upcast(L, 1, ARRAY_TYPE_COMPLEX, nbuf)) {
-    lua_replace(L, 1);
-  }
-
-  struct Array *Fk = lunum_checkarray1(L, 1);
-  struct Array Fx = array_new_zeros(nbuf, ARRAY_TYPE_COMPLEX);
-
-  fft_3d((FFT_DATA*)Fk->data, (FFT_DATA*)Fx.data, FFT_REV, plan);
-  fft_3d_destroy_plan(plan);
-
-  lunum_pusharray1(L, &Fx);
-  return 1;
-}
- */
-
-  /*
-int luaC_fft_helmholtz(lua_State *L)
-// -----------------------------------------------------------------------------
-// input : fx, fy, fz                         ... 3 numeric Lua tables
-// output: fx_s, fy_s, fz_s, fx_c, fy_c, fz_c ... their Helmholtz decompositions
-//
-// This function performs 3d a spectral helmholtz on the input vector field
-// (fx,fy,fz). It returns the coordinate (not spectral) realization of the
-// solenoidal (div-less) and compressive (curl-less) parts as Lua arrays. Note:
-// both the compressive 'c' and solenoidal 's' parts of the returned field
-// include the zero-mode. That means that f != c + s.
-// -----------------------------------------------------------------------------
-{
   clock_t start = clock();
-
-  double *fx_in = luaU_checkarray(L, 1);
-  double *fy_in = luaU_checkarray(L, 2);
-  double *fz_in = luaU_checkarray(L, 3);
-
+  int nx = cow_domain_getnumlocalzonesinterior(f->domain, 0);
+  int ny = cow_domain_getnumlocalzonesinterior(f->domain, 1);
+  int nz = cow_domain_getnumlocalzonesinterior(f->domain, 2);
+  int Nx = cow_domain_getnumglobalzones(f->domain, 0);
+  int Ny = cow_domain_getnumglobalzones(f->domain, 1);
+  int Nz = cow_domain_getnumglobalzones(f->domain, 2);
+  int ng = cow_domain_getguard(f->domain);
   int nbuf;
-  struct fft_plan_3d *plan = call_fft_plan_3d(&nbuf);
+  int ntot = nx * ny * nz;
+  int I0[3] = { ng, ng, ng };
+  int I1[3] = { nx + ng, ny + ng, nz + ng };
 
-  FFT_DATA *fx = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *fy = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *fz = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
+  double *input = (double*) malloc(3 * ntot * sizeof(double));
+  cow_dfield_extract(f, I0, I1, input);
 
+  struct fft_plan_3d *plan = call_fft_plan_3d(f->domain, &nbuf);
+  FFT_DATA *fx = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *fy = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *fz = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  printf("[%s] need to allocate %d zones\n", MODULE, nbuf);
   for (int i=0; i<nbuf; ++i) {
-    fx[i].re = fx_in[i];
+    fx[i].re = input[3*i + 0];
+    fy[i].re = input[3*i + 1];
+    fz[i].re = input[3*i + 2];
     fx[i].im = 0.0;
-
-    fy[i].re = fy_in[i];
     fy[i].im = 0.0;
-
-    fz[i].re = fz_in[i];
     fz[i].im = 0.0;
   }
-
-  FFT_DATA *gx = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *gy = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *gz = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-
+  free(input);
+  FFT_DATA *gx = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *gy = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *gz = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
   fft_3d(fx, gx, FFT_FWD, plan);
   fft_3d(fy, gy, FFT_FWD, plan);
   fft_3d(fz, gz, FFT_FWD, plan);
-
   free(fx);
   free(fy);
   free(fz);
-
-  FFT_DATA *gx_c = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *gy_c = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *gz_c = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-
-  FFT_DATA *gx_s = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *gy_s = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *gz_s = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-
-  const int Nx = HydroModule::Mara->domain->GetLocalShape()[0];
-  const int Ny = HydroModule::Mara->domain->GetLocalShape()[1];
-  const int Nz = HydroModule::Mara->domain->GetLocalShape()[2];
-
-  for (int i=0; i<Nx; ++i) {
-    for (int j=0; j<Ny; ++j) {
-      for (int k=0; k<Nz; ++k) {
-
-        const int m = i*Ny*Nz + j*Nz + k;
-        double khat[3];
-        khat_at(i, j, k, khat);
-
-        FFT_DATA gdotk;
-
-        gdotk.re = gx[m].re * khat[0] + gy[m].re * khat[1] + gz[m].re * khat[2];
-        gdotk.im = gx[m].im * khat[0] + gy[m].im * khat[1] + gz[m].im * khat[2];
-
-        gx_c[m].re = gdotk.re * khat[0];
-        gx_c[m].im = gdotk.im * khat[0];
-
-        gy_c[m].re = gdotk.re * khat[1];
-        gy_c[m].im = gdotk.im * khat[1];
-
-        gz_c[m].re = gdotk.re * khat[2];
-        gz_c[m].im = gdotk.im * khat[2];
-
-        gx_s[m].re = gx[m].re - gx_c[m].re;
-        gx_s[m].im = gx[m].im - gx_c[m].im;
-
-        gy_s[m].re = gy[m].re - gy_c[m].re;
-        gy_s[m].im = gy[m].im - gy_c[m].im;
-
-        gz_s[m].re = gz[m].re - gz_c[m].re;
-        gz_s[m].im = gz[m].im - gz_c[m].im;
-      }
-    }
-  }
-
-  free(gx);
-  free(gy);
-  free(gz);
-
-
-  // Putting in the solenoidal projection
-  // ---------------------------------------------------------------------------
-  FFT_DATA *fx_s = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *fy_s = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *fz_s = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-
-  fft_3d(gx_s, fx_s, FFT_REV, plan);
-  fft_3d(gy_s, fy_s, FFT_REV, plan);
-  fft_3d(gz_s, fz_s, FFT_REV, plan);
-
-  free(gx_s);
-  free(gy_s);
-  free(gz_s);
-
-  double *Fx_s = (double*) malloc(nbuf*sizeof(double));
-  double *Fy_s = (double*) malloc(nbuf*sizeof(double));
-  double *Fz_s = (double*) malloc(nbuf*sizeof(double));
-
-  for (int i=0; i<nbuf; ++i) {
-    Fx_s[i] = fx_s[i].re;
-    Fy_s[i] = fy_s[i].re;
-    Fz_s[i] = fz_s[i].re;
-  }
-
-  free(fx_s);
-  free(fy_s);
-  free(fz_s);
-
-  luaU_pusharray(L, Fx_s, nbuf);
-  luaU_pusharray(L, Fy_s, nbuf);
-  luaU_pusharray(L, Fz_s, nbuf);
-
-  free(Fx_s);
-  free(Fy_s);
-  free(Fz_s);
-
-
-  // Putting in the compressive projection
-  // ---------------------------------------------------------------------------
-  FFT_DATA *fx_c = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *fy_c = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *fz_c = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-
-  fft_3d(gx_c, fx_c, FFT_REV, plan);
-  fft_3d(gy_c, fy_c, FFT_REV, plan);
-  fft_3d(gz_c, fz_c, FFT_REV, plan);
-
-  free(gx_c);
-  free(gy_c);
-  free(gz_c);
-
-  double *Fx_c = (double*) malloc(nbuf*sizeof(double));
-  double *Fy_c = (double*) malloc(nbuf*sizeof(double));
-  double *Fz_c = (double*) malloc(nbuf*sizeof(double));
-
-  for (int i=0; i<nbuf; ++i) {
-    Fx_c[i] = fx_c[i].re;
-    Fy_c[i] = fy_c[i].re;
-    Fz_c[i] = fz_c[i].re;
-  }
-
-  free(fx_c);
-  free(fy_c);
-  free(fz_c);
-
-  luaU_pusharray(L, Fx_c, nbuf);
-  luaU_pusharray(L, Fy_c, nbuf);
-  luaU_pusharray(L, Fz_c, nbuf);
-
-  free(Fx_c);
-  free(Fy_c);
-  free(Fz_c);
-
-
-  fft_3d_destroy_plan(plan);
-
-  printf("[fft] helmholtz decomposition took %3.2f seconds\n",
-         (double) (clock() - start) / CLOCKS_PER_SEC);
-
-  return 6;
-}
-*/
-
-   /*
-int luaC_fft_power_vector_field(lua_State *L)
-// -----------------------------------------------------------------------------
-// input : fx, fy, fz, hid, name ... vector field f, and the hdf5 target
-// output: nothing               ...
-//
-// This function gets the power spectrum of the 3d vector field given by
-// (fx,fy,fz) by binning it spherically. It writes the result to the (assumed to
-// be open) hdf5 file or group id given by 'hid'. Note: in the future this
-// function could be modified to return the histogram as a Lua array if 'hid' is
-// not provided.
-// -----------------------------------------------------------------------------
-{
-  clock_t start = clock();
-
-  double *fx_in = luaU_checkarray(L, 1);
-  double *fy_in = luaU_checkarray(L, 2);
-  double *fz_in = luaU_checkarray(L, 3);
-  int hid = luaL_checkinteger(L, 4);
-  const char *name = luaL_checkstring(L, 5);
-
-  int nbuf;
-  struct fft_plan_3d *plan = call_fft_plan_3d(&nbuf);
-
-  FFT_DATA *fx = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *fy = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *fz = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-
-  for (int i=0; i<nbuf; ++i) {
-    fx[i].re = fx_in[i];
-    fx[i].im = 0.0;
-
-    fy[i].re = fy_in[i];
-    fy[i].im = 0.0;
-
-    fz[i].re = fz_in[i];
-    fz[i].im = 0.0;
-  }
-
-  FFT_DATA *gx = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *gy = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  FFT_DATA *gz = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-
-  fft_3d(fx, gx, FFT_FWD, plan);
-  fft_3d(fy, gy, FFT_FWD, plan);
-  fft_3d(fz, gz, FFT_FWD, plan);
-
-  free(fx);
-  free(fy);
-  free(fz);
-
-  const int Nx = HydroModule::Mara->domain->GetLocalShape()[0];
-  const int Ny = HydroModule::Mara->domain->GetLocalShape()[1];
-  const int Nz = HydroModule::Mara->domain->GetLocalShape()[2];
-
-  const int *N = HydroModule::Mara->domain->GetGlobalShape();
-  Histogram1d hist(NBINS, 1.0, 0.5*sqrt(N[0]*N[0] + N[1]*N[1] + N[2]*N[2]),
-		   Histogram::Logspace);
-  hist.binning_mode = Histogram::BinDensity;
-
-  for (int i=0; i<Nx; ++i) {
-    for (int j=0; j<Ny; ++j) {
-      for (int k=0; k<Nz; ++k) {
-
-        const int m = i*Ny*Nz + j*Nz + k;
-        double khat[3];
-        khat_at(i, j, k, khat);
-
+  cow_histogram *hist = cow_histogram_new();
+  cow_histogram_setlower(hist, 0, 1.0);
+  cow_histogram_setupper(hist, 0, 0.5*sqrt(Nx*Nx + Ny*Ny + Nz*Nz));
+  cow_histogram_setnbins(hist, 0, NBINS);
+  cow_histogram_setbinmode(hist, COW_HIST_BINMODE_DENSITY);
+  cow_histogram_setspacing(hist, COW_HIST_SPACING_LOG);
+  cow_histogram_setdomaincomm(hist, f->domain);
+  cow_histogram_commit(hist);
+  cow_histogram_setnickname(hist, cow_dfield_getname(f));
+  for (int i=0; i<nx; ++i) {
+    for (int j=0; j<ny; ++j) {
+      for (int k=0; k<nz; ++k) {
+        const int m = i*ny*nz + j*nz + k;
 	double kvec[3];
+        double khat[3];
+	khat_at(f->domain, i, j, k, khat);
 	// ---------------------------------------------------------------------
 	// Here we are taking the complex norm (absolute value squared) of the
 	// vector-valued Fourier amplitude corresponding to the wave-vector, k.
@@ -357,138 +121,42 @@ int luaC_fft_power_vector_field(lua_State *L)
 	//                        P(k) = |\vec{f}_\vec{k}|^2
 	//
 	// ---------------------------------------------------------------------
-	const double Kijk = k_at(i, j, k, kvec);
+	const double Kijk = k_at(f->domain, i, j, k, kvec);
 	const double Pijk = cnorm(gx[m]) + cnorm(gy[m]) + cnorm(gz[m]);
-
-	hist.add_sample(Kijk, Pijk);
+	cow_histogram_addsample1(hist, Kijk, Pijk);
       }
     }
   }
-
   free(gx);
   free(gy);
   free(gz);
-
-  hist.nickname = name;
-  hist.synchronize();
-  hist.dump_hdf5(hid); // Histogram does nothing if hid == 0
-
+  cow_histogram_dumphdf5(hist, fout, gout);
+  cow_histogram_del(hist);
   fft_3d_destroy_plan(plan);
-
-  printf("[fft] power_vector_field took %3.2f seconds\n",
-         (double) (clock() - start) / CLOCKS_PER_SEC);
-
-  return 0;
+  printf("[%s] %s took %3.2f seconds\n",
+	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
 }
-*/
-
-
-/*
-int luaC_fft_power_scalar_field(lua_State *L)
-// -----------------------------------------------------------------------------
-// input : f, hid, name ... scalar field f, and the hdf5 target
-// output: nothing      ...
-//
-// This function gets the power spectrum of the 3d scalar field given by 'f' by
-// binning it spherically. It writes the result to the (assumed to be open) hdf5
-// file or group id given by 'hid'. Note: in the future this function could be
-// modified to return the histogram as a Lua array if 'hid' is not provided.
-// -----------------------------------------------------------------------------
-{
-  clock_t start = clock();
-
-  double *f_in = luaU_checkarray(L, 1);
-  int hid = luaL_checkinteger(L, 2);
-  const char *name = luaL_checkstring(L, 3);
-
-  int nbuf;
-  struct fft_plan_3d *plan = call_fft_plan_3d(&nbuf);
-  FFT_DATA *f = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-
-  for (int i=0; i<nbuf; ++i) {
-    f[i].re = f_in[i];
-    f[i].im = 0.0;
-  }
-
-  FFT_DATA *g = (FFT_DATA*) malloc(nbuf*sizeof(FFT_DATA));
-  fft_3d(f, g, FFT_FWD, plan);
-  free(f);
-
-  const int Nx = HydroModule::Mara->domain->GetLocalShape()[0];
-  const int Ny = HydroModule::Mara->domain->GetLocalShape()[1];
-  const int Nz = HydroModule::Mara->domain->GetLocalShape()[2];
-
-  const int *N = HydroModule::Mara->domain->GetGlobalShape();
-  Histogram1d hist(NBINS, 1.0, 0.5*sqrt(N[0]*N[0] + N[1]*N[1] + N[2]*N[2]),
-		   Histogram::Logspace);
-  hist.binning_mode = Histogram::BinDensity;
-
-  for (int i=0; i<Nx; ++i) {
-    for (int j=0; j<Ny; ++j) {
-      for (int k=0; k<Nz; ++k) {
-
-        const int m = i*Ny*Nz + j*Nz + k;
-        double khat[3];
-        khat_at(i, j, k, khat);
-
-	double kvec[3];
-	// ---------------------------------------------------------------------
-	// Here we are taking the complex norm (absolute value squared) of the
-	// vector-valued Fourier amplitude corresponding to the wave-vector, k.
-	//
-	//                        P(k) = |\vec{f}_\vec{k}|^2
-	//
-	// ---------------------------------------------------------------------
-	const double Kijk = k_at(i, j, k, kvec);
-	const double Pijk = cnorm(g[m]);
-
-	hist.add_sample(Kijk, Pijk);
-      }
-    }
-  }
-  free(g);
-
-  hist.nickname = name;
-  hist.synchronize();
-  hist.dump_hdf5(hid); // Histogram does nothing if hid == 0
-
-  fft_3d_destroy_plan(plan);
-
-  printf("[fft] power_scalar_field took %3.2f seconds\n",
-         (double) (clock() - start) / CLOCKS_PER_SEC);
-
-  return 0;
-}
-*/
-
-
-
-
-
-
-
-
-
-
 
 
 struct fft_plan_3d *call_fft_plan_3d(cow_domain *d, int *nbuf)
 {
 #if (COW_MPI)
   const int i0 = cow_domain_getglobalstartindex(d, 0);
-  const int i1 = cow_domain_getnumglobalzones(d, 0) + i0 - 1;
+  const int i1 = cow_domain_getnumlocalzonesinterior(d, 0) + i0 - 1;
   const int j0 = cow_domain_getglobalstartindex(d, 1);
-  const int j1 = cow_domain_getnumglobalzones(d, 1) + j0 - 1;
+  const int j1 = cow_domain_getnumlocalzonesinterior(d, 1) + j0 - 1;
   const int k0 = cow_domain_getglobalstartindex(d, 2);
-  const int k1 = cow_domain_getnumglobalzones(d, 2) + k0 - 1;
+  const int k1 = cow_domain_getnumlocalzonesinterior(d, 2) + k0 - 1;
   const int Nx = cow_domain_getnumglobalzones(d, 0);
   const int Ny = cow_domain_getnumglobalzones(d, 1);
   const int Nz = cow_domain_getnumglobalzones(d, 2);
-  return fft_3d_create_plan(MPI_COMM_WORLD,
+  return fft_3d_create_plan(d->mpi_cart,
                             Nz, Ny, Nx,
                             k0,k1, j0,j1, i0,i1,
                             k0,k1, j0,j1, i0,i1,
                             SCALED_YES, PERMUTE_NONE, nbuf);
+#else
+  return NULL;
 #endif
 }
 

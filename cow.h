@@ -95,7 +95,7 @@ void cow_histogram_synchronize(cow_histogram *h);
 void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
 
-
+void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout);
 
 #ifdef COW_PRIVATE_DEFS
 

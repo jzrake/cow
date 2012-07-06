@@ -46,7 +46,6 @@ void _io_domain_commit(cow_domain *d)
     d->G_ntot_h5[n] = d->G_ntot[n]; // Global space total size
     d->G_strt_h5[n] = d->G_strt[n]; // Global space selection start
   }
-
   // Here we create the following property lists:
   //
   // file access property list   ........ for the call to H5Fopen
