@@ -102,7 +102,7 @@ cow_dfield *cow_scalarfield(cow_domain *domain, const char *name)
 void make_hist(cow_dfield *f, cow_transform op, const char *fout, const char *m)
 {
   char nickname[1024];
-  snprintf(nickname, 1024, "%s-hist", cow_dfield_getname(f));
+  snprintf(nickname, 1024, "%s-hist", m ? m : cow_dfield_getname(f));
 
   double reduc[3]; // min, max, sum
   cow_dfield_reduce(f, op, reduc);
@@ -114,7 +114,7 @@ void make_hist(cow_dfield *f, cow_transform op, const char *fout, const char *m)
   cow_histogram_setbinmode(hist, COW_HIST_BINMODE_COUNTS);
   cow_histogram_setdomaincomm(hist, cow_dfield_getdomain(f));
   cow_histogram_commit(hist);
-  cow_histogram_setnickname(hist, m ? m : nickname);
+  cow_histogram_setnickname(hist, nickname);
   cow_histogram_populate(hist, f, op);
   cow_histogram_dumphdf5(hist, fout, "");
   cow_histogram_del(hist);
