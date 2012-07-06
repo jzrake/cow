@@ -1,19 +1,28 @@
 
-from cow import *
+
+from _cow import *
 import os, sys
+import atexit
+
+atexit.register(cow_finalize)
 
 cow_init()
-d = cow_domain_new()
-f = cow_dfield_new(d, "primitive")
-cow_domain_commit(d)
-cow_dfield_commit(f)
+domain = cow_domain_new()
+dfield = cow_dfield_new(domain, "prim")
+cow_dfield_addmember(dfield, "vx")
+cow_dfield_addmember(dfield, "vy")
+cow_dfield_addmember(dfield, "vz")
+
+cow_domain_setndim(domain, 1);
+cow_domain_setguard(domain, 3);
+cow_domain_setsize(domain, 0, 10);
+cow_domain_commit(domain)
+cow_dfield_commit(dfield)
 
 print test_trans, TEST_TRANS
-print cow_dfield_getname(f)
-print test_trans(None, None, None, None)
+print cow_dfield_getname(dfield)
 
-cow_dfield_loop(f, TEST_TRANS, None)
-cow_dfield_del(f)
-
-cow_domain_del(d)
-cow_finalize()
+#test_trans(None, None, None, None)
+cow_dfield_loop(dfield, TEST_TRANS, None)
+cow_dfield_del(dfield)
+cow_domain_del(domain)

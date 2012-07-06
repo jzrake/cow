@@ -1,0 +1,23 @@
+#!/usr/bin/env python
+
+from distutils.core import setup, Extension
+
+cow_module = Extension('_cow',
+                       extra_compile_args=['-std=c99'],
+                       define_macros = [('COW_MPI', '1'),
+                                        ('COW_HDF5', '1'),
+                                        ('COW_HDF5_MPI', '1')],
+                       include_dirs = ['/Library/Science/hdf5-1.8.9-par/include',
+                                       '/Library/Science/mpich2/include'],
+                       library_dirs = ['/Library/Science/hdf5-1.8.9-par/lib',
+                                       '/Library/Science/mpich2/lib'],
+                       libraries = ['hdf5', 'z', 'mpich', 'pmpich'],
+                       sources=['cow_wrap.c', 'cow.c', 'io.c', 'hist.c'],
+                       )
+setup(name        = 'cow',
+      version     = '0.1',
+      author      = "Jonathan Zrake",
+      description = """C.O.W.""",
+      ext_modules = [cow_module],
+      py_modules  = ["cow"],
+      )
