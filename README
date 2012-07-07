@@ -52,3 +52,5 @@ Features planned or implemented
 [ ] Tracer particles
 
 [ ] Vector field streamline integration
+
+[ ] Low/high pass filtering; course-graining
