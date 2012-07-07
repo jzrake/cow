@@ -110,7 +110,7 @@ void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
   for (int i=0; i<nx; ++i) {
     for (int j=0; j<ny; ++j) {
       for (int k=0; k<nz; ++k) {
-        const int m = i*ny*nz + j*nz + k;
+	int m = i*ny*nz + j*nz + k;
 	double kvec[3];
         double khat[3];
 	khat_at(f->domain, i, j, k, khat);
@@ -121,8 +121,8 @@ void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
 	//                        P(k) = |\vec{f}_\vec{k}|^2
 	//
 	// ---------------------------------------------------------------------
-	const double Kijk = k_at(f->domain, i, j, k, kvec);
-	const double Pijk = cnorm(gx[m]) + cnorm(gy[m]) + cnorm(gz[m]);
+	double Kijk = k_at(f->domain, i, j, k, kvec);
+	double Pijk = cnorm(gx[m]) + cnorm(gy[m]) + cnorm(gz[m]);
 	cow_histogram_addsample1(hist, Kijk, Pijk);
       }
     }
@@ -132,6 +132,118 @@ void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
   free(gz);
   cow_histogram_dumphdf5(hist, fout, gout);
   cow_histogram_del(hist);
+  fft_3d_destroy_plan(plan);
+  printf("[%s] %s took %3.2f seconds\n",
+	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
+}
+
+
+void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
+{
+  if (!f->committed) return;
+  if (f->n_members != 3) {
+    printf("[%s] error: need a 3-component field for pspecvectorfield", MODULE);
+    return;
+  }
+
+  clock_t start = clock();
+  int nx = cow_domain_getnumlocalzonesinterior(f->domain, 0);
+  int ny = cow_domain_getnumlocalzonesinterior(f->domain, 1);
+  int nz = cow_domain_getnumlocalzonesinterior(f->domain, 2);
+  int ng = cow_domain_getguard(f->domain);
+  int nbuf;
+  int ntot = nx * ny * nz;
+  int I0[3] = { ng, ng, ng };
+  int I1[3] = { nx + ng, ny + ng, nz + ng };
+
+  double *input = (double*) malloc(3 * ntot * sizeof(double));
+  cow_dfield_extract(f, I0, I1, input);
+
+  struct fft_plan_3d *plan = call_fft_plan_3d(f->domain, &nbuf);
+  FFT_DATA *fx = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *fy = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *fz = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  printf("[%s] need to allocate %d zones\n", MODULE, nbuf);
+  for (int i=0; i<nbuf; ++i) {
+    fx[i].re = input[3*i + 0];
+    fy[i].re = input[3*i + 1];
+    fz[i].re = input[3*i + 2];
+    fx[i].im = 0.0;
+    fy[i].im = 0.0;
+    fz[i].im = 0.0;
+  }
+  free(input);
+
+  FFT_DATA *gx = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *gy = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *gz = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  fft_3d(fx, gx, FFT_FWD, plan);
+  fft_3d(fy, gy, FFT_FWD, plan);
+  fft_3d(fz, gz, FFT_FWD, plan);
+  free(fx);
+  free(fy);
+  free(fz);
+
+  FFT_DATA *gx_p = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *gy_p = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *gz_p = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  for (int i=0; i<nx; ++i) {
+    for (int j=0; j<ny; ++j) {
+      for (int k=0; k<nz; ++k) {
+	int m = i*ny*nz + j*nz + k;
+        FFT_DATA gdotk;
+        double khat[3];
+        khat_at(f->domain, i, j, k, khat);
+        gdotk.re = gx[m].re * khat[0] + gy[m].re * khat[1] + gz[m].re * khat[2];
+        gdotk.im = gx[m].im * khat[0] + gy[m].im * khat[1] + gz[m].im * khat[2];
+	switch (mode) {
+	case COW_PROJECT_OUT_DIV:
+	  gx_p[m].re = gx[m].re - gdotk.re * khat[0];
+	  gx_p[m].im = gx[m].im - gdotk.im * khat[0];
+	  gy_p[m].re = gy[m].re - gdotk.re * khat[1];
+	  gy_p[m].im = gy[m].im - gdotk.im * khat[1];
+	  gz_p[m].re = gz[m].re - gdotk.re * khat[2];
+	  gz_p[m].im = gz[m].im - gdotk.im * khat[2];
+	  break;
+	case COW_PROJECT_OUT_CURL:
+	  gx_p[m].re = gdotk.re * khat[0];
+	  gx_p[m].im = gdotk.im * khat[0];
+	  gy_p[m].re = gdotk.re * khat[1];
+	  gy_p[m].im = gdotk.im * khat[1];
+	  gz_p[m].re = gdotk.re * khat[2];
+	  gz_p[m].im = gdotk.im * khat[2];
+	  break;
+	default: break;
+	}
+      }
+    }
+  }
+  free(gx);
+  free(gy);
+  free(gz);
+
+  FFT_DATA *fx_p = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *fy_p = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  FFT_DATA *fz_p = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
+  fft_3d(gx_p, fx_p, FFT_REV, plan);
+  fft_3d(gy_p, fy_p, FFT_REV, plan);
+  fft_3d(gz_p, fz_p, FFT_REV, plan);
+  free(gx_p);
+  free(gy_p);
+  free(gz_p);
+
+  double *res = (double*) malloc(3 * nbuf * sizeof(double));
+  for (int i=0; i<nbuf; ++i) {
+    res[3*i + 0] = fx_p[i].re;
+    res[3*i + 1] = fy_p[i].re;
+    res[3*i + 2] = fz_p[i].re;
+  }
+  free(fx_p);
+  free(fy_p);
+  free(fz_p);
+
+  cow_dfield_replace(f, I0, I1, res);
+  free(res);
   fft_3d_destroy_plan(plan);
   printf("[%s] %s took %3.2f seconds\n",
 	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);

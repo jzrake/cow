@@ -14,13 +14,14 @@
 #endif // COW_PRIVATE_DEFS
 
 
-#define COW_ALL_DIMS -10
-#define COW_HIST_SPACING_LINEAR -42
-#define COW_HIST_SPACING_LOG -43
-#define COW_HIST_BINMODE_COUNTS -44 // traditional histogram
+#define COW_ALL_DIMS             -10
+#define COW_HIST_SPACING_LINEAR  -42
+#define COW_HIST_SPACING_LOG     -43
+#define COW_HIST_BINMODE_COUNTS  -44 // traditional histogram
 #define COW_HIST_BINMODE_DENSITY -45 // divides by bin width
 #define COW_HIST_BINMODE_AVERAGE -46 // useful for e.g. power spectrum
-
+#define COW_PROJECT_OUT_DIV      -47 // used for Helmholtz decomposition
+#define COW_PROJECT_OUT_CURL     -48
 
 // -----------------------------------------------------------------------------
 //
@@ -96,6 +97,7 @@ void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
 
 void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout);
+void cow_fft_helmholtzdecomp(cow_dfield *f, int mode);
 
 #ifdef COW_PRIVATE_DEFS
 

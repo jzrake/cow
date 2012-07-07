@@ -38,6 +38,8 @@ Features planned or implemented
 [-] Parallel FFT functions: allows arbitrary data layout, no need to keep 3d
     data in 2d slabs
 
+[-] Helmholtz decomposition of vector fields
+
 [-] Sampling of data points on remote processors: by global index or
     interpolated to physical locations
 
