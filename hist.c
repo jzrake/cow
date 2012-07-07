@@ -6,7 +6,6 @@
 #include "cow.h"
 #define MODULE "hist"
 
-
 #if (COW_HDF5)
 static int H5Lexists_safe(hid_t base, const char *path);
 #endif

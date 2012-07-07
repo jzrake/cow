@@ -35,8 +35,10 @@ Features planned or implemented
 
 [-] Vector field derivative operations: div, grad, curl, etc.
 
-[-] Parallel FFT functions: allows arbitrary data layout, no need to keep 3d
+[+] Parallel FFT functions: allows arbitrary data layout, no need to keep 3d
     data in 2d slabs
+
+[+] Helmholtz decomposition of vector fields
 
 [-] Sampling of data points on remote processors: by global index or
     interpolated to physical locations
@@ -50,3 +52,5 @@ Features planned or implemented
 [ ] Tracer particles
 
 [ ] Vector field streamline integration
+
+[ ] Low/high pass filtering; course-graining

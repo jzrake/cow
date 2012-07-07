@@ -474,8 +474,8 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
     }
   } break;
   case 3: {
-    int ti = f->n_members * mj * mk;
-    int tj = f->n_members * mj;
+    int ti = f->n_members * mk * mj;
+    int tj = f->n_members * mk;
     int tk = f->n_members;
     for (int i=0; i<mi; ++i) {
       for (int j=0; j<mj; ++j) {

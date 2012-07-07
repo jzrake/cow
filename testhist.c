@@ -29,8 +29,8 @@ int main(int argc, char **argv)
   cow_domain_setndim(domain, 3);
   cow_domain_setguard(domain, 2);
   cow_domain_setsize(domain, 0, 4);
-  cow_domain_setsize(domain, 0, 4);
-  cow_domain_setsize(domain, 0, 4);
+  cow_domain_setsize(domain, 1, 4);
+  cow_domain_setsize(domain, 2, 4);
   cow_domain_commit(domain);
 
   cow_dfield_addmember(data, "d1");
