@@ -107,6 +107,10 @@ int cow_domain_getsize(cow_domain *d, int dim)
   if (dim >= 3) return 0;
   return d->L_nint[dim];
 }
+int cow_domain_getndim(cow_domain *d)
+{
+  return d->n_dims;
+}
 void cow_domain_setndim(cow_domain *d, int ndim)
 {
   if (ndim > 3 || d->committed) return;
@@ -283,6 +287,10 @@ int cow_dfield_getstride(cow_dfield *f, int dim)
 {
   if (dim >= 3 || !f->committed) return 0;
   return f->stride[dim];
+}
+int cow_dfield_getnmembers(cow_dfield *f)
+{
+  return f->n_members;
 }
 const char *cow_dfield_getname(cow_dfield *f)
 {

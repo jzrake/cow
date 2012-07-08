@@ -10,14 +10,13 @@ cow_init()
 domain = cow_domain_new()
 dfield = cow_dfield_new(domain, "prim")
 cow_dfield_addmember(dfield, "vx")
-#cow_dfield_addmember(dfield, "vy")
-#cow_dfield_addmember(dfield, "vz")
+cow_dfield_addmember(dfield, "vy")
+cow_dfield_addmember(dfield, "vz")
 
-cow_domain_setndim(domain, 3);
+cow_domain_setndim(domain, 2);
 cow_domain_setguard(domain, 3);
 cow_domain_setsize(domain, 0, 10);
 cow_domain_setsize(domain, 1, 12);
-cow_domain_setsize(domain, 2, 14);
 cow_domain_commit(domain)
 cow_dfield_commit(dfield)
 
