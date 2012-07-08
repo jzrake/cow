@@ -2,6 +2,7 @@
 
 from distutils.core import setup, Extension
 
+
 cow_module = Extension \
 ('_cow',
  extra_compile_args=['-std=c99'],
@@ -13,8 +14,7 @@ cow_module = Extension \
  include_dirs = ['/Library/Science/hdf5-1.8.9-par/include',
                  '/Library/Science/fftw-2.1.5/include',
                  '/Library/Science/mpich2/include',
-                 '/Developer/SDKs/MacOSX10.5.sdk/System/Library/Frameworks'+
-                 '/Python.framework/Versions/2.5/Extras/lib/python/numpy/core/include'],
+                 '/Library/Frameworks/Python.framework/Versions/7.1/lib/python2.7/site-packages/numpy/core/include'],
  library_dirs = ['/Library/Science/hdf5-1.8.9-par/lib',
                  '/Library/Science/fftw-2.1.5/lib',
                  '/Library/Science/mpich2/lib'],
