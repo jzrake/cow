@@ -50,7 +50,6 @@ void cow_domain_setcollective(cow_domain *d, int mode);
 void cow_domain_setchunk(cow_domain *d, int mode);
 void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize);
 void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname);
-int cow_domain_getsize(cow_domain *d, int dim);
 int cow_domain_getndim(cow_domain *d);
 int cow_domain_getguard(cow_domain *d);
 int cow_domain_getnumlocalzonesincguard(cow_domain *d, int dim);
@@ -76,7 +75,9 @@ cow_domain *cow_dfield_getdomain(cow_dfield *f);
 int cow_dfield_getstride(cow_dfield *f, int dim);
 int cow_dfield_getnmembers(cow_dfield *f);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
-void *cow_dfield_getdata(cow_dfield *f);
+void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
+int cow_dfield_getownsdata(cow_dfield *f);
+void *cow_dfield_getbuffer(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
 void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result);
 void cow_dfield_write(cow_dfield *f, const char *fname);
@@ -161,6 +162,7 @@ struct cow_dfield
   void *data;
   int stride[3];
   int committed;
+  int ownsdata;
   cow_domain *domain;
   cow_transform transform;
 #if (COW_MPI)

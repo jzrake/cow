@@ -54,3 +54,17 @@ Features planned or implemented
 [ ] Vector field streamline integration
 
 [ ] Low/high pass filtering; course-graining
+
+[-] Python wrappers
+
+
+Todo list
+-------------------------------
+[+] ... finished
+[-] ... started
+[ ] ... planned
+-------------------------------
+
+[ ] Add methods to allow dfield not to own its data
+
+[ ] 

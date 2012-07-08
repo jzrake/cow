@@ -49,7 +49,7 @@ SWIGINTERN PyObject *_wrap_getarray3(PyObject *SWIGUNUSEDPARM(self), PyObject *a
 
   cow_dfield *f = (cow_dfield *)(argp1);
   cow_domain *d = cow_dfield_getdomain(f);
-  double *data = (double*) cow_dfield_getdata(f);
+  double *data = (double*) cow_dfield_getbuffer(f);
   npy_intp dims[4];
   int ndims = cow_domain_getndim(d);
   dims[0] = cow_domain_getnumlocalzonesincguard(d, 0);

@@ -62,9 +62,9 @@ int main(int argc, char **argv)
   int si = cow_dfield_getstride(prim, 0);
   int ng = cow_domain_getguard(domain);
 
-  double *P = (double*) cow_dfield_getdata(prim);
-  double *B = (double*) cow_dfield_getdata(magf);
-  for (int i=ng; i<cow_domain_getsize(domain, 0)+ng; ++i) {
+  double *P = (double*) cow_dfield_getbuffer(prim);
+  double *B = (double*) cow_dfield_getbuffer(magf);
+  for (int i=ng; i<cow_domain_getnumlocalzonesinterior(domain, 0)+ng; ++i) {
     P[si*i + 0] = 1.0;
     P[si*i + 1] = 2.0;
     P[si*i + 2] = 3.0;
@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 
   cow_dfield_syncguard(prim);
   printf("\n\n ------------------------------------------------- \n\n");
-  for (int i=0; i<cow_domain_getsize(domain, 0)+2*ng; ++i) {
+  for (int i=0; i<cow_domain_getnumlocalzonesinterior(domain, 0)+2*ng; ++i) {
     printf("(%02d) %f %f %f\n", i, P[si*i + 0], P[si*i + 1], P[si*i + 2]);
   }
 

@@ -23,7 +23,7 @@ cow_dfield_commit(dfield)
 
 print test_trans, TEST_TRANS
 print cow_dfield_getname(dfield)
-print cow_dfield_getdata(dfield)
+print cow_dfield_getbuffer(dfield)
 
 A = getarray3(dfield)
 A[:,:,0] = 1.0
