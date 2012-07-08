@@ -6,6 +6,11 @@
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 
+void test_trans(double *result, double **args, int **strides,
+		void *udata)
+{
+  printf("in test_trans\n");
+}
 
 // -----------------------------------------------------------------------------
 //
@@ -26,6 +31,30 @@ static void _dfield_freetype(cow_dfield *f);
 #endif
 static void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
                                    void *out, char op);
+
+void cow_init()
+{
+#if (COW_MPI)
+  int mpi_started;
+  int argc = 1;
+  char *argv_[1] = {"cow"};
+  char **argv = &argv_[0];
+  MPI_Initialized(&mpi_started);
+  if (!mpi_started) {
+    MPI_Init(&argc, &argv);
+  }
+#endif
+}
+void cow_finalize()
+{
+#if (COW_MPI)
+  int mpi_started;
+  MPI_Initialized(&mpi_started);
+  if (mpi_started) {
+    MPI_Finalize();
+  }
+#endif
+}
 
 // -----------------------------------------------------------------------------
 //
@@ -73,10 +102,9 @@ void cow_domain_setsize(cow_domain *d, int dim, int size)
   if (dim >= 3 || d->committed) return;
   d->G_ntot[dim] = size;
 }
-int cow_domain_getsize(cow_domain *d, int dim)
+int cow_domain_getndim(cow_domain *d)
 {
-  if (dim >= 3) return 0;
-  return d->L_nint[dim];
+  return d->n_dims;
 }
 void cow_domain_setndim(cow_domain *d, int ndim)
 {
@@ -215,6 +243,8 @@ cow_dfield *cow_dfield_new(cow_domain *domain, const char *name)
     .member_iter = 0,
     .data = NULL,
     .stride = { 0, 0, 0 },
+    .committed = 0,
+    .ownsdata = 1,
     .domain = domain,
     .transform = NULL,
   } ;
@@ -255,6 +285,10 @@ int cow_dfield_getstride(cow_dfield *f, int dim)
   if (dim >= 3 || !f->committed) return 0;
   return f->stride[dim];
 }
+int cow_dfield_getnmembers(cow_dfield *f)
+{
+  return f->n_members;
+}
 const char *cow_dfield_getname(cow_dfield *f)
 {
   return f->name;
@@ -268,6 +302,22 @@ size_t cow_dfield_getdatabytes(cow_dfield *f)
   if (!f->committed) return 0;
   return cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS) *
     f->n_members * sizeof(double);
+}
+void cow_dfield_setownsdata(cow_dfield *f, int ownsdata)
+{
+  f->ownsdata = ownsdata;
+}
+void cow_dfield_setbuffer(cow_dfield *f, void *buffer)
+{
+  f->data = buffer;
+}
+int cow_dfield_getownsdata(cow_dfield *f)
+{
+  return f->ownsdata;
+}
+void *cow_dfield_getbuffer(cow_dfield *f)
+{
+  return f->data;
 }
 void cow_dfield_addmember(cow_dfield *f, const char *name)
 {
@@ -317,10 +367,6 @@ void cow_dfield_commit(cow_dfield *f)
     break;
   }
   f->committed = 1;
-}
-void *cow_dfield_getdata(cow_dfield *f)
-{
-  return f->data;
 }
 void cow_dfield_syncguard(cow_dfield *f)
 {
@@ -496,9 +542,9 @@ void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result)
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
 {
   int *S = f->stride;
-  int ni = cow_domain_getsize(f->domain, 0);
-  int nj = cow_domain_getsize(f->domain, 1);
-  int nk = cow_domain_getsize(f->domain, 2);
+  int ni = cow_domain_getnumlocalzonesinterior(f->domain, 0);
+  int nj = cow_domain_getnumlocalzonesinterior(f->domain, 1);
+  int nk = cow_domain_getnumlocalzonesinterior(f->domain, 2);
   int ng = cow_domain_getguard(f->domain);
   switch (f->domain->n_dims) {
   case 1:
@@ -530,9 +576,9 @@ void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
 void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
                           cow_transform op, void *udata)
 {
-  int ni = cow_domain_getsize(result->domain, 0);
-  int nj = cow_domain_getsize(result->domain, 1);
-  int nk = cow_domain_getsize(result->domain, 2);
+  int ni = cow_domain_getnumlocalzonesinterior(result->domain, 0);
+  int nj = cow_domain_getnumlocalzonesinterior(result->domain, 1);
+  int nk = cow_domain_getnumlocalzonesinterior(result->domain, 2);
   int ng = cow_domain_getguard(result->domain);
   int *rs = result->stride;
   int **S = (int**) malloc(nargs * sizeof(int*));
