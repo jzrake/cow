@@ -29,7 +29,13 @@ DEFINES = \
 OBJ = cow.o hist.o io.o fft.o fft_3d.o pack_3d.o remap_3d.o factor.o
 EXE = main makehist testhist testfft milos mhdstats
 
-default : $(EXE)
+.PHONY: COWPY
+
+default : COWPY
+
+COWPY : 
+	python setup.py build
+	python setup.py install --prefix=$(PWD)
 
 %.o : %.c
 	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c -std=c99
@@ -65,5 +71,5 @@ milos : milos.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 clean :
-	rm -rf $(EXE) $(OBJ) cow_wrap.* cow.py
-
+	rm -rf $(EXE) $(OBJ) cow_wrap.* cow.py lib
+	python setup.py clean --all

@@ -19,7 +19,7 @@ cow_module = Extension \
                  '/Library/Science/fftw-2.1.5/lib',
                  '/Library/Science/mpich2/lib'],
  libraries = ['hdf5', 'z', 'fftw', 'mpich', 'pmpich'],
- sources=['cow_wrap.c',
+ sources=['cow.i',
           'cow.c',
           'io.c',
           'hist.c',

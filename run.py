@@ -3,6 +3,7 @@
 from _cow import *
 import os, sys
 import atexit
+import numpy as np
 
 atexit.register(cow_finalize)
 
@@ -25,8 +26,13 @@ print cow_dfield_getname(dfield)
 print cow_dfield_getdata(dfield)
 
 A = getarray3(dfield)
-print A.shape
-print A.flags
+A[:,:,0] = 1.0
+A[:,:,1] = 2.0
+A[:,:,2] = 3.0
+B = A[3:-3,3:-3,:]
+print A.shape, B.shape
+print A.flags, B.flags
+print A.max(), A.min()
 
 #test_trans(None, None, None, None)
 #cow_dfield_loop(dfield, TEST_TRANS, None)

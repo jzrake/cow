@@ -30,7 +30,6 @@ void test_trans(double *result, double **args, int **strides, void *udata);
 
 
 
-
 %{
 SWIGINTERN PyObject *_wrap_getarray3(PyObject *SWIGUNUSEDPARM(self), PyObject *args)
 {
