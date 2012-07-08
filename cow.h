@@ -75,7 +75,6 @@ cow_domain *cow_dfield_getdomain(cow_dfield *f);
 int cow_dfield_getstride(cow_dfield *f, int dim);
 int cow_dfield_getnmembers(cow_dfield *f);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
-void cow_dfield_setownsdata(cow_dfield *f, int ownsdata);
 void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
 int cow_dfield_getownsdata(cow_dfield *f);
 void *cow_dfield_getbuffer(cow_dfield *f);

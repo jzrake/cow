@@ -244,7 +244,7 @@ cow_dfield *cow_dfield_new(cow_domain *domain, const char *name)
     .data = NULL,
     .stride = { 0, 0, 0 },
     .committed = 0,
-    .ownsdata = 1,
+    .ownsdata = 0,
     .domain = domain,
     .transform = NULL,
   } ;
@@ -260,7 +260,9 @@ void cow_dfield_del(cow_dfield *f)
   for (int n=0; n<f->n_members; ++n) free(f->members[n]);
   free(f->members);
   free(f->name);
-  free(f->data);
+  if (f->ownsdata) {
+    free(f->data);
+  }
   free(f);
 }
 cow_dfield *cow_dfield_dup(cow_dfield *f)
@@ -303,13 +305,43 @@ size_t cow_dfield_getdatabytes(cow_dfield *f)
   return cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS) *
     f->n_members * sizeof(double);
 }
-void cow_dfield_setownsdata(cow_dfield *f, int ownsdata)
-{
-  f->ownsdata = ownsdata;
-}
 void cow_dfield_setbuffer(cow_dfield *f, void *buffer)
+// -----------------------------------------------------------------------------
+//
+// -> If `f` already owns its data:
+// --> (A) If buffer is NULL or (not NULL and equal to f->data), then do nothing
+// --> (B) Otherwise, `f` frees and disowns its data, re-pointing it to `buffer`
+//
+// -> If `f` foes not own its data:
+// --> (C) If buffer is NULL, then `f` reallocates and adopts its buffer
+// --> (D) Otherwise, `f` re-points its buffer to `buffer`
+//
+// -----------------------------------------------------------------------------
 {
-  f->data = buffer;
+  if (f->ownsdata) {
+    if (buffer == NULL || (buffer != NULL && buffer == f->data)) {
+      // (A)
+      // do nothing
+    }
+    else {
+      // (B)
+      free(f->data);
+      f->data = buffer;
+      f->ownsdata = 0;
+    }
+  }
+  else {
+    if (buffer == NULL) {
+      // (C)
+      int nz = cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS);
+      f->data = malloc(nz * f->n_members * sizeof(double));
+      f->ownsdata = 1;
+    }
+    else {
+      // (D)
+      f->data = buffer;
+    }
+  }
 }
 int cow_dfield_getownsdata(cow_dfield *f)
 {
@@ -346,8 +378,18 @@ void cow_dfield_commit(cow_dfield *f)
   case 3: _dfield_maketype3d(f); break;
   }
 #endif
-  const int nz = cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS);
-  f->data = malloc(nz * f->n_members * sizeof(double));
+  // ---------------------------------------------------------------------------
+  // The way cow_dfield is initialized, f does not own its buffer and its value
+  // is NULL. This corresponds to case (C) in setbuffer: `f` takes ownership of
+  // and allocates its buffer. If before being committed, client code has called
+  // set_buffer with something other than NULL, then f->ownsdata is still false,
+  // but f->data is not NULL. Then the call below triggers case (D) which will
+  // have no effect. If client code has called set_buffer with NULL prior to
+  // this call, then case (C) will already have been realized, `f` will already
+  // own its data, and all subsequent redundant calls including the one below
+  // trigger case (A) and have no effect.
+  // ---------------------------------------------------------------------------
+  cow_dfield_setbuffer(f, f->data);
   int *N = f->domain->L_ntot;
   switch (f->domain->n_dims) {
   case 1:
