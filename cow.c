@@ -35,13 +35,16 @@ static void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
 void cow_init()
 {
 #if (COW_MPI)
-  int mpi_started;
+  int mpi_started, rank;
   int argc = 1;
   char *argv_[1] = {"cow"};
   char **argv = &argv_[0];
   MPI_Initialized(&mpi_started);
   if (!mpi_started) {
     MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    if (rank != 0) freopen("/dev/null", "w", stdout);
+    printf("[cow] was compiled with MPI support\n");
   }
 #endif
 }
