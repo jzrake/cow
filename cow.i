@@ -17,7 +17,7 @@
   %}
 
 %include "cow.h"
-%native(getarray3) PyObject *_wrap_getarray3(PyObject *SWIGUNUSEDPARM(self), PyObject *args);
+%native(cow_dfield_getarray) PyObject *_wrap_cow_dfield_getarray(PyObject *SWIGUNUSEDPARM(self), PyObject *args);
 
 %callback("%(upper)s");
 void test_trans(double *result, double **args, int **strides, void *udata);
@@ -31,19 +31,19 @@ void test_trans(double *result, double **args, int **strides, void *udata);
 
 
 %{
-SWIGINTERN PyObject *_wrap_getarray3(PyObject *SWIGUNUSEDPARM(self), PyObject *args)
+SWIGINTERN PyObject *_wrap_cow_dfield_getarray(PyObject *SWIGUNUSEDPARM(self), PyObject *args)
 {
   PyObject *resultobj = 0;
   void *argp1 = 0;
   int res1 = 0;
   PyObject *obj0 = 0;
 
-  if (!PyArg_ParseTuple(args, (char*)"O:getarray3",&obj0)) SWIG_fail;
+  if (!PyArg_ParseTuple(args, (char*)"O:cow_dfield_getarray",&obj0)) SWIG_fail;
   res1 = SWIG_ConvertPtr(obj0, &argp1, SWIGTYPE_p_cow_dfield, 0 | 0);
 
   if (!SWIG_IsOK(res1)) {
     SWIG_exception_fail(SWIG_ArgError(res1),
-                        "in method '" "getarray3" "', argument " "1"
+                        "in method '" "cow_dfield_getarray" "', argument " "1"
                         " of type '" "cow_dfield *""'");
   }
 
