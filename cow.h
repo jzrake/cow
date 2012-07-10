@@ -57,6 +57,9 @@ int cow_domain_getnumlocalzonesinterior(cow_domain *d, int dim);
 int cow_domain_getnumglobalzones(cow_domain *d, int dim);
 int cow_domain_getglobalstartindex(cow_domain *d, int dim);
 int cow_domain_getgridspacing(cow_domain *d, int dim);
+int cow_domain_subgridatposition(cow_domain *d, double *x);
+int cow_domain_indexatposition(cow_domain *d, int dim, double x);
+double cow_domain_positionatindex(cow_domain *d, int dim, int index);
 
 cow_dfield *cow_dfield_new(cow_domain *domain, const char *name);
 cow_dfield *cow_dfield_dup(cow_dfield *f);
@@ -77,6 +80,7 @@ int cow_dfield_getstride(cow_dfield *f, int dim);
 int cow_dfield_getnmembers(cow_dfield *f);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
 void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
+void cow_dfield_sample(cow_dfield *f, double *x, double *P);
 int cow_dfield_getownsdata(cow_dfield *f);
 void *cow_dfield_getbuffer(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);

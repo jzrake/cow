@@ -8,37 +8,65 @@
 
 #define MODULE "sampling"
 
-int cow_domain_indexatposition(cow_domain *d, int dim, double x)
-// -----------------------------------------------------------------------------
-// d: 0,1,2 for x,y,z
-//
-// r is a global position, i.e. not relative to this subgrid
-// The return value is the integer index, which is relative to this subgrid
-//
-// Within the zone i+Ng, the value (x-x0)/dx ranges from i to i+1.
-// Then we correct for ghosts by adding Ng.
-// -----------------------------------------------------------------------------
-{
-  if (dim >= 3 || !d->committed) return 0.0;
-  return d->n_ghst + (int)((x - d->loc_lower[dim]) / d->dx[dim]);
-}
+static void _sample1(cow_dfield *f, double *x, double *P);
+static void _sample2(cow_dfield *f, double *x, double *P);
+static void _sample3(cow_dfield *f, double *x, double *P);
 
-double cow_domain_positionatindex(cow_domain *d, int dim, int index)
-// -----------------------------------------------------------------------------
-// d: 0,1,2 for x,y,z
-//
-// r is a global position, i.e. not relative to this subgrid
-// The return value is the integer index, which is relative to this subgrid
-//
-// Within the zone i+Ng, the value (x-x0)/dx ranges from i to i+1.
-// Then we correct for ghosts by adding Ng.
-// -----------------------------------------------------------------------------
-{
-  if (dim >= 3 || !d->committed) return 0.0;
-  return d->loc_lower[dim] + d->dx[dim] * (index - d->n_ghst + 0.5);
-}
 
 void cow_dfield_sample(cow_dfield *f, double *x, double *P)
+{
+  switch (f->domain->n_dims) {
+  case 1: _sample1(f, x, P); break;
+  case 2: _sample2(f, x, P); break;
+  case 3: _sample3(f, x, P); break;
+  default: break;
+  }
+}
+void _sample1(cow_dfield *f, double *x, double *P)
+{
+#define M(i) ((i)*s[0])
+  cow_domain *d = f->domain;
+  int *s = f->stride;
+  int i = cow_domain_indexatposition(d, 0, x[0]);
+  double x0 = cow_domain_positionatindex(d, 0, i-1);
+  double *A = (double*) f->data;
+  double *P0 = &A[M(i-1)];
+  double *P1 = &A[M(i+1)];
+  double delx[1] = { 0.5 * (x[0] - x0) / d->dx[0] };
+  for (int q=0; q<f->n_members; ++q) {
+    double b1 = P0[q];
+    double b2 = P1[q] - P0[q];
+    P[q] = b1 + b2*delx[0];
+  }
+#undef M
+}
+void _sample2(cow_dfield *f, double *x, double *P)
+{
+#define M(i,j) ((i)*s[0] + (j)*s[1])
+  cow_domain *d = f->domain;
+  int *s = f->stride;
+  int i = cow_domain_indexatposition(d, 0, x[0]);
+  int j = cow_domain_indexatposition(d, 1, x[1]);
+  double x0 = cow_domain_positionatindex(d, 0, i-1);
+  double y0 = cow_domain_positionatindex(d, 1, j-1);
+  double *A = (double*) f->data;
+  double *P00 = &A[M(i-1,j-1)];
+  double *P01 = &A[M(i-1,j+1)];
+  double *P10 = &A[M(i+1,j-1)];
+  double *P11 = &A[M(i+1,j+1)];
+  double delx[2] = {
+    0.5 * (x[0] - x0) / d->dx[0],
+    0.5 * (x[1] - y0) / d->dx[1] };
+  for (int q=0; q<f->n_members; ++q) {
+    double b1 = P00[q];
+    double b2 = P10[q] - P00[q];
+    double b3 = P01[q] - P00[q];
+    double b4 = P00[q] - P10[q] - P01[q] + P11[q];
+    P[q] = b1 + b2*delx[0] + b3*delx[1] + b4*delx[0]*delx[1];
+  }
+#undef M
+}
+void _sample3(cow_dfield *f, double *x, double *P)
 {
 #define M(i,j,k) ((i)*s[0] + (j)*s[1] + (k)*s[2])
   cow_domain *d = f->domain;
