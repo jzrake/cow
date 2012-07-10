@@ -26,7 +26,7 @@ DEFINES = \
 	-DCOW_FFTW=$(COW_FFTW) \
 	-DFFT_FFTW
 
-OBJ = cow.o hist.o io.o fft.o fft_3d.o pack_3d.o remap_3d.o factor.o
+OBJ = cow.o hist.o io.o samp.o fft.o fft_3d.o pack_3d.o remap_3d.o factor.o
 EXE = main makehist testhist testfft milos mhdstats srhdhist
 
 default : $(EXE)

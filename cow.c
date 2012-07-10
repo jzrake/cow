@@ -69,6 +69,7 @@ struct cow_domain *cow_domain_new()
     .glb_upper = { 1.0, 1.0, 1.0 },
     .loc_lower = { 0.0, 0.0, 0.0 },
     .loc_upper = { 1.0, 1.0, 1.0 },
+    .dx = { 1.0, 1.0, 1.0 },
     .L_nint = { 1, 1, 1 },
     .L_ntot = { 1, 1, 1 },
     .L_strt = { 0, 0, 0 },
@@ -153,6 +154,7 @@ void cow_domain_commit(cow_domain *d)
     const int thisdm_size = (d->proc_index[i]<R) ? augmnt_size : normal_size;
     const double dx = (d->glb_upper[i] - d->glb_lower[i]) / d->G_ntot[i];
 
+    d->dx[i] = dx;
     if (R != 0) d->balanced = 0;
 
     d->L_nint[i] = thisdm_size;
@@ -178,7 +180,6 @@ void cow_domain_commit(cow_domain *d)
     d->L_ntot[i] = d->G_ntot[i] + 2 * d->n_ghst;
     d->L_strt[i] = d->n_ghst;
     d->G_strt[i] = 0;
-
     d->loc_lower[i] = d->glb_lower[i];
     d->loc_upper[i] = d->glb_upper[i];
   }
@@ -224,6 +225,15 @@ int cow_domain_getglobalstartindex(cow_domain *d, int dim)
   case 0: return d->G_strt[0];
   case 1: return d->G_strt[1];
   case 2: return d->G_strt[2];
+  default: return 0;
+  }
+}
+int cow_domain_getgridspacing(cow_domain *d, int dim)
+{
+  switch (dim) {
+  case 0: return d->dx[0];
+  case 1: return d->dx[1];
+  case 2: return d->dx[2];
   default: return 0;
   }
 }

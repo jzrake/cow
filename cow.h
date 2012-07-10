@@ -56,6 +56,7 @@ int cow_domain_getnumlocalzonesincguard(cow_domain *d, int dim);
 int cow_domain_getnumlocalzonesinterior(cow_domain *d, int dim);
 int cow_domain_getnumglobalzones(cow_domain *d, int dim);
 int cow_domain_getglobalstartindex(cow_domain *d, int dim);
+int cow_domain_getgridspacing(cow_domain *d, int dim);
 
 cow_dfield *cow_dfield_new(cow_domain *domain, const char *name);
 cow_dfield *cow_dfield_dup(cow_dfield *f);
@@ -116,6 +117,7 @@ struct cow_domain
   double glb_upper[3]; // upper " "
   double loc_lower[3]; // lower coordinates of local physical domain
   double loc_upper[3]; // upper " "
+  double dx[3]; // grid spacing along each direction
   int L_nint[3]; // interior zones on the local subgrid
   int L_ntot[3]; // total " ", including guard zones
   int L_strt[3]; // starting index of interior zones on local subgrid
