@@ -255,13 +255,13 @@ int cow_domain_subgridatposition(cow_domain *d, double *x)
 }
 int cow_domain_indexatposition(cow_domain *d, int dim, double x)
 // -----------------------------------------------------------------------------
-// d: 0,1,2 for x,y,z
+// dim: 0,1,2 for x,y,z
 //
-// r is a global position, i.e. not relative to this subgrid
+// x is a global position, i.e. not relative to this subgrid
 // The return value is the integer index, which is relative to this subgrid
 //
-// Within the zone i+Ng, the value (x-x0)/dx ranges from i to i+1.
-// Then we correct for ghosts by adding Ng.
+// Within the zone i+ng, the value (x-x0)/dx ranges from i to i+1.
+// Then we correct for ghosts by adding ng.
 // -----------------------------------------------------------------------------
 {
   if (dim >= 3 || !d->committed) return 0.0;

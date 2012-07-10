@@ -148,7 +148,7 @@ struct cow_domain
   MPI_Comm mpi_cart; // the cartesian communicator
 #endif
 #if (COW_HDF5)
-  hsize_t L_nint_h5[3];
+  hsize_t L_nint_h5[3]; // HDF5 versions of the variables with the same name
   hsize_t L_ntot_h5[3];
   hsize_t L_strt_h5[3];
   hsize_t G_ntot_h5[3];
@@ -161,16 +161,16 @@ struct cow_domain
 
 struct cow_dfield
 {
-  char *name;
-  char **members;
-  int member_iter;
-  int n_members;
-  void *data;
-  int stride[3];
-  int committed;
-  int ownsdata;
-  cow_domain *domain;
-  cow_transform transform;
+  char *name; // name of the data field
+  char **members; // list of labels for the data members
+  int member_iter; // maintains an index into the last dimension
+  int n_members; // size of last dimension
+  void *data; // data buffer
+  int stride[3]; // strides describing memory layout: C ordering
+  int committed; // true after cow_dfield_commit called, locks out most changes
+  int ownsdata; // client code can own the data: see setbuffer function
+  cow_domain *domain; // pointer to an associated domain
+  cow_transform transform; // used only by internal code
 #if (COW_MPI)
   MPI_Datatype *send_type; // chunk of data to be sent to respective neighbor
   MPI_Datatype *recv_type; // " "                 received from " "
