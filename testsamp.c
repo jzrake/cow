@@ -5,12 +5,6 @@
 #include <mpi.h>
 #endif
 
-static void histcb(double *result, double **args, int **s, void *u)
-{
-  printf("%f %f %f\n", args[0][0], args[0][1], args[0][2]);
-  result[0] = args[0][0];
-}
-
 int main(int argc, char **argv)
 {
 #if (COW_MPI)
@@ -47,27 +41,10 @@ int main(int argc, char **argv)
   }
   cow_dfield_syncguard(data);
 
-  cow_histogram *hist = cow_histogram_new();
-  cow_histogram_setlower(hist, 0, -1.0);
-  cow_histogram_setupper(hist, 0, +1.0);
-  cow_histogram_setnbins(hist, 0, 200);
-  cow_histogram_commit(hist);
-  cow_histogram_setnickname(hist, "myhist");
-
-  cow_histogram_populate(hist, data, histcb);
-
-  for (int n=0; n<10000; ++n) {
-    double samp = 2.0 * ((double) rand() / RAND_MAX - 0.5);
-    double weight = (double) rand() / RAND_MAX;
-    cow_histogram_addsample1(hist, samp, weight);
-  }
-  // test writing it to an ASCII file
-  cow_histogram_dumpascii(hist, "thehist.dat");
-  // test writing to HDF5 file
-  cow_histogram_dumphdf5(hist, "thehist.h5", "");
-  // test writing to arbitrary group location
-  cow_histogram_dumphdf5(hist, "thehist.h5", "/G1/G2/G3");
-  cow_histogram_del(hist);
+  double r[3] = {0.5, 0.5, 0.5};
+  double sample[3];
+  cow_dfield_sample(data, r, sample);
+  printf("%f %f %f\n", sample[0], sample[1], sample[2]);
 
   cow_dfield_del(data);
   cow_domain_del(domain);

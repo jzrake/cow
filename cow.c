@@ -140,6 +140,7 @@ void cow_domain_commit(cow_domain *d)
   MPI_Dims_create(d->comm_size, d->n_dims, d->proc_sizes);
   MPI_Cart_create(MPI_COMM_WORLD, d->n_dims, d->proc_sizes, w, r, &d->mpi_cart);
   MPI_Comm_rank(d->mpi_cart, &d->cart_rank);
+  MPI_Comm_size(d->mpi_cart, &d->cart_size);
   MPI_Cart_coords(d->mpi_cart, d->cart_rank, d->n_dims, d->proc_index);
 
   for (int i=0; i<d->n_dims; ++i) {

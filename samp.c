@@ -1,6 +1,7 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <math.h>
 #define COW_PRIVATE_DEFS
@@ -11,16 +12,12 @@
 static void _sample1(cow_dfield *f, double *x, double *P);
 static void _sample2(cow_dfield *f, double *x, double *P);
 static void _sample3(cow_dfield *f, double *x, double *P);
-
+static void _rem(cow_dfield *f, double *Ri, double *Ro, double *Po, int Nsamp);
 
 void cow_dfield_sample(cow_dfield *f, double *x, double *P)
 {
-  switch (f->domain->n_dims) {
-  case 1: _sample1(f, x, P); break;
-  case 2: _sample2(f, x, P); break;
-  case 3: _sample3(f, x, P); break;
-  default: break;
-  }
+  double xout[3];
+  _rem(f, x, xout, P, 1);
 }
 void _sample1(cow_dfield *f, double *x, double *P)
 {
@@ -103,4 +100,128 @@ void _sample3(cow_dfield *f, double *x, double *P)
     P[q] = w1 * (1.0 - delx[0]) + w2 * delx[0];
   }
 #undef M
+}
+
+
+
+void _rem(cow_dfield *f, double *Ri, double *Ro, double *Po, int Nsamp)
+{
+#if (COW_MPI)
+  int rank = f->domain->cart_rank;
+  int size = f->domain->cart_size;
+  int Nd = f->domain->n_dims;
+  int Q = f->n_members;
+  double *gx0 = f->domain->glb_lower;
+  double *gx1 = f->domain->glb_upper;
+  double Lx = (Nd>=1) ? gx1[0] - gx0[0] : 0.0;
+  double Ly = (Nd>=2) ? gx1[1] - gx0[1] : 0.0;
+  double Lz = (Nd>=3) ? gx1[2] - gx0[2] : 0.0;
+  double **remote_r1 = (double**) malloc(size * sizeof(double*));
+  double **remote_P1 = (double**) malloc(size * sizeof(double*));
+  int *remote_r1_size = (int*) malloc(size * sizeof(int));
+  int *remote_P1_size = (int*) malloc(size * sizeof(int));
+  for (int n=0; n<size; ++n) {
+    remote_r1[n] = NULL;
+    remote_P1[n] = NULL;
+    remote_r1_size[n] = 0;
+    remote_P1_size[n] = 0;
+  }
+  for (int m=0; m<Nsamp; ++m) {
+    double r1[3];
+    r1[0] = Ri[3*m + 0];
+    r1[1] = Ri[3*m + 1];
+    r1[2] = Ri[3*m + 2];
+    // -------------------------------------------------------------------------
+    // Ensure that the target point is in the global domain by applying periodic
+    // boundary conditions.
+    // -------------------------------------------------------------------------
+    if (Nd>=1) while (r1[0] > gx1[0]) r1[0] -= Lx;
+    if (Nd>=2) while (r1[1] > gx1[1]) r1[1] -= Ly;
+    if (Nd>=3) while (r1[2] > gx1[2]) r1[2] -= Lz;
+    if (Nd>=1) while (r1[0] < gx0[0]) r1[0] += Lx;
+    if (Nd>=2) while (r1[1] < gx0[1]) r1[1] += Ly;
+    if (Nd>=3) while (r1[2] < gx0[2]) r1[2] += Lz;
+    int remote = cow_domain_subgridatposition(f->domain, r1);
+    double **remR = &remote_r1[remote];
+    double **remP = &remote_P1[remote];
+    for (int d=0; d<3; ++d) {
+      int N = (remote_r1_size[remote] += 1);
+      remR[0] = (double*) realloc(remR[0], N * sizeof(double));
+      remR[0][N - 1] = r1[d];
+    }
+    for (int q=0; q<Q; ++q) {
+      int N = (remote_P1_size[remote] += 1);
+      remP[0] = (double*) realloc(remP[0], N * sizeof(double));
+      remP[0][N - 1] = 0.0;
+    }
+  }
+  // ---------------------------------------------------------------------------
+  // We will be sampling pairs between ourselves and the remote process, rank +
+  // dn. That process is referred to as 'lawyer' because they will work for us,
+  // obtaining the records we have determined live on their domain. Similarly,
+  // we will be the lawyer for process rank-dn, so that process is called
+  // 'client'.
+  // ---------------------------------------------------------------------------
+  MPI_Status status;
+  MPI_Comm comm = MPI_COMM_WORLD;
+  int queries_satisfied = 0;
+  for (int dn=0; dn<size; ++dn) {
+    // -------------------------------------------------------------------------
+    // This loop contains three pairs of matching Send/Recv's. For the first
+    // two, the send is place to the lawyer process, and the receive comes from
+    // the client. We call our lawyer and let him know to expect a message of
+    // length 'numlawyer' double[3]'s. Those are the positions of the remote
+    // points we have chosen, and then determined live on his domain. At the
+    // same time, we receive a message from our client, which contains the
+    // length 'numclient' of double[3]'s he will be asking us to fetch. The
+    // next pair of Send/Recv's is the list of coordinates themselves. The last
+    // one is the list of primitive quantities at those locations.
+    // -------------------------------------------------------------------------
+    int lawyer = (rank + size + dn) % size;
+    int client = (rank + size - dn) % size;
+    int numlawyer = remote_r1_size[lawyer] / 3;
+    int numclient;
+    MPI_Sendrecv(&numlawyer, 1, MPI_INT, lawyer, 123,
+                 &numclient, 1, MPI_INT, client, 123, comm, &status);
+    double *you_get_for_me_r = remote_r1[lawyer];
+    double *you_get_for_me_P = remote_P1[lawyer];
+    double *I_find_for_you_r = (double*) malloc(numclient * 3 * sizeof(double));
+    double *I_find_for_you_P = (double*) malloc(numclient * Q * sizeof(double));
+    MPI_Sendrecv(you_get_for_me_r, numlawyer * 3, MPI_DOUBLE, lawyer, 123,
+                 I_find_for_you_r, numclient * 3, MPI_DOUBLE, client, 123,
+                 comm, &status);
+    for (int s=0; s<numclient; ++s) {
+      double *r_query = &I_find_for_you_r[3*s];
+      double *Panswer = (double*) malloc(Q * sizeof(double));
+      switch (Nd) {
+      case 1: _sample1(f, r_query, Panswer);
+      case 2: _sample2(f, r_query, Panswer);
+      case 3: _sample3(f, r_query, Panswer);
+      }
+      memcpy(&I_find_for_you_P[s*Q], &Panswer[0], Q*sizeof(double));
+      free(Panswer);
+    }
+    MPI_Sendrecv(I_find_for_you_P, numclient*Q, MPI_DOUBLE, client, 123,
+                 you_get_for_me_P, numlawyer*Q, MPI_DOUBLE, lawyer, 123,
+                 comm, &status);
+    memcpy(&Ro[queries_satisfied * 3], remote_r1[lawyer],
+	   remote_r1_size[lawyer] * sizeof(double));
+    memcpy(&Po[queries_satisfied * Q], remote_P1[lawyer],
+	   remote_P1_size[lawyer] * sizeof(double));
+    queries_satisfied += numlawyer;
+    free(I_find_for_you_r);
+    free(I_find_for_you_P);
+  }
+  free(remote_r1);
+  free(remote_P1);
+#else
+  for (int n=0; n<Nsamp; ++n) {
+    switch (f->domain->n_dims) {
+    case 1: _sample1(f, &Ri[3*n + 0], &Po[3*n + 0]); break;
+    case 2: _sample2(f, &Ri[3*n + 1], &Po[3*n + 1]); break;
+    case 3: _sample3(f, &Ri[3*n + 2], &Po[3*n + 2]); break;
+    default: break;
+    }
+  }
+#endif
 }
