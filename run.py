@@ -21,6 +21,18 @@ class UnigridDatafield(object):
         for m in members:
             assert(type(m) is str)
             cow_dfield_addmember(self._cdfield, m)
+        nd = cow_domain_getndim(domain._cdomain)
+        dims = [ ]
+        for i in range(nd):
+            dims.append(cow_domain_getnumlocalzonesincguard(domain._cdomain, i))
+        dims.append(len(members))
+        self._buf = np.zeros(dims)
+        if nd == 1:
+            setarray1(self._cdfield, self._buf)
+        if nd == 2:
+            setarray2(self._cdfield, self._buf)
+        if nd == 3:
+            setarray3(self._cdfield, self._buf)
         cow_dfield_commit(self._cdfield)
         self._domain = domain
 
@@ -30,7 +42,7 @@ class UnigridDatafield(object):
 
     @property
     def value(self):
-        return None#cow_dfield_getarray(self._cdfield)
+        return self._buf
 
     def dump(self, fname):
         assert(type(fname) is str)
@@ -56,15 +68,10 @@ class UnigridDomain(object):
 def test():
     domain = UnigridDomain([10,10,10], guard=3)
     dfield = UnigridDatafield(domain, ["vx", "vy", "vz"])
-    #dfield.value[4:5,:,:,0] = 2.2
+    dfield.value[4:5,:,:,0] = 2.2
     dfield.dump("pyout.h5")
-    #print dfield.value.max()
-    testfunc1(domain._cdomain, [1,2,3])
-    testfunc2(domain._cdomain, [[[1],[2],[3]],[[1],[2],[3]]])
-    A = np.ones([10,10,10])
-    B = np.ones([10,10,10,10])
-    setarray3(dfield._cdfield, A)
-    setarray4(dfield._cdfield, B)
+    print dfield.value.max()
+
 
 if __name__ == "__main__":
     test()

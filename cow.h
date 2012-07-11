@@ -37,11 +37,6 @@ typedef struct cow_dfield cow_dfield;
 typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
-void testfunc1(cow_domain *d, double x[3]);
-void testfunc2(cow_domain *d, void *x, int n0, int n1, int n2);
-void setarray3(cow_dfield *f, void *x, int n0, int n1, int n2);
-void setarray4(cow_dfield *f, void *x, int n0, int n1, int n2, int n3);
-
 void cow_init();
 void cow_finalize();
 
@@ -64,7 +59,7 @@ int cow_domain_getnumglobalzones(cow_domain *d, int dim);
 int cow_domain_getglobalstartindex(cow_domain *d, int dim);
 int cow_domain_getgridspacing(cow_domain *d, int dim);
 int cow_domain_getcartrank(cow_domain *d);
-int cow_domain_subgridatposition(cow_domain *d, double *x);
+int cow_domain_subgridatposition(cow_domain *d, double x[3]);
 int cow_domain_indexatposition(cow_domain *d, int dim, double x);
 double cow_domain_positionatindex(cow_domain *d, int dim, int index);
 
