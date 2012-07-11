@@ -23,6 +23,7 @@ cow_module = Extension \
           'cow.c',
           'io.c',
           'hist.c',
+          'samp.c',
           'fft.c',
           'fft_3d.c',
           'remap_3d.c',
