@@ -3,56 +3,48 @@
 from distutils.core import setup, Extension
 import numpy as np
 
-base_config = {
+config = {
     'COW_HDF5': 0,
-    'COW_MPI': 0,
     'COW_HDF5_MPI': 0,
     'COW_FFTW': 0,
+    'COW_MPI': 0,
     'HDF5_HOME': '/usr',
     'FFTW_HOME': '/usr',
+    'MPI_HOME': '/usr',
     'HDF5_LIBS': ['hdf5', 'z'],
-    'FFTW_LIBS': ['fftw']
-    'MPI_LIBS': ['mpi'],
+    'FFTW_LIBS': ['fftw'],
+    'MPI_LIBS': [ ],
     'NPY_INC': np.get_include() }
 
-marble_config = {
-    'COW_HDF5': 1,
-    'COW_MPI': 1,
-    'COW_HDF5_MPI': 1,
-    'COW_FFTW': 1,
-    'HDF5_HOME': '/Library/Science/hdf5-1.8.9-par',
-    'FFTW_HOME': '/Library/Science/fftw-2.1.5',
-    'MPI_LIBS': ['mpich', 'pmpich']
-    }
+try:
+    import cow_config
+    config.update(cow_config.config)
+    print "Using system config"
+except:
+    print "No system config, using default settings"
+
 
 cow_module = Extension \
 ('_cow',
  extra_compile_args=['-std=c99'],
- define_macros = [('COW_MPI', '1'),
-                  ('COW_HDF5', '1'),
-                  ('COW_FFTW', '1'),
-                  ('FFT_FFTW', '1'),
-                  ('COW_HDF5_MPI', '1')],
- include_dirs = ['/Library/Science/hdf5-1.8.9-par/include',
-                 '/Library/Science/fftw-2.1.5/include',
-                 '/Library/Science/mpich2/include',
-                 '/Library/Frameworks/Python.framework/Versions/7.1/lib/python2.7/site-packages/numpy/core/include'],
- library_dirs = ['/Library/Science/hdf5-1.8.9-par/lib',
-                 '/Library/Science/fftw-2.1.5/lib',
-                 '/Library/Science/mpich2/lib'],
- libraries = ['hdf5', 'z', 'fftw', 'mpich', 'pmpich'],
- sources=['cow.i',
-          'cow.c',
-          'io.c',
-          'hist.c',
-          'samp.c',
-          'fft.c',
-          'fft_3d.c',
-          'remap_3d.c',
-          'pack_3d.c',
-          'factor.c'])
+ define_macros = [a for a in config.items() if a[0].startswith('COW')],
+ include_dirs = [config[k] + '/include' for k in config
+                 if k.endswith('HOME')] + [config['NPY_INC']],
+ library_dirs = [config[k] + '/lib' for k in config
+                 if k.endswith('HOME')],
+ libraries = config['HDF5_LIBS'] + config['FFTW_LIBS'] + config['MPI_LIBS'],
+ sources = ['cow.i',
+            'cow.c',
+            'io.c',
+            'hist.c',
+            'samp.c',
+            'fft.c',
+            'fft_3d.c',
+            'remap_3d.c',
+            'pack_3d.c',
+            'factor.c'])
 setup(name        = 'cow',
-      version     = '0.1',
+      version     = '0.4',
       author      = "Jonathan Zrake",
       description = """C.O.W.""",
       ext_modules = [cow_module],
