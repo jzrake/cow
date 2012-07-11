@@ -22,9 +22,9 @@ int main(int argc, char **argv)
 
   cow_domain_setndim(domain, 3);
   cow_domain_setguard(domain, 2);
-  cow_domain_setsize(domain, 0, 4);
-  cow_domain_setsize(domain, 1, 4);
-  cow_domain_setsize(domain, 2, 4);
+  cow_domain_setsize(domain, 0, 42);
+  cow_domain_setsize(domain, 1, 42);
+  cow_domain_setsize(domain, 2, 42);
   cow_domain_commit(domain);
 
   cow_dfield_addmember(data, "d1");
@@ -60,6 +60,10 @@ int main(int argc, char **argv)
   free(r0);
   free(r1);
   free(sample);
+
+  double P[3];
+  cow_dfield_sampleglobalind(data, 12, 12, 12, P);
+  printf("%f %f %f\n", P[0], P[1], P[2]);
 
   cow_dfield_del(data);
   cow_domain_del(domain);

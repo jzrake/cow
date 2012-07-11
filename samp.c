@@ -37,6 +37,8 @@ void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double *P)
 {
   double x[3], xout[3];
   i -= cow_domain_getglobalstartindex(f->domain, 0);
+  j -= cow_domain_getglobalstartindex(f->domain, 1);
+  k -= cow_domain_getglobalstartindex(f->domain, 2);
   x[0] = cow_domain_positionatindex(f->domain, 0, i);
   x[1] = cow_domain_positionatindex(f->domain, 1, j);
   x[2] = cow_domain_positionatindex(f->domain, 2, k);
