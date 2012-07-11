@@ -38,7 +38,10 @@ typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
 void testfunc1(cow_domain *d, double x[3]);
-void testfunc2(cow_domain *d, double *x, int n0, int n1, int n2);
+void testfunc2(cow_domain *d, void *x, int n0, int n1, int n2);
+void setarray3(cow_dfield *f, void *x, int n0, int n1, int n2);
+void setarray4(cow_dfield *f, void *x, int n0, int n1, int n2, int n3);
+
 void cow_init();
 void cow_finalize();
 

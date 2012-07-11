@@ -61,6 +61,10 @@ def test():
     #print dfield.value.max()
     testfunc1(domain._cdomain, [1,2,3])
     testfunc2(domain._cdomain, [[[1],[2],[3]],[[1],[2],[3]]])
+    A = np.ones([10,10,10])
+    B = np.ones([10,10,10,10])
+    setarray3(dfield._cdfield, A)
+    setarray4(dfield._cdfield, B)
 
 if __name__ == "__main__":
     test()
