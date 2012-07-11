@@ -301,6 +301,10 @@ cow_dfield *cow_dfield_new(cow_domain *domain, const char *name)
     .ownsdata = 0,
     .domain = domain,
     .transform = NULL,
+    .samplecoords = NULL,
+    .sampleresult = NULL,
+    .samplecoordslen = 0,
+    .samplemode = COW_SAMPLE_LINEAR,
   } ;
   *f = field;
   cow_dfield_setname(f, name);
@@ -317,6 +321,8 @@ void cow_dfield_del(cow_dfield *f)
   if (f->ownsdata) {
     free(f->data);
   }
+  free(f->samplecoords);
+  free(f->sampleresult);
   free(f);
 }
 cow_dfield *cow_dfield_dup(cow_dfield *f)

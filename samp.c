@@ -15,6 +15,41 @@ static void _sample3(cow_dfield *f, double *x, double *P, int mode);
 static void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
                  int mode);
 
+
+void cow_dfield_setsamplecoords(cow_dfield *f, double *x, int ns, int nd)
+{
+  // nd must be 3
+  int m = f->n_members;
+  f->samplecoords = (double*) realloc(f->samplecoords, ns * 3 * sizeof(double));
+  f->sampleresult = (double*) realloc(f->samplecoords, ns * m * sizeof(double));
+  f->samplecoordslen = ns;
+  memcpy(f->samplecoords, x, ns * 3 * sizeof(double));
+}
+void cow_dfield_getsamplecoords(cow_dfield *f, double **x, int *ns, int *nd)
+{
+  if (ns) *ns = f->samplecoordslen;
+  if (nd) *nd = 3;
+  if (x) *x = f->samplecoords;
+}
+void cow_dfield_getsampleresult(cow_dfield *f, double **P, int *ns, int *nd)
+{
+  if (ns) *ns = f->samplecoordslen;
+  if (nd) *nd = f->n_members;
+  if (P) *P = f->sampleresult;
+}
+void cow_dfield_setsamplemode(cow_dfield *f, int mode)
+{
+  f->samplemode = mode;
+}
+void cow_dfield_sampleexecute(cow_dfield *f)
+{
+  double *xout = (double*) malloc(f->samplecoordslen * 3 * sizeof(double));
+  _rem(f, f->samplecoords, f->samplecoordslen, xout, f->sampleresult,
+       f->samplemode);
+  memcpy(f->samplecoords, xout, f->samplecoordslen * 3 * sizeof(double));
+  free(xout);
+}
+
 void cow_dfield_sampleglobalpos(cow_dfield *f, double *xin, int N, double *xout,
 				double *P, int mode)
 // -----------------------------------------------------------------------------
