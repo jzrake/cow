@@ -72,6 +72,7 @@ struct cow_domain *cow_domain_new()
     .glb_upper = { 1.0, 1.0, 1.0 },
     .loc_lower = { 0.0, 0.0, 0.0 },
     .loc_upper = { 1.0, 1.0, 1.0 },
+    .dx = { 1.0, 1.0, 1.0 },
     .L_nint = { 1, 1, 1 },
     .L_ntot = { 1, 1, 1 },
     .L_strt = { 0, 0, 0 },
@@ -142,6 +143,7 @@ void cow_domain_commit(cow_domain *d)
   MPI_Dims_create(d->comm_size, d->n_dims, d->proc_sizes);
   MPI_Cart_create(MPI_COMM_WORLD, d->n_dims, d->proc_sizes, w, r, &d->mpi_cart);
   MPI_Comm_rank(d->mpi_cart, &d->cart_rank);
+  MPI_Comm_size(d->mpi_cart, &d->cart_size);
   MPI_Cart_coords(d->mpi_cart, d->cart_rank, d->n_dims, d->proc_index);
 
   for (int i=0; i<d->n_dims; ++i) {
@@ -156,6 +158,7 @@ void cow_domain_commit(cow_domain *d)
     const int thisdm_size = (d->proc_index[i]<R) ? augmnt_size : normal_size;
     const double dx = (d->glb_upper[i] - d->glb_lower[i]) / d->G_ntot[i];
 
+    d->dx[i] = dx;
     if (R != 0) d->balanced = 0;
 
     d->L_nint[i] = thisdm_size;
@@ -181,7 +184,6 @@ void cow_domain_commit(cow_domain *d)
     d->L_ntot[i] = d->G_ntot[i] + 2 * d->n_ghst;
     d->L_strt[i] = d->n_ghst;
     d->G_strt[i] = 0;
-
     d->loc_lower[i] = d->glb_lower[i];
     d->loc_upper[i] = d->glb_upper[i];
   }
@@ -229,6 +231,58 @@ int cow_domain_getglobalstartindex(cow_domain *d, int dim)
   case 2: return d->G_strt[2];
   default: return 0;
   }
+}
+int cow_domain_getgridspacing(cow_domain *d, int dim)
+{
+  switch (dim) {
+  case 0: return d->dx[0];
+  case 1: return d->dx[1];
+  case 2: return d->dx[2];
+  default: return 0;
+  }
+}
+int cow_domain_getcartrank(cow_domain *d)
+{
+#if (COW_MPI)
+  return d->cart_rank;
+#else
+  return 0;
+#endif
+}
+int cow_domain_subgridatposition(cow_domain *d, double *x)
+{
+#if (COW_MPI)
+  int index[3];
+  double *x0 = d->glb_lower;
+  double *x1 = d->glb_upper;
+  for (int i=0; i<d->n_dims; ++i) {
+    index[i] = d->proc_sizes[i] * (x[i] - x0[i]) / (x1[i] - x0[i]);
+  }
+  int their_rank;
+  MPI_Cart_rank(d->mpi_cart, index, &their_rank);
+  return their_rank;
+#else
+  return 0;
+#endif
+}
+int cow_domain_indexatposition(cow_domain *d, int dim, double x)
+// -----------------------------------------------------------------------------
+// dim: 0,1,2 for x,y,z
+//
+// x is a global position, i.e. not relative to this subgrid
+// The return value is the integer index, which is relative to this subgrid
+//
+// Within the zone i+ng, the value (x-x0)/dx ranges from i to i+1.
+// Then we correct for ghosts by adding ng.
+// -----------------------------------------------------------------------------
+{
+  if (dim >= 3 || !d->committed) return 0.0;
+  return d->n_ghst + (int)((x - d->loc_lower[dim]) / d->dx[dim]);
+}
+double cow_domain_positionatindex(cow_domain *d, int dim, int index)
+{
+  if (dim >= 3 || !d->committed) return 0.0;
+  return d->loc_lower[dim] + d->dx[dim] * (index - d->n_ghst + 0.5);
 }
 
 // -----------------------------------------------------------------------------

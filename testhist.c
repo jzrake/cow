@@ -38,7 +38,7 @@ int main(int argc, char **argv)
   cow_dfield_addmember(data, "d3");
   cow_dfield_commit(data);
 
-  double *A = (double*)cow_dfield_getbuffer(data);
+  double *A = (double*) cow_dfield_getbuffer(data);
   for (int i=0; i<cow_domain_getnumlocalzonesincguard(domain, COW_ALL_DIMS);
        ++i) {
     A[3*i + 0] = 0.1;

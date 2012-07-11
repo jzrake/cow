@@ -14,7 +14,7 @@
 #endif // COW_PRIVATE_DEFS
 
 
-#define COW_ALL_DIMS             -10
+#define COW_ALL_DIMS             -41
 #define COW_HIST_SPACING_LINEAR  -42
 #define COW_HIST_SPACING_LOG     -43
 #define COW_HIST_BINMODE_COUNTS  -44 // traditional histogram
@@ -22,6 +22,8 @@
 #define COW_HIST_BINMODE_AVERAGE -46 // useful for e.g. power spectrum
 #define COW_PROJECT_OUT_DIV      -47 // used for Helmholtz decomposition
 #define COW_PROJECT_OUT_CURL     -48
+#define COW_SAMPLE_NEAREST       -49 // sample the nearest zone center
+#define COW_SAMPLE_LINEAR        -50 // use (uni/bi/tri) linear interp
 
 // -----------------------------------------------------------------------------
 //
@@ -56,6 +58,11 @@ int cow_domain_getnumlocalzonesincguard(cow_domain *d, int dim);
 int cow_domain_getnumlocalzonesinterior(cow_domain *d, int dim);
 int cow_domain_getnumglobalzones(cow_domain *d, int dim);
 int cow_domain_getglobalstartindex(cow_domain *d, int dim);
+int cow_domain_getgridspacing(cow_domain *d, int dim);
+int cow_domain_getcartrank(cow_domain *d);
+int cow_domain_subgridatposition(cow_domain *d, double *x);
+int cow_domain_indexatposition(cow_domain *d, int dim, double x);
+double cow_domain_positionatindex(cow_domain *d, int dim, int index);
 
 cow_dfield *cow_dfield_new(cow_domain *domain, const char *name);
 cow_dfield *cow_dfield_dup(cow_dfield *f);
@@ -76,6 +83,9 @@ int cow_dfield_getstride(cow_dfield *f, int dim);
 int cow_dfield_getnmembers(cow_dfield *f);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
 void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
+void cow_dfield_sampleglobalpos(cow_dfield *f, double *xin, int N, double *xout,
+				double *P, int mode);
+void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double *P);
 int cow_dfield_getownsdata(cow_dfield *f);
 void *cow_dfield_getbuffer(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
@@ -116,6 +126,7 @@ struct cow_domain
   double glb_upper[3]; // upper " "
   double loc_lower[3]; // lower coordinates of local physical domain
   double loc_upper[3]; // upper " "
+  double dx[3]; // grid spacing along each direction
   int L_nint[3]; // interior zones on the local subgrid
   int L_ntot[3]; // total " ", including guard zones
   int L_strt[3]; // starting index of interior zones on local subgrid
@@ -142,7 +153,7 @@ struct cow_domain
   MPI_Comm mpi_cart; // the cartesian communicator
 #endif
 #if (COW_HDF5)
-  hsize_t L_nint_h5[3];
+  hsize_t L_nint_h5[3]; // HDF5 versions of the variables with the same name
   hsize_t L_ntot_h5[3];
   hsize_t L_strt_h5[3];
   hsize_t G_ntot_h5[3];
@@ -155,16 +166,16 @@ struct cow_domain
 
 struct cow_dfield
 {
-  char *name;
-  char **members;
-  int member_iter;
-  int n_members;
-  void *data;
-  int stride[3];
-  int committed;
-  int ownsdata;
-  cow_domain *domain;
-  cow_transform transform;
+  char *name; // name of the data field
+  char **members; // list of labels for the data members
+  int member_iter; // maintains an index into the last dimension
+  int n_members; // size of last dimension
+  void *data; // data buffer
+  int stride[3]; // strides describing memory layout: C ordering
+  int committed; // true after cow_dfield_commit called, locks out most changes
+  int ownsdata; // client code can own the data: see setbuffer function
+  cow_domain *domain; // pointer to an associated domain
+  cow_transform transform; // used only by internal code
 #if (COW_MPI)
   MPI_Datatype *send_type; // chunk of data to be sent to respective neighbor
   MPI_Datatype *recv_type; // " "                 received from " "

@@ -35,12 +35,16 @@ Features planned or implemented
 
 [-] Vector field derivative operations: div, grad, curl, etc.
 
-[+] Parallel FFT functions: allows arbitrary data layout, no need to keep 3d
+[+] Parallel 3d FFT functions: allows arbitrary data layout, no need to keep 3d
     data in 2d slabs
+
+[ ] 2d parallel FFT's
+
+[ ] Serial versions (for use without MPI) of 1d, 2d, and 3d FFT's
 
 [+] Helmholtz decomposition of vector fields
 
-[-] Sampling of data points on remote processors: by global index or
+[+] Sampling of data points on remote processors: by global index or
     interpolated to physical locations
 
 [ ] Support for domains with complex-valued data
@@ -56,15 +60,3 @@ Features planned or implemented
 [ ] Low/high pass filtering; course-graining
 
 [-] Python wrappers
-
-
-Todo list
--------------------------------
-[+] ... finished
-[-] ... started
-[ ] ... planned
--------------------------------
-
-[ ] Add methods to allow dfield not to own its data
-
-[ ] 

@@ -26,8 +26,8 @@ DEFINES = \
 	-DCOW_FFTW=$(COW_FFTW) \
 	-DFFT_FFTW
 
-OBJ = cow.o hist.o io.o fft.o fft_3d.o pack_3d.o remap_3d.o factor.o
-EXE = main makehist testhist testfft milos mhdstats
+OBJ = cow.o hist.o io.o samp.o fft.o fft_3d.o pack_3d.o remap_3d.o factor.o
+EXE = main makehist milos mhdstats srhdhist testhist testfft testsamp
 
 .PHONY: COWPY
 
@@ -55,12 +55,6 @@ cowpy : cowpy.o cow_wrap.o $(OBJ)
 main : main.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
-testhist : testhist.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
-
-testfft : testfft.o $(OBJ)
-	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
-
 makehist : makehist.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
@@ -68,6 +62,18 @@ mhdstats : mhdstats.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 milos : milos.o $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
+
+srhdhist : srhdhist.o $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
+
+testhist : testhist.o $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
+
+testfft : testfft.o $(OBJ)
+	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
+
+testsamp : testsamp.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 clean :
