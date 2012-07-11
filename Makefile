@@ -8,6 +8,7 @@ COW_FFTW     ?= 0
 CFLAGS       ?= -Wall -g -O0
 HDF5_HOME    ?= /usr/local
 FFTW_HOME    ?= /usr/local
+COW_INSTALL  ?= $(PWD)
 
 ifeq ($(COW_HDF5), 1)
 INC += -I$(HDF5_HOME)/include
@@ -34,7 +35,7 @@ default : COWPY
 
 COWPY : 
 	python setup.py build
-	python setup.py install --prefix=$(PWD)
+	python setup.py install --prefix=$(COW_INSTALL)
 
 %.o : %.c
 	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c -std=c99
