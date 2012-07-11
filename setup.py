@@ -1,7 +1,29 @@
 #!/usr/bin/env python
 
 from distutils.core import setup, Extension
+import numpy as np
 
+base_config = {
+    'COW_HDF5': 0,
+    'COW_MPI': 0,
+    'COW_HDF5_MPI': 0,
+    'COW_FFTW': 0,
+    'HDF5_HOME': '/usr',
+    'FFTW_HOME': '/usr',
+    'HDF5_LIBS': ['hdf5', 'z'],
+    'FFTW_LIBS': ['fftw']
+    'MPI_LIBS': ['mpi'],
+    'NPY_INC': np.get_include() }
+
+marble_config = {
+    'COW_HDF5': 1,
+    'COW_MPI': 1,
+    'COW_HDF5_MPI': 1,
+    'COW_FFTW': 1,
+    'HDF5_HOME': '/Library/Science/hdf5-1.8.9-par',
+    'FFTW_HOME': '/Library/Science/fftw-2.1.5',
+    'MPI_LIBS': ['mpich', 'pmpich']
+    }
 
 cow_module = Extension \
 ('_cow',
