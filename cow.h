@@ -85,6 +85,11 @@ void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
 void cow_dfield_sampleglobalpos(cow_dfield *f, double *xin, int N, double *xout,
 				double *P, int mode);
 void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double *P);
+void cow_dfield_setsamplecoords(cow_dfield *f, double *x, int ns, int nd);
+void cow_dfield_getsamplecoords(cow_dfield *f, double **x, int *ns, int *nd);
+void cow_dfield_getsampleresult(cow_dfield *f, double **P, int *ns, int *nd);
+void cow_dfield_setsamplemode(cow_dfield *f, int mode);
+void cow_dfield_sampleexecute(cow_dfield *f);
 int cow_dfield_getownsdata(cow_dfield *f);
 void *cow_dfield_getbuffer(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
@@ -175,6 +180,10 @@ struct cow_dfield
   int ownsdata; // client code can own the data: see setbuffer function
   cow_domain *domain; // pointer to an associated domain
   cow_transform transform; // used only by internal code
+  double *samplecoords;
+  double *sampleresult;
+  int samplecoordslen;
+  int samplemode;
 #if (COW_MPI)
   MPI_Datatype *send_type; // chunk of data to be sent to respective neighbor
   MPI_Datatype *recv_type; // " "                 received from " "
