@@ -14,10 +14,11 @@ static void _sample2(cow_dfield *f, double *x, double *P);
 static void _sample3(cow_dfield *f, double *x, double *P);
 static void _rem(cow_dfield *f, double *Ri, double *Ro, double *Po, int Nsamp);
 
-void cow_dfield_sample(cow_dfield *f, double *x, double *P)
+void cow_dfield_sample(cow_dfield *f, double *x, double *P, int nsamp)
 {
-  double xout[3];
-  _rem(f, x, xout, P, 1);
+  double *xout = (double*) malloc(nsamp * 3 * sizeof(double));
+  _rem(f, x, xout, P, nsamp);
+  free(xout);
 }
 void _sample1(cow_dfield *f, double *x, double *P)
 {
@@ -212,8 +213,14 @@ void _rem(cow_dfield *f, double *Ri, double *Ro, double *Po, int Nsamp)
     free(I_find_for_you_r);
     free(I_find_for_you_P);
   }
+  for (int n=0; n<size; ++n) {
+    free(remote_r1[n]);
+    free(remote_P1[n]);
+  }
   free(remote_r1);
   free(remote_P1);
+  free(remote_r1_size);
+  free(remote_P1_size);
 #else
   for (int n=0; n<Nsamp; ++n) {
     switch (f->domain->n_dims) {

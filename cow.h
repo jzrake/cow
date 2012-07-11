@@ -80,7 +80,7 @@ int cow_dfield_getstride(cow_dfield *f, int dim);
 int cow_dfield_getnmembers(cow_dfield *f);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
 void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
-void cow_dfield_sample(cow_dfield *f, double *x, double *P);
+void cow_dfield_sample(cow_dfield *f, double *x, double *P, int nsamp);
 int cow_dfield_getownsdata(cow_dfield *f);
 void *cow_dfield_getbuffer(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
