@@ -30,7 +30,7 @@ class UnigridDatafield(object):
 
     @property
     def value(self):
-        return cow_dfield_getarray(self._cdfield)
+        return None#cow_dfield_getarray(self._cdfield)
 
     def dump(self, fname):
         assert(type(fname) is str)
@@ -56,10 +56,13 @@ class UnigridDomain(object):
 def test():
     domain = UnigridDomain([10,10,10], guard=3)
     dfield = UnigridDatafield(domain, ["vx", "vy", "vz"])
-    dfield.value[4:5,:,:,0] = 2.2
+    #dfield.value[4:5,:,:,0] = 2.2
     dfield.dump("pyout.h5")
-    print dfield.value.max()
-
+    #print dfield.value.max()
+    testfunc1(domain._cdomain, [1,2,3])
+    testfunc2(domain._cdomain, [[[1],[2],[3]],[[1],[2],[3]]])
 
 if __name__ == "__main__":
     test()
+
+
