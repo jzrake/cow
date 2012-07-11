@@ -23,8 +23,7 @@ DEFINES = \
 	-DCOW_MPI=$(COW_MPI) \
 	-DCOW_HDF5=$(COW_HDF5) \
 	-DCOW_HDF5_MPI=$(COW_HDF5_MPI) \
-	-DCOW_FFTW=$(COW_FFTW) \
-	-DFFT_FFTW
+	-DCOW_FFTW=$(COW_FFTW)
 
 OBJ = cow.o hist.o io.o samp.o fft.o fft_3d.o pack_3d.o remap_3d.o factor.o
 EXE = main makehist milos mhdstats srhdhist testhist testfft testsamp
