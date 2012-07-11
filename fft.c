@@ -30,7 +30,9 @@
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 
+#if (COW_FFTW && COW_MPI)
 #include "fft_3d.h"
+#endif
 #define MODULE "fft"
 #define NBINS 128
 
@@ -46,13 +48,16 @@
 #define FFT_FWD (+1)
 #define FFT_REV (-1)
 
+#if (COW_FFTW && COW_MPI)
 static struct fft_plan_3d *call_fft_plan_3d(cow_domain *d, int *nbuf);
 static double k_at(cow_domain *d, int i, int j, int k, double *khat);
 static double khat_at(cow_domain *d, int i, int j, int k, double *khat);
 static double cnorm(FFT_DATA z);
+#endif
 
 void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
 {
+#if (COW_FFTW && COW_MPI)
   if (!f->committed) return;
   if (f->n_members != 3) {
     printf("[%s] error: need a 3-component field for pspecvectorfield", MODULE);
@@ -135,11 +140,13 @@ void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
   fft_3d_destroy_plan(plan);
   printf("[%s] %s took %3.2f seconds\n",
 	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
+#endif
 }
 
 
 void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
 {
+#if (COW_FFTW && COW_MPI)
   if (!f->committed) return;
   if (f->n_members != 3) {
     printf("[%s] error: need a 3-component field for pspecvectorfield", MODULE);
@@ -247,12 +254,13 @@ void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
   fft_3d_destroy_plan(plan);
   printf("[%s] %s took %3.2f seconds\n",
 	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
+#endif
 }
 
 
 struct fft_plan_3d *call_fft_plan_3d(cow_domain *d, int *nbuf)
 {
-#if (COW_MPI)
+#if (COW_FFTW && COW_MPI)
   const int i0 = cow_domain_getglobalstartindex(d, 0);
   const int i1 = cow_domain_getnumlocalzonesinterior(d, 0) + i0 - 1;
   const int j0 = cow_domain_getglobalstartindex(d, 1);
@@ -272,6 +280,7 @@ struct fft_plan_3d *call_fft_plan_3d(cow_domain *d, int *nbuf)
 #endif
 }
 
+#if (COW_FFTW && COW_MPI)
 double k_at(cow_domain *d, int i, int j, int k, double *kvec)
 // -----------------------------------------------------------------------------
 // Here, we populate the wave vectors on the Fourier lattice. The convention
@@ -314,3 +323,4 @@ double cnorm(FFT_DATA z)
 {
   return z.re*z.re + z.im*z.im;
 }
+#endif
