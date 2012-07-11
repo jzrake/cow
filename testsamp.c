@@ -50,7 +50,7 @@ int main(int argc, char **argv)
     r0[n] = (double) rand() / RAND_MAX;
   }
   char fname[256];
-  cow_dfield_sample(data, r0, N, r1, sample, COW_SAMPLE_LINEAR);
+  cow_dfield_sampleglobalpos(data, r0, N, r1, sample, COW_SAMPLE_LINEAR);
   snprintf(fname, 256, "samp-%02d.dat", cow_domain_getcartrank(domain));
   FILE *fout = fopen(fname, "w");
   for (int n=0; n<N; ++n) {

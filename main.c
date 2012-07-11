@@ -119,10 +119,6 @@ int main(int argc, char **argv)
 
   cow_dfield_read(magf, "thefile.h5");
 
-  double samp[3], x[1] = { 0.5 };
-  cow_dfield_sample(magf, x, samp);
-  printf("testing sample... (%f %f %f)\n", samp[0], samp[1], samp[2]);
-
   cow_dfield_del(divB_copy);
   cow_dfield_del(divB);
   cow_dfield_del(prim);

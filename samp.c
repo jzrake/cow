@@ -15,8 +15,8 @@ static void _sample3(cow_dfield *f, double *x, double *P, int mode);
 static void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
                  int mode);
 
-void cow_dfield_sample(cow_dfield *f, double *xin, int N, double *xout,
-                       double *P, int mode)
+void cow_dfield_sampleglobalpos(cow_dfield *f, double *xin, int N, double *xout,
+				double *P, int mode)
 // -----------------------------------------------------------------------------
 // Samples `N` points on the global domain. `N` may vary between processes, or
 // be equal to zero. Points are output permuted relative to the input
@@ -31,6 +31,16 @@ void cow_dfield_sample(cow_dfield *f, double *xin, int N, double *xout,
 // -----------------------------------------------------------------------------
 {
   _rem(f, xin, N, xout, P, mode);
+}
+
+void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double *P)
+{
+  double x[3], xout[3];
+  i -= cow_domain_getglobalstartindex(f->domain, 0);
+  x[0] = cow_domain_positionatindex(f->domain, 0, i);
+  x[1] = cow_domain_positionatindex(f->domain, 1, j);
+  x[2] = cow_domain_positionatindex(f->domain, 2, k);
+  _rem(f, x, 1, xout, P, COW_SAMPLE_NEAREST);
 }
 
 /* -----------------------------------------------------------------------------
