@@ -14,7 +14,7 @@
 #endif // COW_PRIVATE_DEFS
 
 
-#define COW_ALL_DIMS             -10
+#define COW_ALL_DIMS             -41
 #define COW_HIST_SPACING_LINEAR  -42
 #define COW_HIST_SPACING_LOG     -43
 #define COW_HIST_BINMODE_COUNTS  -44 // traditional histogram
@@ -22,6 +22,8 @@
 #define COW_HIST_BINMODE_AVERAGE -46 // useful for e.g. power spectrum
 #define COW_PROJECT_OUT_DIV      -47 // used for Helmholtz decomposition
 #define COW_PROJECT_OUT_CURL     -48
+#define COW_SAMPLE_NEAREST       -49 // sample the nearest zone center
+#define COW_SAMPLE_LINEAR        -50 // use (uni/bi/tri) linear interp
 
 // -----------------------------------------------------------------------------
 //
@@ -81,7 +83,8 @@ int cow_dfield_getstride(cow_dfield *f, int dim);
 int cow_dfield_getnmembers(cow_dfield *f);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
 void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
-void cow_dfield_sample(cow_dfield *f, double *x, int N, double *xout, double *P);
+void cow_dfield_sample(cow_dfield *f, double *xin, int N, double *xout, double *P,
+		       int mode);
 int cow_dfield_getownsdata(cow_dfield *f);
 void *cow_dfield_getbuffer(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
