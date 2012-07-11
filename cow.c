@@ -32,7 +32,7 @@ static void _dfield_freetype(cow_dfield *f);
 static void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
                                    void *out, char op);
 
-void cow_init()
+void cow_init(void)
 {
 #if (COW_MPI)
   int mpi_started, rank;
@@ -48,7 +48,7 @@ void cow_init()
   }
 #endif
 }
-void cow_finalize()
+void cow_finalize(void)
 {
 #if (COW_MPI)
   int mpi_started;

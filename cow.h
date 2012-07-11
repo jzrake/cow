@@ -37,8 +37,8 @@ typedef struct cow_dfield cow_dfield;
 typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
-void cow_init();
-void cow_finalize();
+void cow_init(void);
+void cow_finalize(void);
 
 cow_domain *cow_domain_new();
 void cow_domain_commit(cow_domain *d);
