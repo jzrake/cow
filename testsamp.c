@@ -41,20 +41,24 @@ int main(int argc, char **argv)
   }
   cow_dfield_syncguard(data);
 
-  int N = 10;
-  double *r = (double*) malloc(N * 3 * sizeof(double));
+  int N = 10 * cow_domain_getcartrank(domain);
+  double *r0 = (double*) malloc(N * 3 * sizeof(double));
+  double *r1 = (double*) malloc(N * 3 * sizeof(double));
   double *sample = (double*) malloc(N * 3 * sizeof(double));
 
   for (int n=0; n<3*N; ++n) {
-    r[n] = (double) rand() / RAND_MAX;
+    r0[n] = (double) rand() / RAND_MAX;
   }
-
-  cow_dfield_sample(data, r, sample, N);
+  char fname[256];
+  cow_dfield_sample(data, r0, N, r1, sample);
+  snprintf(fname, 256, "samp-%02d.dat", cow_domain_getcartrank(domain));
+  FILE *fout = fopen(fname, "w");
   for (int n=0; n<N; ++n) {
-    printf("%f %f %f\n", sample[3*n+0], sample[3*n+1], sample[3*n+2]);
+    fprintf(fout, "%f %f %f\n", sample[3*n+0], sample[3*n+1], sample[3*n+2]);
   }
-
-  free(r);
+  fclose(fout);
+  free(r0);
+  free(r1);
   free(sample);
 
   cow_dfield_del(data);

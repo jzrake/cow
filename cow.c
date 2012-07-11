@@ -238,6 +238,14 @@ int cow_domain_getgridspacing(cow_domain *d, int dim)
   default: return 0;
   }
 }
+int cow_domain_getcartrank(cow_domain *d)
+{
+#if (COW_MPI)
+  return d->cart_rank;
+#else
+  return 0;
+#endif
+}
 int cow_domain_subgridatposition(cow_domain *d, double *x)
 {
 #if (COW_MPI)

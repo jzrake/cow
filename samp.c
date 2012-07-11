@@ -14,11 +14,21 @@ static void _sample2(cow_dfield *f, double *x, double *P);
 static void _sample3(cow_dfield *f, double *x, double *P);
 static void _rem(cow_dfield *f, double *Ri, double *Ro, double *Po, int Nsamp);
 
-void cow_dfield_sample(cow_dfield *f, double *x, double *P, int nsamp)
+void cow_dfield_sample(cow_dfield *f, double *x, int N, double *xout, double *P)
+// -----------------------------------------------------------------------------
+// Samples `N` points on the global domain. `N` may vary between processes, or
+// be equal to zero. Points are output permuted relative to the input
+// coordinates, so take care to use `xout` as the coordinates associated with
+// samples in `P`.
+//
+// f:    IN   data field instance to sample
+// x:    IN   list of input coordinates at which to sample f's data (N x 3)
+// N:    IN   number of points to sample
+// xout: OUT  locations of returned samples, permutation of x (N x 3)
+// P:    OUT  list of filled samples (N x Q) where Q = f->n_members
+// -----------------------------------------------------------------------------
 {
-  double *xout = (double*) malloc(nsamp * 3 * sizeof(double));
-  _rem(f, x, xout, P, nsamp);
-  free(xout);
+  _rem(f, x, xout, P, N);
 }
 void _sample1(cow_dfield *f, double *x, double *P)
 {
