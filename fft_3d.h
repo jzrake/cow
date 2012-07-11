@@ -18,7 +18,7 @@
 /* FFT_PRECISION = 2 is double-precision complex (8-byte real, 8-byte imag) */
 
 #define FFT_PRECISION 2
-
+#define FFT_FFTW
 /* ------------------------------------------------------------------------- */
 
 /* Data types for single-precision complex */
