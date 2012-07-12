@@ -89,16 +89,12 @@ void make_hist(cow_dfield *f, cow_transform op, const char *fout, const char *m)
 
 int main(int argc, char **argv)
 {
-#if (COW_MPI)
-  {
-    int rank;
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank != 0) freopen("/dev/null", "w", stdout);
-    printf("was compiled with MPI support\n");
-  }
-#endif
+  int modes = 0;
+  int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
+  modes |= GETENVINT("COW_NOREOPEN_STDOUT", 0) ? COW_NOREOPEN_STDOUT : 0;
+  modes |= GETENVINT("COW_DISABLE_MPI", 0) ? COW_DISABLE_MPI : 0;
 
+  cow_init(argc, argv, modes);
   if (argc == 3) {
     printf("running on input file %s\n", argv[1]);
   }
@@ -106,11 +102,10 @@ int main(int argc, char **argv)
     printf("usage: $> srhdhist infile.h5 outfile.h5\n");
     goto done;
   }
-  char *finp = argv[1];
-  char *fout = argv[2];
-  int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
   printf("COW_HDF5_COLLECTIVE: %d\n", collective);
 
+  char *finp = argv[1];
+  char *fout = argv[2];
   cow_domain *domain = cow_domain_new();
   cow_domain_readsize(domain, finp, "prim/vx");
   cow_domain_setguard(domain, 2);
@@ -148,8 +143,6 @@ int main(int argc, char **argv)
   cow_domain_del(domain);
 
  done:
-#if (COW_MPI)
-  MPI_Finalize();
-#endif
+  cow_finalize();
   return 0;
 }
