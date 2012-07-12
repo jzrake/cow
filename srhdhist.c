@@ -157,11 +157,32 @@ int main(int argc, char **argv)
 
 
 
+void lorentz_boost(double u[4], double x[4], double xp[4])
+{
+  double u2 = u[1]*u[1] + u[2]*u[2] + u[3]*u[3];
+  double gm = sqrt(1.0 + u2);
+  double L[4][4];
+  L[0][0] = gm;
+  L[0][1] = L[1][0] = -u[1];
+  L[0][2] = L[2][0] = -u[2];
+  L[0][3] = L[3][0] = -u[3];
+  for (int i=1; i<4; ++i) {
+    for (int j=1; j<4; ++j) {
+      L[i][j] = (gm - 1) * u[i]*u[j] / u2 + (i == j);
+    }
+  }
+  for (int i=0; i<4; ++i) {
+    xp[i] = 0.0;
+    for (int j=0; j<4; ++j) {
+      xp[i] += L[i][j] * x[j];
+    }
+  }
+}
 
 void relative_lorentz_factor(cow_dfield *vel, int N)
 {
   double *x = (double*) malloc(N * 3 * sizeof(double));
-  double *P;
+  double *v;
 
   for (int n=0; n<N; ++n) {
     x[3*n + 0] = (double) rand() / RAND_MAX;
@@ -175,12 +196,35 @@ void relative_lorentz_factor(cow_dfield *vel, int N)
 
   cow_dfield_sampleexecute(vel);
   cow_dfield_getsamplecoords(vel, &x, NULL, NULL);
-  cow_dfield_getsampleresult(vel, &P, NULL, NULL);
+  cow_dfield_getsampleresult(vel, &v, NULL, NULL);
 
-  for (int n=0; n<N; ++n) {
-    printf("(%f %f %f) : %f %f %f\n",
-	   x[3*n+0], x[3*n+1], x[3*n+2],
-	   P[3*n+0], P[3*n+1], P[3*n+2]);
+  for (int n=0; n<N/2; ++n) {
+    double *x1 = &x[6*n + 0];
+    double *x2 = &x[6*n + 3];
+    double *v1 = &v[6*n + 0];
+    double *v2 = &v[6*n + 3];
+    double g1 = 1.0 / sqrt(1.0 - (v1[0]*v1[0] + v1[1]*v1[1] + v1[2]*v1[2]));
+    double g2 = 1.0 / sqrt(1.0 - (v2[0]*v2[0] + v2[1]*v2[1] + v2[2]*v2[2]));
+    double umu1[4] = { g1, g1*v1[0], g1*v1[1], g1*v1[2] };
+    double umu2[4] = { g2, g2*v2[0], g2*v2[1], g2*v2[2] };
+    double xmu1[4] = { 0.0, x1[0], x1[1], x1[2] };
+    double xmu2[4] = { 0.0, x2[0], x2[1], x2[2] };
+    double xmu1p[4];
+    double xmu2p[4];
+    double xrel[4];
+    double urel[4];
+    lorentz_boost(umu1, xmu1, xmu1p);
+    lorentz_boost(umu1, xmu2, xmu2p);
+    lorentz_boost(umu1, umu2, urel);
+    xrel[0] = xmu2p[0] - xmu1p[0];
+    xrel[1] = xmu2p[1] - xmu1p[1];
+    xrel[2] = xmu2p[2] - xmu1p[2];
+    xrel[3] = xmu2p[3] - xmu1p[3];
+    printf("u: (%+f, %+f, %+f, %+f)\n", umu1[0], umu1[1], umu1[2], umu1[3]);
+    printf("1: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu1[0], xmu1[1], xmu1[2], xmu1[3],
+	   xmu1p[0], xmu1p[1], xmu1p[2], xmu1p[3]);
+    printf("2: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu2[0], xmu2[1], xmu2[2], xmu2[3],
+	   xmu2p[0], xmu2p[1], xmu2p[2], xmu2p[3]);
   }
 }
 
