@@ -12,6 +12,7 @@
 #define GETENVDBL(a,dflt) (getenv(a) ? atof(getenv(a)) : dflt)
 
 
+static void relative_lorentz_factor(cow_dfield *vel, int N);
 
 static void div5(double *result, double **args, int **s, void *u)
 {
@@ -114,6 +115,8 @@ int main(int argc, char **argv)
   cow_domain_setcollective(domain, collective);
   cow_domain_setalign(domain, 4*KILOBYTES, 4*MEGABYTES);
 
+  srand(cow_domain_getcartrank(domain));
+
   cow_dfield *vel = cow_dfield_new(domain, "prim");
   cow_dfield *rho = cow_dfield_new(domain, "prim");
   cow_dfield_addmember(vel, "vx");
@@ -136,13 +139,48 @@ int main(int argc, char **argv)
   make_hist(divV, take_elm0, fout, NULL);
   make_hist(rotV, take_mag3, fout, NULL);
 
-  cow_dfield_del(vel);
   cow_dfield_del(rho);
   cow_dfield_del(divV);
   cow_dfield_del(rotV);
+
+
+  relative_lorentz_factor(vel, 100);
+  cow_dfield_del(vel);
+
+
   cow_domain_del(domain);
 
  done:
   cow_finalize();
   return 0;
 }
+
+
+
+
+void relative_lorentz_factor(cow_dfield *vel, int N)
+{
+  double *x = (double*) malloc(N * 3 * sizeof(double));
+  double *P;
+
+  for (int n=0; n<N; ++n) {
+    x[3*n + 0] = (double) rand() / RAND_MAX;
+    x[3*n + 1] = (double) rand() / RAND_MAX;
+    x[3*n + 2] = (double) rand() / RAND_MAX;
+  }
+
+  cow_dfield_setsamplemode(vel, COW_SAMPLE_LINEAR);
+  cow_dfield_setsamplecoords(vel, x, N, 3);
+  free(x);
+
+  cow_dfield_sampleexecute(vel);
+  cow_dfield_getsamplecoords(vel, &x, NULL, NULL);
+  cow_dfield_getsampleresult(vel, &P, NULL, NULL);
+
+  for (int n=0; n<N; ++n) {
+    printf("(%f %f %f) : %f %f %f\n",
+	   x[3*n+0], x[3*n+1], x[3*n+2],
+	   P[3*n+0], P[3*n+1], P[3*n+2]);
+  }
+}
+

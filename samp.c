@@ -21,7 +21,7 @@ void cow_dfield_setsamplecoords(cow_dfield *f, double *x, int ns, int nd)
   // nd must be 3
   int m = f->n_members;
   f->samplecoords = (double*) realloc(f->samplecoords, ns * 3 * sizeof(double));
-  f->sampleresult = (double*) realloc(f->samplecoords, ns * m * sizeof(double));
+  f->sampleresult = (double*) realloc(f->sampleresult, ns * m * sizeof(double));
   f->samplecoordslen = ns;
   memcpy(f->samplecoords, x, ns * 3 * sizeof(double));
 }
