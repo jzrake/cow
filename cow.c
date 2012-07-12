@@ -32,7 +32,7 @@ static void _dfield_freetype(cow_dfield *f);
 static void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
                                    void *out, char op);
 
-void cow_init()
+void cow_init(void)
 {
 #if (COW_MPI)
   int mpi_started, rank;
@@ -40,7 +40,7 @@ void cow_init()
   char *argv_[1] = {"cow"};
   char **argv = &argv_[0];
   MPI_Initialized(&mpi_started);
-  if (!mpi_started) {
+  if (mpi_started) {
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if (rank != 0) freopen("/dev/null", "w", stdout);
@@ -48,7 +48,7 @@ void cow_init()
   }
 #endif
 }
-void cow_finalize()
+void cow_finalize(void)
 {
 #if (COW_MPI)
   int mpi_started;

@@ -6,6 +6,9 @@
 # Compiled Dynamic libraries
 *.so
 
+# Python crap
+*.pyc
+
 # Compiled Static libraries
 *.lai
 *.la

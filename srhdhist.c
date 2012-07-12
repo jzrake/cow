@@ -12,6 +12,7 @@
 #define GETENVDBL(a,dflt) (getenv(a) ? atof(getenv(a)) : dflt)
 
 
+static void relative_lorentz_factor(cow_dfield *vel, int N);
 
 static void div5(double *result, double **args, int **s, void *u)
 {
@@ -89,16 +90,12 @@ void make_hist(cow_dfield *f, cow_transform op, const char *fout, const char *m)
 
 int main(int argc, char **argv)
 {
-#if (COW_MPI)
-  {
-    int rank;
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank != 0) freopen("/dev/null", "w", stdout);
-    printf("was compiled with MPI support\n");
-  }
-#endif
+  int modes = 0;
+  int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
+  modes |= GETENVINT("COW_NOREOPEN_STDOUT", 0) ? COW_NOREOPEN_STDOUT : 0;
+  modes |= GETENVINT("COW_DISABLE_MPI", 0) ? COW_DISABLE_MPI : 0;
 
+  cow_init(argc, argv, modes);
   if (argc == 3) {
     printf("running on input file %s\n", argv[1]);
   }
@@ -106,11 +103,10 @@ int main(int argc, char **argv)
     printf("usage: $> srhdhist infile.h5 outfile.h5\n");
     goto done;
   }
-  char *finp = argv[1];
-  char *fout = argv[2];
-  int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
   printf("COW_HDF5_COLLECTIVE: %d\n", collective);
 
+  char *finp = argv[1];
+  char *fout = argv[2];
   cow_domain *domain = cow_domain_new();
   cow_domain_readsize(domain, finp, "prim/vx");
   cow_domain_setguard(domain, 2);
@@ -118,6 +114,8 @@ int main(int argc, char **argv)
   cow_domain_setchunk(domain, 1);
   cow_domain_setcollective(domain, collective);
   cow_domain_setalign(domain, 4*KILOBYTES, 4*MEGABYTES);
+
+  srand(cow_domain_getcartrank(domain));
 
   cow_dfield *vel = cow_dfield_new(domain, "prim");
   cow_dfield *rho = cow_dfield_new(domain, "prim");
@@ -141,15 +139,92 @@ int main(int argc, char **argv)
   make_hist(divV, take_elm0, fout, NULL);
   make_hist(rotV, take_mag3, fout, NULL);
 
-  cow_dfield_del(vel);
   cow_dfield_del(rho);
   cow_dfield_del(divV);
   cow_dfield_del(rotV);
+
+
+  relative_lorentz_factor(vel, 100);
+  cow_dfield_del(vel);
+
+
   cow_domain_del(domain);
 
  done:
-#if (COW_MPI)
-  MPI_Finalize();
-#endif
+  cow_finalize();
   return 0;
 }
+
+
+
+void lorentz_boost(double u[4], double x[4], double xp[4])
+{
+  double u2 = u[1]*u[1] + u[2]*u[2] + u[3]*u[3];
+  double gm = sqrt(1.0 + u2);
+  double L[4][4];
+  L[0][0] = gm;
+  L[0][1] = L[1][0] = -u[1];
+  L[0][2] = L[2][0] = -u[2];
+  L[0][3] = L[3][0] = -u[3];
+  for (int i=1; i<4; ++i) {
+    for (int j=1; j<4; ++j) {
+      L[i][j] = (gm - 1) * u[i]*u[j] / u2 + (i == j);
+    }
+  }
+  for (int i=0; i<4; ++i) {
+    xp[i] = 0.0;
+    for (int j=0; j<4; ++j) {
+      xp[i] += L[i][j] * x[j];
+    }
+  }
+}
+
+void relative_lorentz_factor(cow_dfield *vel, int N)
+{
+  double *x = (double*) malloc(N * 3 * sizeof(double));
+  double *v;
+
+  for (int n=0; n<N; ++n) {
+    x[3*n + 0] = (double) rand() / RAND_MAX;
+    x[3*n + 1] = (double) rand() / RAND_MAX;
+    x[3*n + 2] = (double) rand() / RAND_MAX;
+  }
+
+  cow_dfield_setsamplemode(vel, COW_SAMPLE_LINEAR);
+  cow_dfield_setsamplecoords(vel, x, N, 3);
+  free(x);
+
+  cow_dfield_sampleexecute(vel);
+  cow_dfield_getsamplecoords(vel, &x, NULL, NULL);
+  cow_dfield_getsampleresult(vel, &v, NULL, NULL);
+
+  for (int n=0; n<N/2; ++n) {
+    double *x1 = &x[6*n + 0];
+    double *x2 = &x[6*n + 3];
+    double *v1 = &v[6*n + 0];
+    double *v2 = &v[6*n + 3];
+    double g1 = 1.0 / sqrt(1.0 - (v1[0]*v1[0] + v1[1]*v1[1] + v1[2]*v1[2]));
+    double g2 = 1.0 / sqrt(1.0 - (v2[0]*v2[0] + v2[1]*v2[1] + v2[2]*v2[2]));
+    double umu1[4] = { g1, g1*v1[0], g1*v1[1], g1*v1[2] };
+    double umu2[4] = { g2, g2*v2[0], g2*v2[1], g2*v2[2] };
+    double xmu1[4] = { 0.0, x1[0], x1[1], x1[2] };
+    double xmu2[4] = { 0.0, x2[0], x2[1], x2[2] };
+    double xmu1p[4];
+    double xmu2p[4];
+    double xrel[4];
+    double urel[4];
+    lorentz_boost(umu1, xmu1, xmu1p);
+    lorentz_boost(umu1, xmu2, xmu2p);
+    lorentz_boost(umu1, umu2, urel);
+    xrel[0] = xmu2p[0] - xmu1p[0];
+    xrel[1] = xmu2p[1] - xmu1p[1];
+    xrel[2] = xmu2p[2] - xmu1p[2];
+    xrel[3] = xmu2p[3] - xmu1p[3];
+    printf("u: (%+f, %+f, %+f, %+f)\n", umu1[0], umu1[1], umu1[2], umu1[3]);
+    printf("1: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu1[0], xmu1[1], xmu1[2], xmu1[3],
+	   xmu1p[0], xmu1p[1], xmu1p[2], xmu1p[3]);
+    printf("2: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu2[0], xmu2[1], xmu2[2], xmu2[3],
+	   xmu2p[0], xmu2p[1], xmu2p[2], xmu2p[3]);
+  }
+}
+
