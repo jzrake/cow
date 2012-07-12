@@ -14,6 +14,8 @@
 #endif // COW_PRIVATE_DEFS
 
 
+#define COW_NOREOPEN_STDOUT   (2<<0)
+#define COW_DISABLE_MPI       (2<<1)
 #define COW_ALL_DIMS             -41
 #define COW_HIST_SPACING_LINEAR  -42
 #define COW_HIST_SPACING_LOG     -43
@@ -37,6 +39,7 @@ typedef struct cow_dfield cow_dfield;
 typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
+
 void cow_init(void);
 void cow_finalize(void);
 
