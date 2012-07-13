@@ -161,7 +161,7 @@ int main(int argc, char **argv)
     cow_histogram_setlower(histlab, 0, 0.1);
     cow_histogram_setupper(histlab, 0, 1.5);
     cow_histogram_setnbins(histlab, 0, 500);
-    cow_histogram_setbinmode(histlab, COW_HIST_BINMODE_COUNTS);//AVERAGE);
+    cow_histogram_setbinmode(histlab, COW_HIST_BINMODE_AVERAGE);
     cow_histogram_setnickname(histlab, "gamma-rel-drlab-hist");
     cow_histogram_commit(histlab);
 
