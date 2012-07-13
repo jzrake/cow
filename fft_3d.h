@@ -39,16 +39,6 @@ struct fft_plan_3d {
   int scaled;                       /* whether to scale FFT results */
   int normnum;                      /* # of values to rescale */
   double norm;                      /* normalization factor for rescaling */
-                                    /* system specific 1d FFT info */
-  int nfast;
-  int nmid;
-  int nslow;
-  fftw_plan plan_fast_forward;
-  fftw_plan plan_fast_backward;
-  fftw_plan plan_mid_forward;
-  fftw_plan plan_mid_backward;
-  fftw_plan plan_slow_forward;
-  fftw_plan plan_slow_backward;
 };
 
 /* function prototypes */

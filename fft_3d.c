@@ -59,40 +59,6 @@
 
 void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
 {
-  int nfast = plan->nfast;
-  int nmid = plan->nmid;
-  int nslow = plan->nslow;
-
-  plan->plan_fast_forward =
-    fftw_plan_dft_1d(nfast, in, out, FFTW_FORWARD,FFTW_ESTIMATE);
-  plan->plan_fast_backward =
-    fftw_plan_dft_1d(nfast, in, out, FFTW_BACKWARD,FFTW_ESTIMATE);
-
-  if (nmid == nfast) {
-    plan->plan_mid_forward = plan->plan_fast_forward;
-    plan->plan_mid_backward = plan->plan_fast_backward;
-  }
-  else {
-    plan->plan_mid_forward =
-      fftw_plan_dft_1d(nmid, in, out, FFTW_FORWARD,FFTW_ESTIMATE);
-    plan->plan_mid_backward =
-      fftw_plan_dft_1d(nmid, in, out, FFTW_BACKWARD,FFTW_ESTIMATE);
-  }
-  if (nslow == nfast) {
-    plan->plan_slow_forward = plan->plan_fast_forward;
-    plan->plan_slow_backward = plan->plan_fast_backward;
-  }
-  else if (nslow == nmid) {
-    plan->plan_slow_forward = plan->plan_mid_forward;
-    plan->plan_slow_backward = plan->plan_mid_backward;
-  }
-  else {
-    plan->plan_slow_forward =
-      fftw_plan_dft_1d(nslow, in, out, FFTW_FORWARD,FFTW_ESTIMATE);
-    plan->plan_slow_backward =
-      fftw_plan_dft_1d(nslow, in, out, FFTW_BACKWARD,FFTW_ESTIMATE);
-  }
-
   int i,total,length,num;
   double norm;
   FFT_DATA *data,*copy;
@@ -144,7 +110,7 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
 					   1, length,
 					   sign, FFTW_ESTIMATE);
     fftw_execute(fftplan);
-    fftw_destroy_plan(plan);
+    fftw_destroy_plan(fftplan);
   }
   /* 1st mid-remap to prepare for 2nd FFTs
      copy = loc for remap result */
@@ -172,7 +138,7 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
 					   1, length,
 					   sign, FFTW_ESTIMATE);
     fftw_execute(fftplan);
-    fftw_destroy_plan(plan);
+    fftw_destroy_plan(fftplan);
   }
   /* 2nd mid-remap to prepare for 3rd FFTs
      copy = loc for remap result */
@@ -199,7 +165,7 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
 					   1, length,
 					   sign, FFTW_ESTIMATE);
     fftw_execute(fftplan);
-    fftw_destroy_plan(plan);
+    fftw_destroy_plan(fftplan);
   }
 
 
@@ -476,9 +442,6 @@ struct fft_plan_3d *fft_3d_create_plan
     plan->normnum = (out_ihi-out_ilo+1) * (out_jhi-out_jlo+1) *
       (out_khi-out_klo+1);
   }
-  plan->nfast = nfast;
-  plan->nmid = nmid;
-  plan->nslow = nslow;
   return plan;
 }
 
@@ -486,27 +449,6 @@ struct fft_plan_3d *fft_3d_create_plan
 
 void fft_3d_destroy_plan(struct fft_plan_3d *plan)
 {
-#warning("remove destroy's here")
-  if (plan->pre_plan) remap_3d_destroy_plan(plan->pre_plan);
-  if (plan->mid1_plan) remap_3d_destroy_plan(plan->mid1_plan);
-  if (plan->mid2_plan) remap_3d_destroy_plan(plan->mid2_plan);
-  if (plan->post_plan) remap_3d_destroy_plan(plan->post_plan);
-
-  if (plan->copy) free(plan->copy);
-  if (plan->scratch) free(plan->scratch);
-
-  if (plan->plan_slow_forward != plan->plan_mid_forward &&
-      plan->plan_slow_forward != plan->plan_fast_forward) {
-    fftw_destroy_plan(plan->plan_slow_forward);
-    fftw_destroy_plan(plan->plan_slow_backward);
-  }
-  if (plan->plan_mid_forward != plan->plan_fast_forward) {
-    fftw_destroy_plan(plan->plan_mid_forward);
-    fftw_destroy_plan(plan->plan_mid_backward);
-  }
-  fftw_destroy_plan(plan->plan_fast_forward);
-  fftw_destroy_plan(plan->plan_fast_backward);
-
   free(plan);
 }
 
