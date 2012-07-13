@@ -208,6 +208,7 @@ void cow_domain_commit(cow_domain *d)
       d->G_strt[i] = 0;
       d->loc_lower[i] = d->glb_lower[i];
       d->loc_upper[i] = d->glb_upper[i];
+      d->dx[i] = (d->glb_upper[i] - d->glb_lower[i]) / d->G_ntot[i];
     }
 #if (COW_MPI)
   }

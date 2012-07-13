@@ -161,11 +161,11 @@ int main(int argc, char **argv)
     cow_histogram_setlower(histlab, 0, 0.1);
     cow_histogram_setupper(histlab, 0, 1.5);
     cow_histogram_setnbins(histlab, 0, 500);
-    cow_histogram_setbinmode(histlab, COW_HIST_BINMODE_AVERAGE);
+    cow_histogram_setbinmode(histlab, COW_HIST_BINMODE_COUNTS);//AVERAGE);
     cow_histogram_setnickname(histlab, "gamma-rel-drlab-hist");
     cow_histogram_commit(histlab);
 
-    int nbatch = 5000;
+    int nbatch = 100;
     for (int n=0; n<nbatch; ++n) {
       relative_lorentz_factor(vel, histlab, 10000, 'l');
       relative_lorentz_factor(vel, histpro, 10000, 'p');
@@ -269,38 +269,3 @@ void relative_lorentz_factor(cow_dfield *vel, cow_histogram *hist, int N,
     }
   }
 }
-
-
-/*
-  if (drprop > sqrt(3)) {
-  printf("drprop/sqrt(3)=%f\n", drprop/sqrt(3));
-  printf("r1=%f %f %f\n", x1[0], x1[1], x1[2]);
-  printf("r2=%f %f %f\n", x2[0], x2[1], x2[2]);
-  }
-*/
-
-
-
-/*
-
-  double v1v1 = v1[0]*v1[0] + v1[1]*v1[1] + v1[2]*v1[2];
-  double v2v2 = v2[0]*v2[0] + v2[1]*v2[1] + v2[2]*v2[2];
-  double v1v2 = v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2];
-  printf("--------------------------------------------------\n");
-  printf("v1=%f %f %f\n", v1[0], v1[1], v1[2]);
-  printf("v2=%f %f %f\n", v2[0], v2[1], v2[2]);
-  printf("g1,g2,grel=%f %f %f\n", g1, g2, gammarel);
-  printf("v1.v2=%f\n", v1v2);
-  printf("theta=%f\n", acos(v1v2/sqrt(v1v1*v2v2)));
-  if (v1v2 < 0) {
-  printf("GOT NEGATIVE ONE: %f\n", v1v2);
-  exit(2);
-  }
-*/
-/*
-  printf("u: (%+f, %+f, %+f, %+f)\n", umu1[0], umu1[1], umu1[2], umu1[3]);
-  printf("1: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu1[0], xmu1[1], xmu1[2], xmu1[3],
-  xmu1p[0], xmu1p[1], xmu1p[2], xmu1p[3]);
-  printf("2: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu2[0], xmu2[1], xmu2[2], xmu2[3],
-  xmu2p[0], xmu2p[1], xmu2p[2], xmu2p[3]);
-*/
