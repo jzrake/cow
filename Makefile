@@ -1,29 +1,23 @@
 
 CC           ?= mpicc
-CXX          ?= mpicxx
 COW_HDF5     ?= 0
 COW_MPI      ?= 0
 COW_HDF5_MPI ?= 0
 COW_FFTW     ?= 0
 CFLAGS       ?= -Wall -g -O0
-HDF5_HOME    ?= /usr/local
-FFTW_HOME    ?= /usr/local
-
-ifeq ($(COW_HDF5), 1)
-INC += -I$(HDF5_HOME)/include
-LIB += -L$(HDF5_HOME)/lib -lz -lhdf5
-endif
-
-ifeq ($(COW_FFTW), 1)
-INC += -I$(FFTW_HOME)/include
-LIB += -L$(FFTW_HOME)/lib -lfftw
-endif
+FFTW_INC     ?= 
+FFTW_LIB     ?= 
+HDF5_INC     ?= 
+HDF5_LIB     ?= 
 
 DEFINES = \
 	-DCOW_MPI=$(COW_MPI) \
 	-DCOW_HDF5=$(COW_HDF5) \
 	-DCOW_HDF5_MPI=$(COW_HDF5_MPI) \
 	-DCOW_FFTW=$(COW_FFTW)
+
+LIB = $(HDF5_LIB) $(FFTW_LIB)
+INC = $(HDF5_INC) $(FFTW_INC)
 
 OBJ = cow.o hist.o io.o samp.o fft.o fft_3d.o pack_3d.o remap_3d.o factor.o
 EXE = main makehist milos mhdstats srhdhist testhist testfft testsamp
