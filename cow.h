@@ -40,7 +40,7 @@ typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
 
-void cow_init(void);
+void cow_init(int argc, char **argv, int modes);
 void cow_finalize(void);
 
 cow_domain *cow_domain_new();

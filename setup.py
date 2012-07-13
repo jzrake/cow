@@ -8,12 +8,9 @@ config = {
     'COW_HDF5_MPI': 0,
     'COW_FFTW': 0,
     'COW_MPI': 0,
-    'HDF5_HOME': '/usr',
-    'FFTW_HOME': '/usr',
-    'MPI_HOME': '/usr',
-    'HDF5_LIBS': ['hdf5', 'z'],
-    'FFTW_LIBS': ['fftw'],
-    'MPI_LIBS': [ ],
+    'include_dirs': [ ],
+    'library_dirs': [ ],
+    'libraries': [ ], # e.g. ['hdf5', 'z', 'fftw']
     'NPY_INC': np.get_include() }
 
 try:
@@ -22,17 +19,15 @@ try:
     print "Using system config"
 except:
     print "No system config, using default settings"
-
+config['include_dirs'] += [np.get_include()]
 
 cow_module = Extension \
 ('_cow',
  extra_compile_args=['-std=c99'],
  define_macros = [a for a in config.items() if a[0].startswith('COW')],
- include_dirs = [config[k] + '/include' for k in config
-                 if k.endswith('HOME')] + [config['NPY_INC']],
- library_dirs = [config[k] + '/lib' for k in config
-                 if k.endswith('HOME')],
- libraries = config['HDF5_LIBS'] + config['FFTW_LIBS'] + config['MPI_LIBS'],
+ include_dirs = config['include_dirs'],
+ library_dirs = config['library_dirs'],
+ libraries = config['libraries'],
  sources = ['cow.i',
             'cow.c',
             'io.c',

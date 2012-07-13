@@ -1,14 +1,24 @@
 
+import os
 import atexit
 import numpy as np
 from _cow import *
+
 
 def cow_exit():
     print "finalizing cow..."
     cow_finalize()
 
+KILOBYTES = 1 << 10
+MEGABYTES = 1 << 20
+modes = 0
+hdf5_collective = os.getenv("COW_HDF5_COLLECTIVE", 0)
+modes |= (COW_NOREOPEN_STDOUT if os.getenv("COW_NOREOPEN_STDOUT", 0) else 0)
+modes |= (COW_DISABLE_MPI if os.getenv("COW_DISABLE_MPI", 0) else 0)
+
 atexit.register(cow_exit)
-cow_init()
+cow_init(0, None, modes)
+
 
 class UnigridDatafield(object):
     def __init__(self, domain, members, name="dfield"):
@@ -62,6 +72,10 @@ class UnigridDomain(object):
         cow_domain_setndim(self._cdomain, self._nd)
         cow_domain_setguard(self._cdomain, guard)
         cow_domain_commit(self._cdomain)
+        # Set up the IO scheme
+        cow_domain_setchunk(self._cdomain, 1);
+        cow_domain_setcollective(self._cdomain, hdf5_collective);
+        cow_domain_setalign(self._cdomain, 4*KILOBYTES, 4*MEGABYTES);
 
     @property
     def rank(self):
