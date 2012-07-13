@@ -40,7 +40,7 @@ typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
 
-void cow_init(int arg, char **argv, int mode);
+void cow_init(int argc, char **argv, int modes);
 void cow_finalize(void);
 
 cow_domain *cow_domain_new();
@@ -62,7 +62,7 @@ int cow_domain_getnumglobalzones(cow_domain *d, int dim);
 int cow_domain_getglobalstartindex(cow_domain *d, int dim);
 int cow_domain_getgridspacing(cow_domain *d, int dim);
 int cow_domain_getcartrank(cow_domain *d);
-int cow_domain_subgridatposition(cow_domain *d, double *x);
+int cow_domain_subgridatposition(cow_domain *d, double x[3]);
 int cow_domain_indexatposition(cow_domain *d, int dim, double x);
 double cow_domain_positionatindex(cow_domain *d, int dim, int index);
 
@@ -88,9 +88,9 @@ void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
 void cow_dfield_sampleglobalpos(cow_dfield *f, double *xin, int N, double *xout,
 				double *P, int mode);
 void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double *P);
-void cow_dfield_setsamplecoords(cow_dfield *f, double *x, int ns, int nd);
-void cow_dfield_getsamplecoords(cow_dfield *f, double **x, int *ns, int *nd);
-void cow_dfield_getsampleresult(cow_dfield *f, double **P, int *ns, int *nd);
+void cow_dfield_setsamplecoords(cow_dfield *f, double *x, int n0, int n1);
+void cow_dfield_getsamplecoords(cow_dfield *f, double **x, int *n0, int *n1);
+void cow_dfield_getsampleresult(cow_dfield *f, double **x, int *n0, int *n1);
 void cow_dfield_setsamplemode(cow_dfield *f, int mode);
 void cow_dfield_sampleexecute(cow_dfield *f);
 int cow_dfield_getownsdata(cow_dfield *f);
