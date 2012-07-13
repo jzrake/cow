@@ -112,10 +112,6 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
   else
     data = in;
 
-  /* 1d FFTs along fast axis */
-
-  total = plan->total1;
-  length = plan->length1;
 
   // ---------------------------------------------------------------------------
   //  fftw(plan->plan_fast_forward,total/length,data,1,length,NULL,0,0);
@@ -132,32 +128,26 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
   // *in FFTW3?
   // answer: fftw_plan_many_dft
 
-  plan->plan_fast_forward =
-    fftw_plan_dft_1d(nfast, data, data, FFTW_FORWARD, FFTW_ESTIMATE);
-  plan->plan_fast_backward =
-    fftw_plan_dft_1d(nfast, data, data, FFTW_BACKWARD, FFTW_ESTIMATE);
 
-  int sign = flag == -1 ? FFTW_FORWARD : FFTW_BACKWARD;
-  int N = length;
-  fftw_plan fftplan = fftw_plan_many_dft(1, &N, total/length,
-					 data, NULL,
-					 1, length,
-					 data, NULL,
-					 1, length,
-					 sign, FFTW_ESTIMATE);
-  fftw_execute(fftplan);
-  fftw_destroy_plan(plan);
+
+  // 1d FFTs along mid axis
   // ---------------------------------------------------------------------------
-#ifdef FFT_FFTW
-  if (flag == -1)
-    fftw(plan->plan_fast_forward,total/length,data,1,length,NULL,0,0);
-  else
-    fftw(plan->plan_fast_backward,total/length,data,1,length,NULL,0,0);
-#endif
-
+  total = plan->total1;
+  length = plan->length1;
+  {
+    int sign = flag == -1 ? FFTW_FORWARD : FFTW_BACKWARD;
+    int N = length;
+    fftw_plan fftplan = fftw_plan_many_dft(1, &N, total/length,
+					   data, NULL,
+					   1, length,
+					   data, NULL,
+					   1, length,
+					   sign, FFTW_ESTIMATE);
+    fftw_execute(fftplan);
+    fftw_destroy_plan(plan);
+  }
   /* 1st mid-remap to prepare for 2nd FFTs
      copy = loc for remap result */
-
   if (plan->mid1_target == 0)
     copy = out;
   else
@@ -166,31 +156,26 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
            plan->mid1_plan);
   data = copy;
 
-  /* 1d FFTs along mid axis */
 
+
+  // 1d FFTs along mid axis
+  // ---------------------------------------------------------------------------
   total = plan->total2;
   length = plan->length2;
-
-  int sign = flag == -1 ? FFTW_FORWARD : FFTW_BACKWARD;
-  int N = length;
-  fftw_plan fftplan = fftw_plan_many_dft(1, &N, total/length,
-					 data, NULL,
-					 1, length,
-					 data, NULL,
-					 1, length,
-					 sign, FFTW_ESTIMATE);
-  fftw_execute(fftplan);
-  fftw_destroy_plan(plan);
-#ifdef FFT_FFTW
-  if (flag == -1)
-    fftw(plan->plan_mid_forward,total/length,data,1,length,NULL,0,0);
-  else
-    fftw(plan->plan_mid_backward,total/length,data,1,length,NULL,0,0);
-#endif
-
+  {
+    int sign = flag == -1 ? FFTW_FORWARD : FFTW_BACKWARD;
+    int N = length;
+    fftw_plan fftplan = fftw_plan_many_dft(1, &N, total/length,
+					   data, NULL,
+					   1, length,
+					   data, NULL,
+					   1, length,
+					   sign, FFTW_ESTIMATE);
+    fftw_execute(fftplan);
+    fftw_destroy_plan(plan);
+  }
   /* 2nd mid-remap to prepare for 3rd FFTs
      copy = loc for remap result */
-
   if (plan->mid2_target == 0)
     copy = out;
   else
@@ -199,17 +184,24 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
            plan->mid2_plan);
   data = copy;
 
-  /* 1d FFTs along slow axis */
 
+  // 1d FFTs along slow axis
+  // ---------------------------------------------------------------------------
   total = plan->total3;
   length = plan->length3;
+  {
+    int sign = flag == -1 ? FFTW_FORWARD : FFTW_BACKWARD;
+    int N = length;
+    fftw_plan fftplan = fftw_plan_many_dft(1, &N, total/length,
+					   data, NULL,
+					   1, length,
+					   data, NULL,
+					   1, length,
+					   sign, FFTW_ESTIMATE);
+    fftw_execute(fftplan);
+    fftw_destroy_plan(plan);
+  }
 
-#ifdef FFT_FFTW
-  if (flag == -1)
-    fftw(plan->plan_slow_forward,total/length,data,1,length,NULL,0,0);
-  else
-    fftw(plan->plan_slow_backward,total/length,data,1,length,NULL,0,0);
-#endif
 
   /* post-remap to put data in output format if needed
      destination is always out */
