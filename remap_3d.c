@@ -12,7 +12,7 @@
    See the README file in the top-level directory of the distribution.
 */
 
-#if (COW_FFTW && COW_MPI)
+#if (COW_MPI)
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
@@ -519,4 +519,4 @@ int remap_3d_collide(struct extent_3d *block1, struct extent_3d *block2,
 
 #else
 void __remap_3d_stub() { }
-#endif // (COW_FFTW && COW_MPI)
+#endif // (COW_MPI)
