@@ -7,6 +7,7 @@
 #endif
 #define KILOBYTES (1<<10)
 #define MEGABYTES (1<<20)
+#define PI (4*atan(1))
 #define GETENVINT(a,dflt) (getenv(a) ? atoi(getenv(a)) : dflt)
 #define GETENVDBL(a,dflt) (getenv(a) ? atof(getenv(a)) : dflt)
 
@@ -84,7 +85,7 @@ static void take_sqr3(double *result, double **args, int **s, void *u)
 static void magEtrans(double *result, double **args, int **s, void *u)
 {
   double *B = args[0];
-  *result = (B[0]*B[0] + B[1]*B[1] + B[2]*B[2]) / (8*M_PI);
+  *result = (B[0]*B[0] + B[1]*B[1] + B[2]*B[2]) / (8*PI);
 }
 static void kinEtrans(double *result, double **args, int **s, void *u)
 {
@@ -136,28 +137,25 @@ void make_hist(cow_dfield *f, cow_transform op, const char *fout, const char *m)
 
 int main(int argc, char **argv)
 {
-#if (COW_MPI)
-  {
-    int rank;
-    MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-    if (rank != 0) freopen("/dev/null", "w", stdout);
-    printf("was compiled with MPI support\n");
-  }
-#endif
 
+  int modes = 0;
+  int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
+  modes |= GETENVINT("COW_NOREOPEN_STDOUT", 0) ? COW_NOREOPEN_STDOUT : 0;
+  modes |= GETENVINT("COW_DISABLE_MPI", 0) ? COW_DISABLE_MPI : 0;
+
+  cow_init(argc, argv, modes);
   if (argc == 3) {
     printf("running on input file %s\n", argv[1]);
   }
   else {
     printf("usage: $> mhdstats infile.h5 outfile.h5\n");
-    goto done;
+    cow_finalize();
+    return 0;
   }
-  char *finp = argv[1];
-  char *fout = argv[2];
-  int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
   printf("COW_HDF5_COLLECTIVE: %d\n", collective);
 
+  char *finp = argv[1];
+  char *fout = argv[2];
   int derivfields = 0;
   int energies = 1;
 
@@ -262,9 +260,6 @@ int main(int argc, char **argv)
   cow_dfield_del(mag);
   cow_domain_del(domain);
 
- done:
-#if (COW_MPI)
-  MPI_Finalize();
-#endif
+  cow_finalize();
   return 0;
 }

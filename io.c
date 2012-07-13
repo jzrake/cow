@@ -330,7 +330,7 @@ int _io_check_file_exists(const char *fname)
 {
   FILE *testf = fopen(fname, "r");
   if (testf == NULL) {
-    printf("[%s] error: file does not exist: %s\n", MODULE, fname);
+    printf("[%s] error: file does not exist %s\n", MODULE, fname);
     return 1;
   }
   else {
