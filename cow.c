@@ -40,7 +40,7 @@ void cow_init(void)
   char *argv_[1] = {"cow"};
   char **argv = &argv_[0];
   MPI_Initialized(&mpi_started);
-  if (mpi_started) {
+  if (!mpi_started) {
     MPI_Init(&argc, &argv);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     if (rank != 0) freopen("/dev/null", "w", stdout);
