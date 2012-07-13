@@ -433,6 +433,14 @@ struct fft_plan_3d *fft_3d_create_plan
 
 void fft_3d_destroy_plan(struct fft_plan_3d *plan)
 {
+  if (plan->pre_plan) remap_3d_destroy_plan(plan->pre_plan);
+  if (plan->mid1_plan) remap_3d_destroy_plan(plan->mid1_plan);
+  if (plan->mid2_plan) remap_3d_destroy_plan(plan->mid2_plan);
+  if (plan->post_plan) remap_3d_destroy_plan(plan->post_plan);
+
+  if (plan->copy) free(plan->copy);
+  if (plan->scratch) free(plan->scratch);
+
   free(plan);
 }
 
