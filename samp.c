@@ -208,11 +208,11 @@ void _sample3(cow_dfield *f, double *x, double *P, int mode)
 void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
           int mode)
 {
+  int Q = f->n_members;
 #if (COW_MPI)
   int rank = f->domain->cart_rank;
   int size = f->domain->cart_size;
   int Nd = f->domain->n_dims;
-  int Q = f->n_members;
   double *gx0 = f->domain->glb_lower;
   double *gx1 = f->domain->glb_upper;
   double Lx = (Nd>=1) ? gx1[0] - gx0[0] : 0.0;
@@ -323,11 +323,12 @@ void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
   free(remote_r1_size);
   free(remote_P1_size);
 #else
+  memcpy(Ro, Ri, Nsamp * 3 * sizeof(double));
   for (int n=0; n<Nsamp; ++n) {
     switch (f->domain->n_dims) {
-    case 1: _sample1(f, &Ri[3*n + 0], &Po[3*n + 0], mode); break;
-    case 2: _sample2(f, &Ri[3*n + 1], &Po[3*n + 1], mode); break;
-    case 3: _sample3(f, &Ri[3*n + 2], &Po[3*n + 2], mode); break;
+    case 1: _sample1(f, &Ri[3*n], &Po[Q*n], mode); break;
+    case 2: _sample2(f, &Ri[3*n], &Po[Q*n], mode); break;
+    case 3: _sample3(f, &Ri[3*n], &Po[Q*n], mode); break;
     default: break;
     }
   }
