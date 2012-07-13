@@ -86,12 +86,12 @@ void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
   FFT_DATA *fz = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
   printf("[%s] need to allocate %d zones\n", MODULE, nbuf);
   for (int i=0; i<nbuf; ++i) {
-    fx[i].re = input[3*i + 0];
-    fy[i].re = input[3*i + 1];
-    fz[i].re = input[3*i + 2];
-    fx[i].im = 0.0;
-    fy[i].im = 0.0;
-    fz[i].im = 0.0;
+    fx[i][0] = input[3*i + 0];
+    fy[i][0] = input[3*i + 1];
+    fz[i][0] = input[3*i + 2];
+    fx[i][1] = 0.0;
+    fy[i][1] = 0.0;
+    fz[i][1] = 0.0;
   }
   free(input);
   FFT_DATA *gx = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
@@ -172,12 +172,12 @@ void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
   FFT_DATA *fz = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
   printf("[%s] need to allocate %d zones\n", MODULE, nbuf);
   for (int i=0; i<nbuf; ++i) {
-    fx[i].re = input[3*i + 0];
-    fy[i].re = input[3*i + 1];
-    fz[i].re = input[3*i + 2];
-    fx[i].im = 0.0;
-    fy[i].im = 0.0;
-    fz[i].im = 0.0;
+    fx[i][0] = input[3*i + 0];
+    fy[i][0] = input[3*i + 1];
+    fz[i][0] = input[3*i + 2];
+    fx[i][1] = 0.0;
+    fy[i][1] = 0.0;
+    fz[i][1] = 0.0;
   }
   free(input);
 
@@ -201,24 +201,24 @@ void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
         FFT_DATA gdotk;
         double khat[3];
         khat_at(f->domain, i, j, k, khat);
-        gdotk.re = gx[m].re * khat[0] + gy[m].re * khat[1] + gz[m].re * khat[2];
-        gdotk.im = gx[m].im * khat[0] + gy[m].im * khat[1] + gz[m].im * khat[2];
+        gdotk[0] = gx[m][0] * khat[0] + gy[m][0] * khat[1] + gz[m][0] * khat[2];
+        gdotk[1] = gx[m][1] * khat[0] + gy[m][1] * khat[1] + gz[m][1] * khat[2];
 	switch (mode) {
 	case COW_PROJECT_OUT_DIV:
-	  gx_p[m].re = gx[m].re - gdotk.re * khat[0];
-	  gx_p[m].im = gx[m].im - gdotk.im * khat[0];
-	  gy_p[m].re = gy[m].re - gdotk.re * khat[1];
-	  gy_p[m].im = gy[m].im - gdotk.im * khat[1];
-	  gz_p[m].re = gz[m].re - gdotk.re * khat[2];
-	  gz_p[m].im = gz[m].im - gdotk.im * khat[2];
+	  gx_p[m][0] = gx[m][0] - gdotk[0] * khat[0];
+	  gx_p[m][1] = gx[m][1] - gdotk[1] * khat[0];
+	  gy_p[m][0] = gy[m][0] - gdotk[0] * khat[1];
+	  gy_p[m][1] = gy[m][1] - gdotk[1] * khat[1];
+	  gz_p[m][0] = gz[m][0] - gdotk[0] * khat[2];
+	  gz_p[m][1] = gz[m][1] - gdotk[1] * khat[2];
 	  break;
 	case COW_PROJECT_OUT_CURL:
-	  gx_p[m].re = gdotk.re * khat[0];
-	  gx_p[m].im = gdotk.im * khat[0];
-	  gy_p[m].re = gdotk.re * khat[1];
-	  gy_p[m].im = gdotk.im * khat[1];
-	  gz_p[m].re = gdotk.re * khat[2];
-	  gz_p[m].im = gdotk.im * khat[2];
+	  gx_p[m][0] = gdotk[0] * khat[0];
+	  gx_p[m][1] = gdotk[1] * khat[0];
+	  gy_p[m][0] = gdotk[0] * khat[1];
+	  gy_p[m][1] = gdotk[1] * khat[1];
+	  gz_p[m][0] = gdotk[0] * khat[2];
+	  gz_p[m][1] = gdotk[1] * khat[2];
 	  break;
 	default: break;
 	}
@@ -241,9 +241,9 @@ void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
 
   double *res = (double*) malloc(3 * nbuf * sizeof(double));
   for (int i=0; i<nbuf; ++i) {
-    res[3*i + 0] = fx_p[i].re;
-    res[3*i + 1] = fy_p[i].re;
-    res[3*i + 2] = fz_p[i].re;
+    res[3*i + 0] = fx_p[i][0];
+    res[3*i + 1] = fy_p[i][0];
+    res[3*i + 2] = fz_p[i][0];
   }
   free(fx_p);
   free(fy_p);
@@ -321,6 +321,6 @@ double khat_at(cow_domain *d, int i, int j, int k, double *khat)
 double cnorm(FFT_DATA z)
 // http://www.cplusplus.com/reference/std/complex/norm
 {
-  return z.re*z.re + z.im*z.im;
+  return z[0]*z[0] + z[1]*z[1];
 }
 #endif

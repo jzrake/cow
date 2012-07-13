@@ -7,7 +7,7 @@
 #include "cow.h"
 
 void test_trans(double *result, double **args, int **strides,
-		void *udata)
+                void *udata)
 {
   printf("in test_trans\n");
 }
@@ -66,6 +66,14 @@ void cow_finalize(void)
   }
 #endif
 }
+int cow_mpirunning(void)
+{
+  int mpi_started = 0;
+#if (COW_MPI)
+  MPI_Initialized(&mpi_started);
+#endif
+  return mpi_started;
+}
 
 // -----------------------------------------------------------------------------
 //
@@ -101,8 +109,10 @@ struct cow_domain *cow_domain_new()
 void cow_domain_del(cow_domain *d)
 {
 #if (COW_MPI)
-  MPI_Comm_free(&d->mpi_cart);
-  _domain_freetags(d);
+  if (cow_mpirunning()) {
+    MPI_Comm_free(&d->mpi_cart);
+    _domain_freetags(d);
+  }
 #endif
 #if (COW_HDF5)
   _io_domain_del(d);
@@ -143,57 +153,64 @@ void cow_domain_commit(cow_domain *d)
 {
   if (d->committed) return;
 #if (COW_MPI)
-  int w[3] = { 1, 1, 1 }; // 'wrap', periodic in all directions
-  int r = 1; // 'reorder' allow MPI to choose a cart_rank != comm_rank
+  if (cow_mpirunning()) {
+    int w[3] = { 1, 1, 1 }; // 'wrap', periodic in all directions
+    int r = 1; // 'reorder' allow MPI to choose a cart_rank != comm_rank
 
-  MPI_Comm_rank(MPI_COMM_WORLD, &d->comm_rank);
-  MPI_Comm_size(MPI_COMM_WORLD, &d->comm_size);
-  MPI_Dims_create(d->comm_size, d->n_dims, d->proc_sizes);
-  MPI_Cart_create(MPI_COMM_WORLD, d->n_dims, d->proc_sizes, w, r, &d->mpi_cart);
-  MPI_Comm_rank(d->mpi_cart, &d->cart_rank);
-  MPI_Comm_size(d->mpi_cart, &d->cart_size);
-  MPI_Cart_coords(d->mpi_cart, d->cart_rank, d->n_dims, d->proc_index);
+    MPI_Comm_rank(MPI_COMM_WORLD, &d->comm_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &d->comm_size);
+    MPI_Dims_create(d->comm_size, d->n_dims, d->proc_sizes);
+    MPI_Cart_create(MPI_COMM_WORLD, d->n_dims, d->proc_sizes, w, r,
+                    &d->mpi_cart);
+    MPI_Comm_rank(d->mpi_cart, &d->cart_rank);
+    MPI_Comm_size(d->mpi_cart, &d->cart_size);
+    MPI_Cart_coords(d->mpi_cart, d->cart_rank, d->n_dims, d->proc_index);
 
-  for (int i=0; i<d->n_dims; ++i) {
-    // -------------------------------------------------------------------------
-    // The number of subgrid zones for dimension i needs to be non-uniform if
-    // proc_sizes[i] does not divide the G_ntot[i]. For each dimension, we add a
-    // zone to the first R subgrids , where R is given below:
-    // -------------------------------------------------------------------------
-    const int R = d->G_ntot[i] % d->proc_sizes[i];
-    const int normal_size = d->G_ntot[i] / d->proc_sizes[i];
-    const int augmnt_size = normal_size + 1;
-    const int thisdm_size = (d->proc_index[i]<R) ? augmnt_size : normal_size;
-    const double dx = (d->glb_upper[i] - d->glb_lower[i]) / d->G_ntot[i];
+    for (int i=0; i<d->n_dims; ++i) {
+      // -----------------------------------------------------------------------
+      // The number of subgrid zones for dimension i needs to be non-uniform if
+      // proc_sizes[i] does not divide the G_ntot[i]. For each dimension, we add
+      // a zone to the first R subgrids , where R is given below:
+      // -----------------------------------------------------------------------
+      const int R = d->G_ntot[i] % d->proc_sizes[i];
+      const int normal_size = d->G_ntot[i] / d->proc_sizes[i];
+      const int augmnt_size = normal_size + 1;
+      const int thisdm_size = (d->proc_index[i]<R) ? augmnt_size : normal_size;
+      const double dx = (d->glb_upper[i] - d->glb_lower[i]) / d->G_ntot[i];
 
-    d->dx[i] = dx;
-    if (R != 0) d->balanced = 0;
+      d->dx[i] = dx;
+      if (R != 0) d->balanced = 0;
 
-    d->L_nint[i] = thisdm_size;
-    d->G_strt[i] = 0;
-    for (int j=0; j<d->proc_index[i]; ++j) {
-      d->G_strt[i] += (j<R) ? augmnt_size : normal_size;
+      d->L_nint[i] = thisdm_size;
+      d->G_strt[i] = 0;
+      for (int j=0; j<d->proc_index[i]; ++j) {
+        d->G_strt[i] += (j<R) ? augmnt_size : normal_size;
+      }
+      d->loc_lower[i] = d->glb_lower[i] + dx *  d->G_strt[i];
+      d->loc_upper[i] = d->glb_upper[i] + dx * (d->G_strt[i] + thisdm_size);
+      d->L_ntot[i] = d->L_nint[i] + 2 * d->n_ghst;
+      d->L_strt[i] = d->n_ghst;
     }
-    d->loc_lower[i] = d->glb_lower[i] + dx *  d->G_strt[i];
-    d->loc_upper[i] = d->glb_upper[i] + dx * (d->G_strt[i] + thisdm_size);
-    d->L_ntot[i] = d->L_nint[i] + 2 * d->n_ghst;
-    d->L_strt[i] = d->n_ghst;
+    switch (d->n_dims) {
+    case 1: _domain_maketags1d(d); break;
+    case 2: _domain_maketags2d(d); break;
+    case 3: _domain_maketags3d(d); break;
+    }
+    printf("[cow] subgrid layout is (%d %d %d)\n",
+           d->proc_sizes[0], d->proc_sizes[1], d->proc_sizes[2]);
   }
-  switch (d->n_dims) {
-  case 1: _domain_maketags1d(d); break;
-  case 2: _domain_maketags2d(d); break;
-  case 3: _domain_maketags3d(d); break;
-  }
-  printf("[cow] subgrid layout is (%d %d %d)\n",
-         d->proc_sizes[0], d->proc_sizes[1], d->proc_sizes[2]);
-#else
-  for (int i=0; i<d->n_dims; ++i) {
-    d->L_nint[i] = d->G_ntot[i];
-    d->L_ntot[i] = d->G_ntot[i] + 2 * d->n_ghst;
-    d->L_strt[i] = d->n_ghst;
-    d->G_strt[i] = 0;
-    d->loc_lower[i] = d->glb_lower[i];
-    d->loc_upper[i] = d->glb_upper[i];
+  else {
+#endif
+    for (int i=0; i<d->n_dims; ++i) {
+      d->L_nint[i] = d->G_ntot[i];
+      d->L_ntot[i] = d->G_ntot[i] + 2 * d->n_ghst;
+      d->L_strt[i] = d->n_ghst;
+      d->G_strt[i] = 0;
+      d->loc_lower[i] = d->glb_lower[i];
+      d->loc_upper[i] = d->glb_upper[i];
+      d->dx[i] = (d->glb_upper[i] - d->glb_lower[i]) / d->G_ntot[i];
+    }
+#if (COW_MPI)
   }
 #endif
 #if (COW_HDF5)
@@ -443,10 +460,12 @@ void cow_dfield_commit(cow_dfield *f)
 {
   if (f->committed) return;
 #if (COW_MPI)
-  switch (f->domain->n_dims) {
-  case 1: _dfield_maketype1d(f); break;
-  case 2: _dfield_maketype2d(f); break;
-  case 3: _dfield_maketype3d(f); break;
+  if (cow_mpirunning()) {
+    switch (f->domain->n_dims) {
+    case 1: _dfield_maketype1d(f); break;
+    case 2: _dfield_maketype2d(f); break;
+    case 3: _dfield_maketype3d(f); break;
+    }
   }
 #endif
   // ---------------------------------------------------------------------------
@@ -483,74 +502,77 @@ void cow_dfield_commit(cow_dfield *f)
 }
 void cow_dfield_syncguard(cow_dfield *f)
 {
-#if (COW_MPI)
   if (f->domain->n_ghst == 0) return;
-  cow_domain *d = f->domain;
-  int N = d->num_neighbors;
-  MPI_Request *requests = (MPI_Request*) malloc(2*N*sizeof(MPI_Request));
-  MPI_Status *statuses = (MPI_Status*) malloc(2*N*sizeof(MPI_Status));
-  for (int n=0; n<N; ++n) {
-    MPI_Request req1, req2;
-    int st = d->send_tags[n];
-    int rt = d->recv_tags[n];
-    int nr = d->neighbors[n];
-    MPI_Isend(f->data, 1, f->send_type[n], nr, st, d->mpi_cart, &req1);
-    MPI_Irecv(f->data, 1, f->recv_type[n], nr, rt, d->mpi_cart, &req2);
-    requests[2*n+0] = req1;
-    requests[2*n+1] = req2;
-  }
-  MPI_Waitall(2*N, requests, statuses);
-  free(requests);
-  free(statuses);
-#else
-  double *data = (double*) f->data;
-  int *nint = f->domain->L_nint;
-  int *ntot = f->domain->L_ntot;
-  int *s = f->stride;
-  int nq = f->n_members;
-  int ng = f->domain->n_ghst;
-  switch (f->domain->n_dims) {
-  case 1:
-    for (int i=0; i<ntot[0]; ++i) {
-      int m0 = i*s[0];
-      int m1 = i*s[0];
-      if (i <            ng) m0 += nint[0] * s[0];
-      if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
-      if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
+  if (cow_mpirunning()) {
+#if (COW_MPI)
+    cow_domain *d = f->domain;
+    int N = d->num_neighbors;
+    MPI_Request *requests = (MPI_Request*) malloc(2*N*sizeof(MPI_Request));
+    MPI_Status *statuses = (MPI_Status*) malloc(2*N*sizeof(MPI_Status));
+    for (int n=0; n<N; ++n) {
+      MPI_Request req1, req2;
+      int st = d->send_tags[n];
+      int rt = d->recv_tags[n];
+      int nr = d->neighbors[n];
+      MPI_Isend(f->data, 1, f->send_type[n], nr, st, d->mpi_cart, &req1);
+      MPI_Irecv(f->data, 1, f->recv_type[n], nr, rt, d->mpi_cart, &req2);
+      requests[2*n+0] = req1;
+      requests[2*n+1] = req2;
     }
-    break;
-  case 2:
-    for (int i=0; i<ntot[0]; ++i) {
-      for (int j=0; j<ntot[1]; ++j) {
-        int m0 = i*s[0] + j*s[1];
-        int m1 = i*s[0] + j*s[1];
+    MPI_Waitall(2*N, requests, statuses);
+    free(requests);
+    free(statuses);
+#endif
+  }
+  else {
+    double *data = (double*) f->data;
+    int *nint = f->domain->L_nint;
+    int *ntot = f->domain->L_ntot;
+    int *s = f->stride;
+    int nq = f->n_members;
+    int ng = f->domain->n_ghst;
+    switch (f->domain->n_dims) {
+    case 1:
+      for (int i=0; i<ntot[0]; ++i) {
+        int m0 = i*s[0];
+        int m1 = i*s[0];
         if (i <            ng) m0 += nint[0] * s[0];
         if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
-        if (j <            ng) m0 += nint[1] * s[1];
-        if (j >= nint[1] + ng) m0 -= nint[1] * s[1];
         if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
       }
-    }
-    break;
-  case 3:
-    for (int i=0; i<ntot[0]; ++i) {
-      for (int j=0; j<ntot[1]; ++j) {
-        for (int k=0; k<ntot[2]; ++k) {
-          int m0 = i*s[0] + j*s[1] + k*s[2];
-          int m1 = i*s[0] + j*s[1] + k*s[2];
+      break;
+    case 2:
+      for (int i=0; i<ntot[0]; ++i) {
+        for (int j=0; j<ntot[1]; ++j) {
+          int m0 = i*s[0] + j*s[1];
+          int m1 = i*s[0] + j*s[1];
           if (i <            ng) m0 += nint[0] * s[0];
           if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
           if (j <            ng) m0 += nint[1] * s[1];
           if (j >= nint[1] + ng) m0 -= nint[1] * s[1];
-          if (k <            ng) m0 += nint[2] * s[2];
-          if (k >= nint[2] + ng) m0 -= nint[2] * s[2];
           if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
         }
       }
+      break;
+    case 3:
+      for (int i=0; i<ntot[0]; ++i) {
+        for (int j=0; j<ntot[1]; ++j) {
+          for (int k=0; k<ntot[2]; ++k) {
+            int m0 = i*s[0] + j*s[1] + k*s[2];
+            int m1 = i*s[0] + j*s[1] + k*s[2];
+            if (i <            ng) m0 += nint[0] * s[0];
+            if (i >= nint[0] + ng) m0 -= nint[0] * s[0];
+            if (j <            ng) m0 += nint[1] * s[1];
+            if (j >= nint[1] + ng) m0 -= nint[1] * s[1];
+            if (k <            ng) m0 += nint[2] * s[2];
+            if (k >= nint[2] + ng) m0 -= nint[2] * s[2];
+            if (m0 != m1) memcpy(data + m1, data + m0, nq * sizeof(double));
+          }
+        }
+      }
+      break;
     }
-    break;
   }
-#endif
 }
 
 void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out)
@@ -645,6 +667,7 @@ void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result)
   result[2] = 0.0; // sum
   f->transform = op;
   cow_dfield_loop(f, _reduce, udata);
+  if (!cow_mpirunning()) return;
 #if (COW_MPI)
   cow_domain *d = f->domain;
   MPI_Allreduce(MPI_IN_PLACE, &result[0], 1, MPI_DOUBLE, MPI_MIN, d->mpi_cart);

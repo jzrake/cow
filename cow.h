@@ -21,7 +21,7 @@
 #define COW_HIST_SPACING_LOG     -43
 #define COW_HIST_BINMODE_COUNTS  -44 // traditional histogram
 #define COW_HIST_BINMODE_DENSITY -45 // divides by bin width
-#define COW_HIST_BINMODE_AVERAGE -46 // useful for e.g. power spectrum
+#define COW_HIST_BINMODE_AVERAGE -46
 #define COW_PROJECT_OUT_DIV      -47 // used for Helmholtz decomposition
 #define COW_PROJECT_OUT_CURL     -48
 #define COW_SAMPLE_NEAREST       -49 // sample the nearest zone center
@@ -42,6 +42,7 @@ typedef void (*cow_transform)(double *result, double **args, int **strides,
 
 void cow_init(int argc, char **argv, int modes);
 void cow_finalize(void);
+int cow_mpirunning(void);
 
 cow_domain *cow_domain_new();
 void cow_domain_commit(cow_domain *d);

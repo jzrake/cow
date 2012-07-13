@@ -18,110 +18,10 @@
 /* FFT_PRECISION = 2 is double-precision complex (8-byte real, 8-byte imag) */
 
 #define FFT_PRECISION 2
-#define FFT_FFTW
-/* ------------------------------------------------------------------------- */
+#define FFT_FFTW3
 
-/* Data types for single-precision complex */
-
-#if FFT_PRECISION == 1
-
-#ifdef FFT_SGI
-#include "fft.h"
-typedef complex FFT_DATA;
-#define FFT_1D cfft1d
-#define FFT_1D_INIT cfft1di
-#endif
-
-#ifdef FFT_INTEL
-typedef struct {
-  float re;
-  float im;
-} FFT_DATA;
-#define FFT_1D cfft1d_
-#define FFT_1D_INIT cfft1d_
-#endif
-
-#ifdef FFT_DEC
-typedef struct {
-  float re;
-  float im;
-} FFT_DATA;
-#define FFT_1D cfft_
-#endif
-
-#ifdef FFT_T3E
-#include <complex.h>
-typedef complex single FFT_DATA;
-#define FFT_1D GGFFT
-#define FFT_1D_INIT GGFFT
-#endif
-
-#ifdef FFT_FFTW
-#include "fftw.h"
-typedef FFTW_COMPLEX FFT_DATA;
-#endif
-
-#ifdef FFT_NONE
-typedef struct {
-  float re;
-  float im;
-} FFT_DATA;
-#endif
-
-#endif
-
-/* ------------------------------------------------------------------------- */
-
-/* Data types for double-precision complex */
-
-#if FFT_PRECISION == 2
-
-#ifdef FFT_SGI
-#include "fft.h"
-typedef zomplex FFT_DATA;
-#define FFT_1D zfft1d
-#define FFT_1D_INIT zfft1di
-#endif
-
-#ifdef FFT_INTEL
-typedef struct {
-  double re;
-  double im;
-} FFT_DATA;
-#define FFT_1D zfft1d_
-#define FFT_1D_INIT zfft1d_
-#endif
-
-#ifdef FFT_DEC
-typedef struct {
-  double re;
-  double im;
-} FFT_DATA;
-#define FFT_1D zfft_
-#endif
-
-#ifdef FFT_T3E
-#include <complex.h>
-typedef complex double FFT_DATA;
-#define FFT_1D CCFFT
-#define FFT_1D_INIT CCFFT
-#endif
-
-#ifdef FFT_FFTW
-#include "fftw.h"
-typedef FFTW_COMPLEX FFT_DATA;
-#endif
-
-#ifdef FFT_NONE
-typedef struct {
-  double re;
-  double im;
-} FFT_DATA;
-#endif
-
-#endif
-
-/* ------------------------------------------------------------------------- */
+#include "fftw3.h"
+typedef fftw_complex FFT_DATA;
 
 /* details of how to do a 3d FFT */
 
@@ -139,51 +39,15 @@ struct fft_plan_3d {
   int scaled;                       /* whether to scale FFT results */
   int normnum;                      /* # of values to rescale */
   double norm;                      /* normalization factor for rescaling */
-                                    /* system specific 1d FFT info */
-#ifdef FFT_SGI
-  FFT_DATA *coeff1;
-  FFT_DATA *coeff2;
-  FFT_DATA *coeff3;
-#endif
-#ifdef FFT_INTEL
-  FFT_DATA *coeff1;
-  FFT_DATA *coeff2;
-  FFT_DATA *coeff3;
-#endif
-#ifdef FFT_T3E
-  double *coeff1;
-  double *coeff2;
-  double *coeff3;
-  double *work1;
-  double *work2;
-  double *work3;
-#endif
-#ifdef FFT_FFTW
-  fftw_plan plan_fast_forward;
-  fftw_plan plan_fast_backward;
-  fftw_plan plan_mid_forward;
-  fftw_plan plan_mid_backward;
-  fftw_plan plan_slow_forward;
-  fftw_plan plan_slow_backward;
-#endif
 };
 
 /* function prototypes */
 
 void fft_3d(FFT_DATA *, FFT_DATA *, int, struct fft_plan_3d *);
-struct fft_plan_3d *fft_3d_create_plan(MPI_Comm, int, int, int,
-  int, int, int, int, int, int, int, int, int, int, int, int,
-  int, int, int *);
+struct fft_plan_3d *fft_3d_create_plan
+(MPI_Comm, int, int, int,
+ int, int, int, int, int, int, int, int, int, int, int, int,
+ int, int, int *);
 void fft_3d_destroy_plan(struct fft_plan_3d *);
 void factor(int, int *, int *);
 void bifactor(int, int *, int *);
-
-/* machine specifics */
-
-#ifdef T3E_KLUDGE
-
-#define fft_3d_ FFT_3D
-#define fft_3d_create_plan_ FFT_3D_CREATE_PLAN
-#define fft_3d_destroy_plan_ FFT_3D_DESTROY_PLAN
-
-#endif
