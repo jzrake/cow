@@ -12,7 +12,8 @@
 #define GETENVDBL(a,dflt) (getenv(a) ? atof(getenv(a)) : dflt)
 
 
-void relative_lorentz_factor(cow_dfield *vel, cow_histogram *hist, int N);
+void relative_lorentz_factor(cow_dfield *vel, cow_histogram *hist, int N,
+                             char mode);
 
 static void div5(double *result, double **args, int **s, void *u)
 {
@@ -128,34 +129,56 @@ int main(int argc, char **argv)
   cow_dfield_commit(rho);
   cow_dfield_read(vel, finp);
   cow_dfield_read(rho, finp);
-  make_hist(vel, take_lorentzfactor, fout, "gamma");
-  make_hist(rho, take_elm0, fout, "rho");
 
-  cow_dfield *divV = cow_scalarfield(domain, "divV");
-  cow_dfield *rotV = cow_vectorfield(domain, "rotV");
-  cow_dfield_transform(divV, &vel, 1, div5, NULL);
-  cow_dfield_transform(rotV, &vel, 1, rot5, NULL);
+  int dohist = 0;
+  int dopair = 1;
 
-  make_hist(divV, take_elm0, fout, NULL);
-  make_hist(rotV, take_mag3, fout, NULL);
+  if (dohist) {
+    make_hist(vel, take_lorentzfactor, fout, "gamma");
+    make_hist(rho, take_elm0, fout, "rho");
 
-  cow_dfield_del(rho);
-  cow_dfield_del(divV);
-  cow_dfield_del(rotV);
+    cow_dfield *divV = cow_scalarfield(domain, "divV");
+    cow_dfield *rotV = cow_vectorfield(domain, "rotV");
+    cow_dfield_transform(divV, &vel, 1, div5, NULL);
+    cow_dfield_transform(rotV, &vel, 1, rot5, NULL);
 
-  cow_histogram *hist = cow_histogram_new();
-  cow_histogram_setlower(hist, 0, 0.0);
-  cow_histogram_setupper(hist, 0, 1.0);
-  cow_histogram_setnbins(hist, 0, 500);
-  cow_histogram_setbinmode(hist, COW_HIST_BINMODE_AVERAGE);
-  cow_histogram_setnickname(hist, "gamma-rel");
-  cow_histogram_commit(hist);
+    make_hist(divV, take_elm0, fout, NULL);
+    make_hist(rotV, take_mag3, fout, NULL);
+    cow_dfield_del(divV);
+    cow_dfield_del(rotV);
+  }
 
-  relative_lorentz_factor(vel, hist, 100);
-  cow_histogram_dumpascii(hist, "gamma-rel.dat");
-  cow_histogram_del(hist);
+  if (dopair) {
+    cow_histogram *histpro = cow_histogram_new();
+    cow_histogram_setlower(histpro, 0, 0.1);
+    cow_histogram_setupper(histpro, 0, 1.5);
+    cow_histogram_setnbins(histpro, 0, 500);
+    cow_histogram_setbinmode(histpro, COW_HIST_BINMODE_AVERAGE);
+    cow_histogram_setnickname(histpro, "gamma-rel-drprop-hist");
+    cow_histogram_commit(histpro);
+
+    cow_histogram *histlab = cow_histogram_new();
+    cow_histogram_setlower(histlab, 0, 0.1);
+    cow_histogram_setupper(histlab, 0, 1.5);
+    cow_histogram_setnbins(histlab, 0, 500);
+    cow_histogram_setbinmode(histlab, COW_HIST_BINMODE_AVERAGE);
+    cow_histogram_setnickname(histlab, "gamma-rel-drlab-hist");
+    cow_histogram_commit(histlab);
+
+    int nbatch = 5000;
+    for (int n=0; n<nbatch; ++n) {
+      relative_lorentz_factor(vel, histlab, 10000, 'l');
+      relative_lorentz_factor(vel, histpro, 10000, 'p');
+      printf("batch=%d\n", n);
+    }
+    cow_histogram_dumphdf5(histpro, fout, "");
+    cow_histogram_dumphdf5(histlab, fout, "");
+    cow_histogram_del(histlab);
+    cow_histogram_del(histpro);
+  }
 
   cow_dfield_del(vel);
+  cow_dfield_del(rho);
   cow_domain_del(domain);
   cow_finalize();
   return 0;
@@ -191,7 +214,8 @@ static void lorentz_boost(double u[4], double x[4], double xp[4])
   }
 }
 
-void relative_lorentz_factor(cow_dfield *vel, cow_histogram *hist, int N)
+void relative_lorentz_factor(cow_dfield *vel, cow_histogram *hist, int N,
+                             char mode)
 {
   double *x = (double*) malloc(N * 3 * sizeof(double));
   double *v;
@@ -232,19 +256,51 @@ void relative_lorentz_factor(cow_dfield *vel, cow_histogram *hist, int N)
     xrel[1] = xmu2p[1] - xmu1p[1];
     xrel[2] = xmu2p[2] - xmu1p[2];
     xrel[3] = xmu2p[3] - xmu1p[3];
-
+    double dx[3] = { x2[0] - x1[0], x2[1] - x1[1], x2[2] - x1[2] };
+    double drlab = sqrt(dx[0]*dx[0] + dx[1]*dx[1] + dx[2]*dx[2]);
     double drprop = sqrt(xrel[1]*xrel[1] + xrel[2]*xrel[2] + xrel[3]*xrel[3]);
     double gammarel = urel[0];
 
-    cow_histogram_addsample1(hist, drprop, gammarel);
-
-    /*
-      printf("u: (%+f, %+f, %+f, %+f)\n", umu1[0], umu1[1], umu1[2], umu1[3]);
-      printf("1: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu1[0], xmu1[1], xmu1[2], xmu1[3],
-      xmu1p[0], xmu1p[1], xmu1p[2], xmu1p[3]);
-      printf("2: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu2[0], xmu2[1], xmu2[2], xmu2[3],
-      xmu2p[0], xmu2p[1], xmu2p[2], xmu2p[3]);
-    */
+    if (mode == 'p') { // proper
+      cow_histogram_addsample1(hist, drprop, gammarel);
+    }
+    else if (mode == 'l') {
+      cow_histogram_addsample1(hist, drlab, gammarel);
+    }
   }
 }
 
+
+/*
+  if (drprop > sqrt(3)) {
+  printf("drprop/sqrt(3)=%f\n", drprop/sqrt(3));
+  printf("r1=%f %f %f\n", x1[0], x1[1], x1[2]);
+  printf("r2=%f %f %f\n", x2[0], x2[1], x2[2]);
+  }
+*/
+
+
+
+/*
+
+  double v1v1 = v1[0]*v1[0] + v1[1]*v1[1] + v1[2]*v1[2];
+  double v2v2 = v2[0]*v2[0] + v2[1]*v2[1] + v2[2]*v2[2];
+  double v1v2 = v1[0]*v2[0] + v1[1]*v2[1] + v1[2]*v2[2];
+  printf("--------------------------------------------------\n");
+  printf("v1=%f %f %f\n", v1[0], v1[1], v1[2]);
+  printf("v2=%f %f %f\n", v2[0], v2[1], v2[2]);
+  printf("g1,g2,grel=%f %f %f\n", g1, g2, gammarel);
+  printf("v1.v2=%f\n", v1v2);
+  printf("theta=%f\n", acos(v1v2/sqrt(v1v1*v2v2)));
+  if (v1v2 < 0) {
+  printf("GOT NEGATIVE ONE: %f\n", v1v2);
+  exit(2);
+  }
+*/
+/*
+  printf("u: (%+f, %+f, %+f, %+f)\n", umu1[0], umu1[1], umu1[2], umu1[3]);
+  printf("1: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu1[0], xmu1[1], xmu1[2], xmu1[3],
+  xmu1p[0], xmu1p[1], xmu1p[2], xmu1p[3]);
+  printf("2: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu2[0], xmu2[1], xmu2[2], xmu2[3],
+  xmu2p[0], xmu2p[1], xmu2p[2], xmu2p[3]);
+*/
