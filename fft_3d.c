@@ -80,22 +80,6 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
 
 
   // ---------------------------------------------------------------------------
-  //  fftw(plan->plan_fast_forward,total/length,data,1,length,NULL,0,0);
-  //
-  // plan: plan->plan_fast_forward
-  // howmany: total/length   <--- how to specify this?
-  // in: data
-  // istride: 1              <--- this
-  // idist: length           <--- and this?
-  // out: data (in-place)
-  // ostride: 0
-  // odist: 0
-  //
-  // *in FFTW3?
-  // answer: fftw_plan_many_dft
-
-
-
   // 1d FFTs along mid axis
   // ---------------------------------------------------------------------------
   total = plan->total1;
@@ -123,7 +107,7 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
   data = copy;
 
 
-
+  // ---------------------------------------------------------------------------
   // 1d FFTs along mid axis
   // ---------------------------------------------------------------------------
   total = plan->total2;
@@ -151,6 +135,7 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
   data = copy;
 
 
+  // ---------------------------------------------------------------------------
   // 1d FFTs along slow axis
   // ---------------------------------------------------------------------------
   total = plan->total3;
@@ -167,7 +152,6 @@ void fft_3d(FFT_DATA *in, FFT_DATA *out, int flag, struct fft_plan_3d *plan)
     fftw_execute(fftplan);
     fftw_destroy_plan(fftplan);
   }
-
 
   /* post-remap to put data in output format if needed
      destination is always out */
