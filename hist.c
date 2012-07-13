@@ -91,14 +91,18 @@ void cow_histogram_commit(cow_histogram *h)
     }
   }
 #if (COW_MPI)
-  MPI_Comm_dup(h->comm, &h->comm);
+  if (cow_mpirunning()) {
+    MPI_Comm_dup(h->comm, &h->comm);
+  }
 #endif
   h->committed = 1;
 }
 void cow_histogram_del(cow_histogram *h)
 {
 #if (COW_MPI)
-  MPI_Comm_free(&h->comm);
+  if (cow_mpirunning()) {
+    MPI_Comm_free(&h->comm);
+  }
 #endif
   free(h->bedgesx);
   free(h->bedgesy);
@@ -232,13 +236,8 @@ void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w)
 }
 void cow_histogram_synchronize(cow_histogram *h)
 {
-  if (!h->committed) return;
+  if (!h->committed || !cow_mpirunning()) return;
 #if (COW_MPI)
-  int run_uses_mpi;
-  MPI_Initialized(&run_uses_mpi);
-  if (!run_uses_mpi) {
-    return;
-  }
   int nbins = h->nbinsx * h->nbinsy;
   MPI_Comm c = h->comm;
   MPI_Allreduce(MPI_IN_PLACE, h->weight, nbins, MPI_DOUBLE, MPI_SUM, c);
@@ -276,15 +275,11 @@ void cow_histogram_dumpascii(cow_histogram *h, const char *fn)
   if (!h->committed) return;
   cow_histogram_synchronize(h);
 #if (COW_MPI)
-  {
-    int run_uses_mpi;
+  if (cow_mpirunning()) {
     int rank;
-    MPI_Initialized(&run_uses_mpi);
-    if (run_uses_mpi) {
-      MPI_Comm_rank(h->comm, &rank);
-      if (rank != 0) {
-	return;
-      }
+    MPI_Comm_rank(h->comm, &rank);
+    if (rank != 0) {
+      return;
     }
   }
 #endif
@@ -329,9 +324,9 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
   snprintf(gname, 1024, "%s/%s", gn, h->nickname);
   cow_histogram_synchronize(h);
 #if (COW_MPI)
-  int run_uses_mpi;
-  MPI_Initialized(&run_uses_mpi);
-  if (run_uses_mpi) MPI_Comm_rank(h->comm, &rank);
+  if (cow_mpirunning()) {
+    MPI_Comm_rank(h->comm, &rank);
+  }
 #endif
   if (rank == 0) {
     // -------------------------------------------------------------------------

@@ -55,10 +55,12 @@ void _io_domain_commit(cow_domain *d)
   d->fapl = H5Pcreate(H5P_FILE_ACCESS);
   d->dcpl = H5Pcreate(H5P_DATASET_CREATE);
   d->dxpl = H5Pcreate(H5P_DATASET_XFER);
-#if (COW_HDF5_MPI)
-  H5Pset_fapl_mpio(d->fapl, d->mpi_cart, MPI_INFO_NULL);
-#endif
-#endif
+#if (COW_HDF5_MPI && COW_MPI)
+  if (cow_mpirunning()) {
+    H5Pset_fapl_mpio(d->fapl, d->mpi_cart, MPI_INFO_NULL);
+  }
+#endif // COW_HDF5_MPI && COW_MPI
+#endif // COW_HDF5
 }
 void _io_domain_del(cow_domain *d)
 {
@@ -71,6 +73,7 @@ void _io_domain_del(cow_domain *d)
 
 void cow_domain_setcollective(cow_domain *d, int mode)
 {
+  if (!cow_mpirunning()) return;
 #if (COW_HDF5 && COW_HDF5_MPI)
   if (mode) {
     printf("[%s] setting HDF5 io mode to collective\n", MODULE);

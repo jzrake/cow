@@ -12,7 +12,7 @@
 #define GETENVDBL(a,dflt) (getenv(a) ? atof(getenv(a)) : dflt)
 
 
-static void relative_lorentz_factor(cow_dfield *vel, int N);
+void relative_lorentz_factor(cow_dfield *vel, cow_histogram *hist, int N);
 
 static void div5(double *result, double **args, int **s, void *u)
 {
@@ -101,7 +101,8 @@ int main(int argc, char **argv)
   }
   else {
     printf("usage: $> srhdhist infile.h5 outfile.h5\n");
-    goto done;
+    cow_finalize();
+    return 0;
   }
   printf("COW_HDF5_COLLECTIVE: %d\n", collective);
 
@@ -127,7 +128,6 @@ int main(int argc, char **argv)
   cow_dfield_commit(rho);
   cow_dfield_read(vel, finp);
   cow_dfield_read(rho, finp);
-
   make_hist(vel, take_lorentzfactor, fout, "gamma");
   make_hist(rho, take_elm0, fout, "rho");
 
@@ -143,21 +143,33 @@ int main(int argc, char **argv)
   cow_dfield_del(divV);
   cow_dfield_del(rotV);
 
+  cow_histogram *hist = cow_histogram_new();
+  cow_histogram_setlower(hist, 0, 0.0);
+  cow_histogram_setupper(hist, 0, 1.0);
+  cow_histogram_setnbins(hist, 0, 500);
+  cow_histogram_setbinmode(hist, COW_HIST_BINMODE_AVERAGE);
+  cow_histogram_setnickname(hist, "gamma-rel");
+  cow_histogram_commit(hist);
 
-  relative_lorentz_factor(vel, 100);
+  relative_lorentz_factor(vel, hist, 100);
+  cow_histogram_dumpascii(hist, "gamma-rel.dat");
+  cow_histogram_del(hist);
+
   cow_dfield_del(vel);
-
-
   cow_domain_del(domain);
-
- done:
   cow_finalize();
   return 0;
 }
 
 
 
-void lorentz_boost(double u[4], double x[4], double xp[4])
+static void lorentz_boost(double u[4], double x[4], double xp[4])
+// -----------------------------------------------------------------------------
+// Maps the 4-vector x into xp by the boost formed from the 4-velocity u.
+//
+// see:
+// http://en.wikipedia.org/wiki/Lorentz_transformation#Boost_in_any_direction
+// -----------------------------------------------------------------------------
 {
   double u2 = u[1]*u[1] + u[2]*u[2] + u[3]*u[3];
   double gm = sqrt(1.0 + u2);
@@ -179,7 +191,7 @@ void lorentz_boost(double u[4], double x[4], double xp[4])
   }
 }
 
-void relative_lorentz_factor(cow_dfield *vel, int N)
+void relative_lorentz_factor(cow_dfield *vel, cow_histogram *hist, int N)
 {
   double *x = (double*) malloc(N * 3 * sizeof(double));
   double *v;
@@ -220,11 +232,19 @@ void relative_lorentz_factor(cow_dfield *vel, int N)
     xrel[1] = xmu2p[1] - xmu1p[1];
     xrel[2] = xmu2p[2] - xmu1p[2];
     xrel[3] = xmu2p[3] - xmu1p[3];
-    printf("u: (%+f, %+f, %+f, %+f)\n", umu1[0], umu1[1], umu1[2], umu1[3]);
-    printf("1: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu1[0], xmu1[1], xmu1[2], xmu1[3],
-	   xmu1p[0], xmu1p[1], xmu1p[2], xmu1p[3]);
-    printf("2: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu2[0], xmu2[1], xmu2[2], xmu2[3],
-	   xmu2p[0], xmu2p[1], xmu2p[2], xmu2p[3]);
+
+    double drprop = sqrt(xrel[1]*xrel[1] + xrel[2]*xrel[2] + xrel[3]*xrel[3]);
+    double gammarel = urel[0];
+
+    cow_histogram_addsample1(hist, drprop, gammarel);
+
+    /*
+      printf("u: (%+f, %+f, %+f, %+f)\n", umu1[0], umu1[1], umu1[2], umu1[3]);
+      printf("1: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu1[0], xmu1[1], xmu1[2], xmu1[3],
+      xmu1p[0], xmu1p[1], xmu1p[2], xmu1p[3]);
+      printf("2: (%+f, %+f, %+f, %+f) -> (%+f, %+f, %+f, %+f)\n", xmu2[0], xmu2[1], xmu2[2], xmu2[3],
+      xmu2p[0], xmu2p[1], xmu2p[2], xmu2p[3]);
+    */
   }
 }
 

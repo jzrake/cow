@@ -12,9 +12,10 @@
 static void _sample1(cow_dfield *f, double *x, double *P, int mode);
 static void _sample2(cow_dfield *f, double *x, double *P, int mode);
 static void _sample3(cow_dfield *f, double *x, double *P, int mode);
+static void _loc(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
+		 int mode);
 static void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
                  int mode);
-
 
 void cow_dfield_setsamplecoords(cow_dfield *f, double *x, int ns, int nd)
 {
@@ -44,8 +45,16 @@ void cow_dfield_setsamplemode(cow_dfield *f, int mode)
 void cow_dfield_sampleexecute(cow_dfield *f)
 {
   double *xout = (double*) malloc(f->samplecoordslen * 3 * sizeof(double));
-  _rem(f, f->samplecoords, f->samplecoordslen, xout, f->sampleresult,
-       f->samplemode);
+  double *xin = f->samplecoords;
+  int N = f->samplecoordslen;
+  double *P = f->sampleresult;
+  int mode = f->samplemode;
+  if (cow_mpirunning()) {
+    _rem(f, xin, N, xout, P, mode);
+  }
+  else {
+    _loc(f, xin, N, xout, P, mode);
+  }
   memcpy(f->samplecoords, xout, f->samplecoordslen * 3 * sizeof(double));
   free(xout);
 }
@@ -65,7 +74,12 @@ void cow_dfield_sampleglobalpos(cow_dfield *f, double *xin, int N, double *xout,
 // P:    OUT  list of filled samples (N x Q) where Q = f->n_members
 // -----------------------------------------------------------------------------
 {
-  _rem(f, xin, N, xout, P, mode);
+  if (cow_mpirunning()) {
+    _rem(f, xin, N, xout, P, mode);
+  }
+  else {
+    _loc(f, xin, N, xout, P, mode);
+  }
 }
 
 void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double *P)
@@ -204,12 +218,25 @@ void _sample3(cow_dfield *f, double *x, double *P, int mode)
 }
 
 
-
-void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
+void _loc(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
           int mode)
 {
   int Q = f->n_members;
+  memcpy(Ro, Ri, Nsamp * 3 * sizeof(double));
+  for (int n=0; n<Nsamp; ++n) {
+    switch (f->domain->n_dims) {
+    case 1: _sample1(f, &Ri[3*n], &Po[Q*n], mode); break;
+    case 2: _sample2(f, &Ri[3*n], &Po[Q*n], mode); break;
+    case 3: _sample3(f, &Ri[3*n], &Po[Q*n], mode); break;
+    default: break;
+    }
+  }
+}
+void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
+          int mode)
+{
 #if (COW_MPI)
+  int Q = f->n_members;
   int rank = f->domain->cart_rank;
   int size = f->domain->cart_size;
   int Nd = f->domain->n_dims;
@@ -265,7 +292,7 @@ void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
   // 'client'.
   // ---------------------------------------------------------------------------
   MPI_Status status;
-  MPI_Comm comm = MPI_COMM_WORLD;
+  MPI_Comm comm = f->domain->mpi_cart;
   int queries_satisfied = 0;
   for (int dn=0; dn<size; ++dn) {
     // -------------------------------------------------------------------------
@@ -322,15 +349,5 @@ void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
   free(remote_P1);
   free(remote_r1_size);
   free(remote_P1_size);
-#else
-  memcpy(Ro, Ri, Nsamp * 3 * sizeof(double));
-  for (int n=0; n<Nsamp; ++n) {
-    switch (f->domain->n_dims) {
-    case 1: _sample1(f, &Ri[3*n], &Po[Q*n], mode); break;
-    case 2: _sample2(f, &Ri[3*n], &Po[Q*n], mode); break;
-    case 3: _sample3(f, &Ri[3*n], &Po[Q*n], mode); break;
-    default: break;
-    }
-  }
 #endif
 }
