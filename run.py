@@ -1,5 +1,4 @@
 
-
 import numpy as np
 import cowpy
 
@@ -16,7 +15,8 @@ def test():
     dfield.value[:,:,:,:] = np.random.rand(*dfield.value.shape)
     x, P = dfield.sample(sampx)
     print x, P
-
+    print domain.global_start
+    print domain.coordinate(4, 4, 4)
 
 if __name__ == "__main__":
     test()
