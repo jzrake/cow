@@ -16,9 +16,18 @@ def test():
     x, P = dfield.sample(sampx)
     print x, P
     print domain.global_start
-    print domain.coordinate(4, 4, 4)
+    print domain.coordinate([4, 4, 4])
+
+def testio():
+    domain = cowpy.UnigridDomain([12,12,16], guard=3)
+    dfield = cowpy.UnigridDatafield(domain, ["vx", "vy", "vz"], name="vel")
+    dfield.value[:] = 1.0
+    dfield.dump("iotest.h5")
+    dfield.read("iotest.h5")
+    assert dfield.value.all() == 1.0
+    print dfield["vx"].shape
 
 if __name__ == "__main__":
-    test()
+    testio()
 
 

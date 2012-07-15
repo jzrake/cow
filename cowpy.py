@@ -41,9 +41,10 @@ class UnigridDatafield(object):
             setarray3(self._cdfield, self._buf)
         cow_dfield_commit(self._cdfield)
         self._domain = domain
+        self._members = members
+        self._lookup = {m : n for n,m in enumerate(members)}
 
     def __del__(self):
-        print "deleting dfield"
         cow_dfield_del(self._cdfield)
 
     @property
@@ -54,6 +55,10 @@ class UnigridDatafield(object):
         assert type(fname) is str
         cow_dfield_write(self._cdfield, fname)
 
+    def read(self, fname):
+        assert type(fname) is str
+        cow_dfield_read(self._cdfield, fname)
+
     def sample(self, points):
         cow_dfield_setsamplecoords(self._cdfield, points)
         cow_dfield_setsamplemode(self._cdfield, COW_SAMPLE_LINEAR)
@@ -61,6 +66,9 @@ class UnigridDatafield(object):
         x = cow_dfield_getsamplecoords(self._cdfield).copy()
         P = cow_dfield_getsampleresult(self._cdfield).copy()
         return  x, P
+
+    def __getitem__(self, key):
+        return self.value[..., self._lookup[key]]
 
 class UnigridDomain(object):
     def __init__(self, G_ntot, guard=0, x0=None, x1=None):
@@ -78,7 +86,6 @@ class UnigridDomain(object):
         cow_domain_setalign(self._cdomain, 4*KILOBYTES, 4*MEGABYTES)
 
     def __del__(self):
-        print "deleting domain"
         cow_domain_del(self._cdomain)
 
     @property
@@ -90,7 +97,7 @@ class UnigridDomain(object):
         return [cow_domain_getglobalstartindex(self._cdomain, n)
                 for n in range(self._nd)]
 
-    def coordinate(self, *args):
-        assert len(args) == self._nd
+    def coordinate(self, ind):
+        assert len(ind) == self._nd
         return [cow_domain_positionatindex(self._cdomain, n, i)
-                for n, i in enumerate(args)]
+                for n, i in enumerate(ind)]
