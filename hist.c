@@ -251,10 +251,30 @@ void cow_histogram_synchronize(cow_histogram *h)
   MPI_Allreduce(MPI_IN_PLACE, h->counts, nbins, MPI_LONG, MPI_SUM, c);
 #endif
 }
-
 void cow_histogram_getbinlocx(cow_histogram *h, double **x, int *n0)
 {
-
+  _filloutput(h);
+  if (n0) *n0 = h->nbinsx;
+  if (x) *x = h->binlocx;
+}
+void cow_histogram_getbinlocy(cow_histogram *h, double **x, int *n0)
+{
+  _filloutput(h);
+  if (n0) *n0 = h->nbinsy;
+  if (x) *x = h->binlocy;
+}
+void cow_histogram_getbinval1(cow_histogram *h, double **x, int *n0)
+{
+  _filloutput(h);
+  if (n0) *n0 = h->nbinsx;
+  if (x) *x = h->binvalv;
+}
+void cow_histogram_getbinval2(cow_histogram *h, double **x, int *n0, int *n1)
+{
+  _filloutput(h);
+  if (n0) *n0 = h->nbinsx;
+  if (n1) *n1 = h->nbinsy;
+  if (x) *x = h->binvalv;
 }
 
 double cow_histogram_getbinval(cow_histogram *h, int i, int j)
@@ -286,6 +306,7 @@ void cow_histogram_dumpascii(cow_histogram *h, const char *fn)
 {
   if (!h->committed) return;
   cow_histogram_synchronize(h);
+  _filloutput(h);
 #if (COW_MPI)
   if (cow_mpirunning()) {
     int rank;
@@ -305,17 +326,14 @@ void cow_histogram_dumpascii(cow_histogram *h, const char *fn)
   }
   if (h->n_dims == 1) {
     for (int n=0; n<h->nbinsx; ++n) {
-      fprintf(file, "%f %f\n", 0.5*(h->bedgesx[n] + h->bedgesx[n+1]),
-	      cow_histogram_getbinval(h, n, 0));
+      fprintf(file, "%f %f\n", h->binlocx[n], h->binvalv[n]);
     }
   }
   else if (h->n_dims == 2) {
     for (int nx=0; nx<h->nbinsx; ++nx) {
       for (int ny=0; ny<h->nbinsy; ++ny) {
-	fprintf(file, "%f %f %f\n",
-		0.5*(h->bedgesx[nx] + h->bedgesx[nx+1]),
-		0.5*(h->bedgesy[ny] + h->bedgesy[ny+1]),
-		cow_histogram_getbinval(h, nx, ny));
+	fprintf(file, "%f %f %f\n", h->binlocx[nx], h->binlocy[ny],
+		h->binvalv[nx * h->nbinsy + ny]);
       }
     }
   }
