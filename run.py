@@ -3,7 +3,7 @@ import numpy as np
 import cowpy
 
 def testsamp():
-    domain = cowpy.Domain([10,10,10], guard=3)
+    domain = cowpy.DistributedDomain([10,10,10], guard=3)
     dfield = cowpy.DataField(domain, ["vx", "vy", "vz"])
     np.random.seed(domain.rank)
     sampx = np.random.rand(10,3)
@@ -17,7 +17,7 @@ def testsamp():
     assert len(x) == len(sampx)
 
 def testio():
-    domain = cowpy.Domain([12,12,16], guard=3)
+    domain = cowpy.DistributedDomain([12,12,16], guard=3)
     dfield = cowpy.DataField(domain, ["vx", "vy", "vz"], name="vel")
     dfield["vx"] = 2.1
     dfield["vy"] = 2.2
@@ -36,12 +36,20 @@ def testhist():
     print hist.binloc
     assert abs(hist.binval.sum() - 1000) < 1e-16
 
-def testvec():
-    domain = cowpy.Domain([10,10,10], guard=3)
-    vec = cowpy.VectorField3d(domain)
+def testcb():
+    domain = cowpy.DistributedDomain([10,10,10], guard=2)
+    B = cowpy.VectorField3d(domain, name="B")
+    B[0] = 1.0
+    B[1] = 1.1
+    B[2] = 1.2
+    J = B.curl()
+    M1 = B.divergence(method="corner")
+    M2 = B.divergence(method="5point")
+    print J
+    print M1
 
 if __name__ == "__main__":
     testhist()
     testsamp()
     testio()
-    testvec()
+    testcb()

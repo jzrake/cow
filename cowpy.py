@@ -20,7 +20,7 @@ atexit.register(cow_exit)
 cow_init(0, None, modes)
 
 
-class Domain(object):
+class DistributedDomain(object):
     def __init__(self, G_ntot, guard=0, x0=None, x1=None):
         self._nd = len(G_ntot)
         assert self._nd <= 3
@@ -41,11 +41,13 @@ class Domain(object):
     @property
     def rank(self):
         return cow_domain_getcartrank(self._cdomain)
-
     @property
     def global_start(self):
         return [cow_domain_getglobalstartindex(self._cdomain, n)
                 for n in range(self._nd)]
+    @property
+    def guard(self):
+        return cow_domain_getguard(self._cdomain)
 
     def coordinate(self, ind):
         assert len(ind) == self._nd
@@ -76,6 +78,7 @@ class DataField(object):
         self._domain = domain
         self._members = members
         self._lookup = dict([(m, n) for n,m in enumerate(members)])
+        self._name = name
 
     def __del__(self):
         cow_dfield_del(self._cdfield)
@@ -83,6 +86,9 @@ class DataField(object):
     @property
     def value(self):
         return self._buf
+    @property
+    def domain(self):
+        return self._domain
 
     def dump(self, fname):
         assert type(fname) is str
@@ -101,18 +107,54 @@ class DataField(object):
         return  x, P
 
     def __getitem__(self, key):
-        return self.value[..., self._lookup[key]]
+        if type(key) is int:
+            return self.value[..., key]
+        else:
+            return self.value[..., self._lookup[key]]
 
     def __setitem__(self, key, val):
-        self.value[..., self._lookup[key]] = val
+        if type(key) is int:
+            self.value[..., key] = val 
+        else:
+            self.value[..., self._lookup[key]] = val
+
+    def __repr__(self):
+        return "{%s: '%s' %s, padding: %d, members: %s}" %\
+            (type(self), self._name, self.value[...,0].shape,
+             self.domain.guard, self._members)
+
+class ScalarField3d(DataField):
+    def __init__(self, domain, members=["f"], name="scalarfield"):
+        assert len(members) == 1
+        assert domain._nd == 3
+        super(ScalarField3d, self).__init__(domain, members, name)
 
 
 class VectorField3d(DataField):
-    def __init__(self, domain, members=["x","y","z"], name="vectorfield"):
+    def __init__(self, domain, members=["fx","fy","fz"], name="vectorfield"):
         assert len(members) == 3
         assert domain._nd == 3
         super(VectorField3d, self).__init__(domain, members, name)
 
+    def curl(self):
+        assert self.domain.guard >= 2
+        res = VectorField3d(self._domain, name="del_cross_"+self._name)
+        cow_dfield_transf1(res._cdfield, self._cdfield, cow_trans_rot5, None)
+        return res
+
+    def divergence(self, method="5point"):
+        assert method in ["5point", "corner"]
+        trans = cow_dfield_transf1
+        if method == "5point":
+            assert self.domain.guard >= 2
+            res = ScalarField3d(self._domain, name="del_dot_"+self._name)
+            trans(res._cdfield, self._cdfield, cow_trans_div5, None)
+            return res
+        elif method == "corner":
+            assert self.domain.guard >= 1
+            res = ScalarField3d(self._domain, name="del_dot_"+self._name)
+            trans(res._cdfield, self._cdfield, cow_trans_divcorner, None)
+            return res
 
 class Histogram1d(object):
     _spacing = {"linear": COW_HIST_SPACING_LINEAR,

@@ -6,12 +6,6 @@
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 
-void test_trans(double *result, double **args, int **strides,
-                void *udata)
-{
-  printf("in test_trans\n");
-}
-
 // -----------------------------------------------------------------------------
 //
 // private helper functions
@@ -761,6 +755,11 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
   free(x);
   cow_dfield_syncguard(result);
 }
+void cow_dfield_transf1(cow_dfield *result, cow_dfield *args, cow_transform op,
+			void *udata)
+{
+  cow_dfield_transform(result, &args, 1, op, udata);
+}
 
 #if (COW_MPI)
 void _domain_maketags1d(cow_domain *d)
@@ -953,3 +952,51 @@ void _dfield_freetype(cow_dfield *f)
   free(f->recv_type);
 }
 #endif
+
+
+// -----------------------------------------------------------------------------
+// Special derivative operators used on vector fields. These do not divide by
+// the grid zone spacing.
+// -----------------------------------------------------------------------------
+
+
+void cow_trans_divcorner(double *result, double **args, int **s, void *u)
+// -----------------------------------------------------------------------------
+// 3d divergence stencil maintained by the constraint transport scheme of Toth
+// (2000). Second order in space, gives the divergence at the upper right corner
+// of cell when the vectors are all given at the cell centers.
+// -----------------------------------------------------------------------------
+{
+#define M(i,j,k) ((i)*s[0][0] + (j)*s[0][1] + (k)*s[0][2])
+  double *fx = &args[0][0];
+  double *fy = &args[0][1];
+  double *fz = &args[0][2];
+  *result = ((fx[M(1,0,0)] + fx[M(1,1,0)] + fx[M(1,0,1)] + fx[M(1,1,1)]) -
+             (fx[M(0,0,0)] + fx[M(0,1,0)] + fx[M(0,0,1)] + fx[M(0,1,1)])) / 4.0
+    +       ((fy[M(0,1,0)] + fy[M(0,1,1)] + fy[M(1,1,0)] + fy[M(1,1,1)]) -
+             (fy[M(0,0,0)] + fy[M(0,0,1)] + fy[M(1,0,0)] + fy[M(1,0,1)])) / 4.0
+    +       ((fz[M(0,0,1)] + fz[M(1,0,1)] + fz[M(0,1,1)] + fz[M(1,1,1)]) -
+             (fz[M(0,0,0)] + fz[M(1,0,0)] + fz[M(0,1,0)] + fz[M(1,1,0)])) / 4.0;
+#undef M
+}
+void cow_trans_div5(double *result, double **args, int **s, void *u)
+{
+#define diff5(f,s) ((-f[2*s] + 8*f[s] - 8*f[-s] + f[-2*s]) / 12.0)
+  double *f0 = &args[0][0];
+  double *f1 = &args[0][1];
+  double *f2 = &args[0][2];
+  *result = diff5(f0, s[0][0]) + diff5(f1, s[0][1]) + diff5(f2, s[0][2]);
+#undef diff5
+}
+void cow_trans_rot5(double *result, double **args, int **s, void *u)
+{
+  // http://en.wikipedia.org/wiki/Five-point_stencil
+#define diff5(f,s) ((-f[2*s] + 8*f[s] - 8*f[-s] + f[-2*s]) / 12.0)
+  double *f0 = &args[0][0];
+  double *f1 = &args[0][1];
+  double *f2 = &args[0][2];
+  result[0] = diff5(f2, s[0][1]) - diff5(f1, s[0][2]);
+  result[1] = diff5(f0, s[0][2]) - diff5(f2, s[0][0]);
+  result[2] = diff5(f1, s[0][0]) - diff5(f0, s[0][1]);
+#undef diff5
+}
