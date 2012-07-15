@@ -11,6 +11,8 @@ config = {
     'include_dirs': [ ],
     'library_dirs': [ ],
     'libraries': [ ], # e.g. ['hdf5', 'z', 'fftw']
+    'extra_compile_args': [ ],
+    'extra_link_args': [ ],
     'NPY_INC': np.get_include() }
 
 try:
@@ -23,7 +25,8 @@ config['include_dirs'] += [np.get_include()]
 
 cow_module = Extension \
 ('_cow',
- extra_compile_args=['-std=c99'],
+ extra_compile_args = ['-std=c99'] + config['extra_compile_args'],
+ extra_link_args = config['extra_link_args'],
  define_macros = [a for a in config.items() if a[0].startswith('COW')],
  include_dirs = config['include_dirs'],
  library_dirs = config['library_dirs'],
