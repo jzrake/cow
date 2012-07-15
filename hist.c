@@ -9,6 +9,7 @@
 #if (COW_HDF5)
 static int H5Lexists_safe(hid_t base, const char *path);
 #endif
+static void _filloutput(cow_histogram *h);
 
 cow_histogram *cow_histogram_new()
 {
@@ -31,6 +32,9 @@ cow_histogram *cow_histogram_new()
     .n_dims = 0,
     .committed = 0,
     .transform = NULL,
+    .binlocx = NULL,
+    .binlocy = NULL,
+    .binvalv = NULL,
 #if (COW_MPI)
     .comm = MPI_COMM_WORLD,
 #endif
@@ -110,6 +114,9 @@ void cow_histogram_del(cow_histogram *h)
   free(h->counts);
   free(h->nickname);
   free(h->fullname);
+  free(h->binlocx);
+  free(h->binlocy);
+  free(h->binvalv);
   free(h);
 }
 void cow_histogram_setdomaincomm(cow_histogram *h, cow_domain *d)
@@ -245,6 +252,11 @@ void cow_histogram_synchronize(cow_histogram *h)
 #endif
 }
 
+void cow_histogram_getbinlocx(cow_histogram *h, double **x, int *n0)
+{
+
+}
+
 double cow_histogram_getbinval(cow_histogram *h, int i, int j)
 {
   if (!h->committed) return 0.0;
@@ -323,6 +335,7 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
   int rank = 0;
   snprintf(gname, 1024, "%s/%s", gn, h->nickname);
   cow_histogram_synchronize(h);
+  _filloutput(h);
 #if (COW_MPI)
   if (cow_mpirunning()) {
     MPI_Comm_rank(h->comm, &rank);
@@ -374,25 +387,11 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
     H5Tclose(strn);
     H5Sclose(aspc);
   }
-  // Create a temporary array for the bin centers
-  // ---------------------------------------------------------------------------
-  int nbins = h->nbinsx * h->nbinsy;
-  double *binlocX = (double*) malloc(h->nbinsx * sizeof(double));
-  double *binlocY = (double*) malloc(h->nbinsy * sizeof(double));
-  double *binvalV = (double*) malloc(nbins * sizeof(double));
-  if (h->n_dims >= 1) for (int i=0; i<h->nbinsx; ++i) {
-    binlocX[i] = 0.5*(h->bedgesx[i] + h->bedgesx[i+1]);
-  }
-  if (h->n_dims >= 2) for (int j=0; j<h->nbinsy; ++j) {
-    binlocY[j] = 0.5*(h->bedgesy[j] + h->bedgesy[j+1]);
-  }
-  for (int i=0; i<h->nbinsx; ++i) {
-    for (int j=0; j<h->nbinsy; ++j) {
-      binvalV[i*h->nbinsy + j] = cow_histogram_getbinval(h, i, j);
-    }
-  }
   // Create the data sets in the group: binloc (bin centers) and binval (values)
   // ---------------------------------------------------------------------------
+  double *binlocX = h->binlocx;
+  double *binlocY = h->binlocy;
+  double *binvalV = h->binvalv;
   hsize_t sizeX[2] = { h->nbinsx };
   hsize_t sizeY[2] = { h->nbinsy };
   hsize_t sizeZ[2] = { h->nbinsx, h->nbinsy };
@@ -409,7 +408,7 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
     hid_t fspcY = H5Screate_simple(1, sizeY, NULL);
     hid_t dsetbinY = H5Dcreate(grp, "binlocY", H5T_NATIVE_DOUBLE, fspcY,
 			       H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-    H5Dwrite(dsetbinY, H5T_NATIVE_DOUBLE, fspcY, fspcY, H5P_DEFAULT, binlocX);
+    H5Dwrite(dsetbinY, H5T_NATIVE_DOUBLE, fspcY, fspcY, H5P_DEFAULT, binlocY);
     H5Dclose(dsetbinY);
     H5Sclose(fspcY);
   }
@@ -420,10 +419,26 @@ void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
   H5Sclose(fspcZ);
   H5Gclose(grp);
   H5Fclose(fid);
-  free(binlocX);
-  free(binlocY);
-  free(binvalV);
 #endif
+}
+
+void _filloutput(cow_histogram *h)
+{
+  int nbins = h->nbinsx * h->nbinsy;
+  h->binlocx = (double*) realloc(h->binlocx, h->nbinsx * sizeof(double));
+  h->binlocy = (double*) realloc(h->binlocy, h->nbinsy * sizeof(double));
+  h->binvalv = (double*) realloc(h->binvalv, nbins * sizeof(double));
+  if (h->n_dims >= 1) for (int i=0; i<h->nbinsx; ++i) {
+      h->binlocx[i] = 0.5*(h->bedgesx[i] + h->bedgesx[i+1]);
+    }
+  if (h->n_dims >= 2) for (int j=0; j<h->nbinsy; ++j) {
+      h->binlocy[j] = 0.5*(h->bedgesy[j] + h->bedgesy[j+1]);
+    }
+  for (int i=0; i<h->nbinsx; ++i) {
+    for (int j=0; j<h->nbinsy; ++j) {
+      h->binvalv[i*h->nbinsy + j] = cow_histogram_getbinval(h, i, j);
+    }
+  }
 }
 
 #if (COW_HDF5)
