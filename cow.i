@@ -5,6 +5,12 @@
 %module cow
 %{
 #define SWIG_FILE_WITH_INIT
+
+  // Swig source is littered with 'no prototype' warnings on icc:
+#ifdef __INTEL_COMPILER
+#pragma warning disable 1418
+#endif
+
 #include <numpy/arrayobject.h>
 #include "cow.h"
 void setarray1(cow_dfield *f, double *x, int n0, int n1)
