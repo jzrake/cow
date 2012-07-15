@@ -20,8 +20,41 @@ atexit.register(cow_exit)
 cow_init(0, None, modes)
 
 
-class UnigridDatafield(object):
-    def __init__(self, domain, members, name="dfield"):
+class Domain(object):
+    def __init__(self, G_ntot, guard=0, x0=None, x1=None):
+        self._nd = len(G_ntot)
+        assert self._nd <= 3
+        self._cdomain = cow_domain_new()
+        for n, ni in enumerate(G_ntot):
+            cow_domain_setsize(self._cdomain, n, ni)
+        cow_domain_setndim(self._cdomain, self._nd)
+        cow_domain_setguard(self._cdomain, guard)
+        cow_domain_commit(self._cdomain)
+        # Set up the IO scheme
+        cow_domain_setchunk(self._cdomain, 1)
+        cow_domain_setcollective(self._cdomain, hdf5_collective)
+        cow_domain_setalign(self._cdomain, 4*KILOBYTES, 4*MEGABYTES)
+
+    def __del__(self):
+        cow_domain_del(self._cdomain)
+
+    @property
+    def rank(self):
+        return cow_domain_getcartrank(self._cdomain)
+
+    @property
+    def global_start(self):
+        return [cow_domain_getglobalstartindex(self._cdomain, n)
+                for n in range(self._nd)]
+
+    def coordinate(self, ind):
+        assert len(ind) == self._nd
+        return [cow_domain_positionatindex(self._cdomain, n, i)
+                for n, i in enumerate(ind)]
+
+
+class DataField(object):
+    def __init__(self, domain, members, name="datafield"):
         assert type(name) is str
         self._cdfield = cow_dfield_new(domain._cdomain, name)
         for m in members:
@@ -70,34 +103,47 @@ class UnigridDatafield(object):
     def __getitem__(self, key):
         return self.value[..., self._lookup[key]]
 
-class UnigridDomain(object):
-    def __init__(self, G_ntot, guard=0, x0=None, x1=None):
-        self._nd = len(G_ntot)
-        assert self._nd <= 3
-        self._cdomain = cow_domain_new()
-        for n, ni in enumerate(G_ntot):
-            cow_domain_setsize(self._cdomain, n, ni)
-        cow_domain_setndim(self._cdomain, self._nd)
-        cow_domain_setguard(self._cdomain, guard)
-        cow_domain_commit(self._cdomain)
-        # Set up the IO scheme
-        cow_domain_setchunk(self._cdomain, 1)
-        cow_domain_setcollective(self._cdomain, hdf5_collective)
-        cow_domain_setalign(self._cdomain, 4*KILOBYTES, 4*MEGABYTES)
+    def __setitem__(self, key, val):
+        self.value[..., self._lookup[key]] = val
+
+
+class VectorField3d(DataField):
+    def __init__(self, domain, members=["x","y","z"], name="vectorfield"):
+        assert len(members) == 3
+        assert domain._nd == 3
+        super(VectorField3d, self).__init__(domain, members, name)
+
+
+class Histogram1d(object):
+    _spacing = {"linear": COW_HIST_SPACING_LINEAR,
+                "log": COW_HIST_SPACING_LOG}
+    _binmode = {"counts": COW_HIST_BINMODE_COUNTS,
+                "density": COW_HIST_BINMODE_DENSITY,
+                "average": COW_HIST_BINMODE_AVERAGE}
+    def __init__(self, x0, x1, N=200, spacing="linear", binmode="counts",
+                 name="histogram"):
+        self._chist = cow_histogram_new()
+        cow_histogram_setlower(self._chist, 0, x0)
+        cow_histogram_setupper(self._chist, 0, x1)
+        cow_histogram_setnbins(self._chist, 0, N)
+        cow_histogram_setbinmode(self._chist, self._binmode[binmode])
+        cow_histogram_setspacing(self._chist, self._spacing[spacing])
+        cow_histogram_setnickname(self._chist, name)
+        cow_histogram_commit(self._chist)
 
     def __del__(self):
-        cow_domain_del(self._cdomain)
+        cow_histogram_del(self._chist)
+
+    def add_sample(self, val, weight=1):
+        """ Bins the data point with value `val` and weight `weight` """
+        cow_histogram_addsample1(self._chist, val, weight)
 
     @property
-    def rank(self):
-        return cow_domain_getcartrank(self._cdomain)
+    def binloc(self):
+        """ Returns the bin centers """
+        return cow_histogram_getbinlocx(self._chist).copy()
 
     @property
-    def global_start(self):
-        return [cow_domain_getglobalstartindex(self._cdomain, n)
-                for n in range(self._nd)]
-
-    def coordinate(self, ind):
-        assert len(ind) == self._nd
-        return [cow_domain_positionatindex(self._cdomain, n, i)
-                for n, i in enumerate(ind)]
+    def binval(self):
+        """ Returns the present bin values """
+        return cow_histogram_getbinval1(self._chist).copy()
