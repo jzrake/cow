@@ -16,6 +16,7 @@
 #if (COW_FFTW && COW_MPI)
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #include <mpi.h>
 
 #include "pack_3d.h"
@@ -206,7 +207,7 @@ struct fft_plan_3d *fft_3d_create_plan
   int second_ilo,second_ihi,second_jlo,second_jhi,second_klo,second_khi;
   int third_ilo,third_ihi,third_jlo,third_jhi,third_klo,third_khi;
   int out_size,first_size,second_size,third_size,copy_size,scratch_size;
-  int np1,np2,ip1,ip2;
+  int np1=0,np2=0,ip1,ip2;
 
   MPI_Comm_rank(comm, &me);
   MPI_Comm_size(comm, &nprocs);
@@ -444,6 +445,69 @@ void fft_3d_destroy_plan(struct fft_plan_3d *plan)
   free(plan);
 }
 
+
+void factor(int n, int *num, int *list)
+{
+  if (n == 1) {
+    return;
+  }
+  else if (n % 2 == 0) {
+    *list = 2;
+    (*num)++;
+    factor(n/2,num,list+1);
+  }
+  else if (n % 3 == 0) {
+    *list = 3;
+    (*num)++;
+    factor(n/3,num,list+1);
+  }
+  else if (n % 5 == 0) {
+    *list = 5;
+    (*num)++;
+    factor(n/5,num,list+1);
+  }
+  else if (n % 7 == 0) {
+    *list = 7;
+    (*num)++;
+    factor(n/7,num,list+1);
+  }
+  else if (n % 11 == 0) {
+    *list = 11;
+    (*num)++;
+    factor(n/11,num,list+1);
+  }
+  else if (n % 13 == 0) {
+    *list = 13;
+    (*num)++;
+    factor(n/13,num,list+1);
+  }
+  else {
+    *list = n;
+    (*num)++;
+    return;
+  }
+}
+
+
+/* ------------------------------------------------------------------- */
+/* divide n into 2 factors of as equal size as possible */
+
+void bifactor(int n, int *factor1, int *factor2)
+
+{
+  int n1,n2,facmax;
+
+  facmax = sqrt((double) n);
+
+  for (n1 = facmax; n1 > 0; n1--) {
+    n2 = n/n1;
+    if (n1*n2 == n) {
+      *factor1 = n1;
+      *factor2 = n2;
+      return;
+    }
+  }
+}
 
 #else
 void __fft_3d_stub() { }
