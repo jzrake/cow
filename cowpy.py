@@ -22,7 +22,7 @@ cow_init(0, None, modes)
 
 class UnigridDatafield(object):
     def __init__(self, domain, members, name="dfield"):
-        assert(type(name) is str)
+        assert type(name) is str
         self._cdfield = cow_dfield_new(domain._cdomain, name)
         for m in members:
             assert(type(m) is str)
@@ -41,9 +41,10 @@ class UnigridDatafield(object):
             setarray3(self._cdfield, self._buf)
         cow_dfield_commit(self._cdfield)
         self._domain = domain
+        self._members = members
+        self._lookup = {m : n for n,m in enumerate(members)}
 
     def __del__(self):
-        print "deleting dfield"
         cow_dfield_del(self._cdfield)
 
     @property
@@ -51,21 +52,28 @@ class UnigridDatafield(object):
         return self._buf
 
     def dump(self, fname):
-        assert(type(fname) is str)
+        assert type(fname) is str
         cow_dfield_write(self._cdfield, fname)
+
+    def read(self, fname):
+        assert type(fname) is str
+        cow_dfield_read(self._cdfield, fname)
 
     def sample(self, points):
         cow_dfield_setsamplecoords(self._cdfield, points)
         cow_dfield_setsamplemode(self._cdfield, COW_SAMPLE_LINEAR)
         cow_dfield_sampleexecute(self._cdfield)
-        x = cow_dfield_getsamplecoords(self._cdfield).copy(),
+        x = cow_dfield_getsamplecoords(self._cdfield).copy()
         P = cow_dfield_getsampleresult(self._cdfield).copy()
         return  x, P
+
+    def __getitem__(self, key):
+        return self.value[..., self._lookup[key]]
 
 class UnigridDomain(object):
     def __init__(self, G_ntot, guard=0, x0=None, x1=None):
         self._nd = len(G_ntot)
-        assert(self._nd <= 3)
+        assert self._nd <= 3
         self._cdomain = cow_domain_new()
         for n, ni in enumerate(G_ntot):
             cow_domain_setsize(self._cdomain, n, ni)
@@ -73,14 +81,23 @@ class UnigridDomain(object):
         cow_domain_setguard(self._cdomain, guard)
         cow_domain_commit(self._cdomain)
         # Set up the IO scheme
-        cow_domain_setchunk(self._cdomain, 1);
-        cow_domain_setcollective(self._cdomain, hdf5_collective);
-        cow_domain_setalign(self._cdomain, 4*KILOBYTES, 4*MEGABYTES);
+        cow_domain_setchunk(self._cdomain, 1)
+        cow_domain_setcollective(self._cdomain, hdf5_collective)
+        cow_domain_setalign(self._cdomain, 4*KILOBYTES, 4*MEGABYTES)
+
+    def __del__(self):
+        cow_domain_del(self._cdomain)
 
     @property
     def rank(self):
         return cow_domain_getcartrank(self._cdomain)
 
-    def __del__(self):
-        print "deleting domain"
-        cow_domain_del(self._cdomain)
+    @property
+    def global_start(self):
+        return [cow_domain_getglobalstartindex(self._cdomain, n)
+                for n in range(self._nd)]
+
+    def coordinate(self, ind):
+        assert len(ind) == self._nd
+        return [cow_domain_positionatindex(self._cdomain, n, i)
+                for n, i in enumerate(ind)]

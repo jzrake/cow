@@ -1,22 +1,15 @@
 /* -*- C -*-  (not really, but good for syntax highlighting) */
 
+// http://www.scipy.org/Cookbook/SWIG_NumPy_examples
+
 %module cow
 %{
 #define SWIG_FILE_WITH_INIT
 #include <numpy/arrayobject.h>
 #include "cow.h"
-  void setarray1(cow_dfield *f, double *x, int n0, int n1)
-  {
-    cow_dfield_setbuffer(f, x);
-  }
-  void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2)
-  {
-    cow_dfield_setbuffer(f, x);
-  }
-  void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3)
-  {
-    cow_dfield_setbuffer(f, x);
-  }
+void setarray1(cow_dfield *f, double *x, int n0, int n1);
+void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2);
+void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3);
   %}
 
 %typemap(in) (const char *name)
@@ -38,15 +31,27 @@
 {(double *x, int n0, int n1, int n2)};
 %apply(double *IN_ARRAY4, int DIM1, int DIM2, int DIM3, int DIM4)
 {(double *x, int n0, int n1, int n2, int n3)};
+%apply(double **ARGOUTVIEW_ARRAY1, int *DIM1)
+{(double **x, int *n0)};
 %apply(double **ARGOUTVIEW_ARRAY2, int *DIM1, int *DIM2)
 {(double **x, int *n0, int *n1)};
 
 %include "cow.h"
-extern void setarray1(cow_dfield *f, double *x, int n0, int n1);
-extern void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2);
-extern void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3);
+void setarray1(cow_dfield *f, double *x, int n0, int n1)
+{
+  cow_dfield_setbuffer(f, x);
+}
+void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2)
+{
+  cow_dfield_setbuffer(f, x);
+}
+void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3)
+{
+  cow_dfield_setbuffer(f, x);
+}
 
 %clear(double *x, int n0, int n1);
 %clear(double *x, int n0, int n1, int n2);
 %clear(double *x, int n0, int n1, int n2, int n3);
+%clear(double **x, int *n0);
 %clear(double **x, int *n1, int *n0);

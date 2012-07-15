@@ -3,6 +3,9 @@
 from distutils.core import setup, Extension
 import numpy as np
 
+# Helpful info on linker environment:
+# http://bit.ly/Nsvato
+
 config = {
     'COW_HDF5': 0,
     'COW_HDF5_MPI': 0,

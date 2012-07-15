@@ -36,6 +36,10 @@
 
 /**********************************************************************/
 
+%fragment("NumPy_Backward_Compatibility", "header")
+{
+
+}
 %fragment("NumPy_Utilities", "header")
 {
   /* Given a PyObject, return a string describing its type.
