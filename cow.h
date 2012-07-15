@@ -118,6 +118,10 @@ void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
 void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
 void cow_histogram_synchronize(cow_histogram *h);
 void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op);
+void cow_histogram_getbinlocx(cow_histogram *h, double **x, int *n0);
+void cow_histogram_getbinlocy(cow_histogram *h, double **x, int *n0);
+void cow_histogram_getbinval1(cow_histogram *h, double **x, int *n0);
+void cow_histogram_getbinval2(cow_histogram *h, double **x, int *n0, int *n1);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
 
 void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout);
@@ -213,6 +217,9 @@ struct cow_histogram
   int n_dims;
   int committed;
   cow_transform transform;
+  double *binlocx; // Pointers to these arrays are returned by the getbinlocx
+  double *binlocy; // getbinlocy, and getbinval functions.
+  double *binvalv;
 #if (COW_MPI)
   MPI_Comm comm;
 #endif
