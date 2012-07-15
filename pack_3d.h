@@ -14,6 +14,8 @@
 
 /* loop counters for doing a pack/unpack */
 
+#ifndef PACK_3D_HEADER
+
 struct pack_plan_3d {
   int nfast;                 /* # of elements in fast index */
   int nmid;                  /* # of elements in mid index */
@@ -33,3 +35,5 @@ void unpack_3d_permute1_n(double *, double *, struct pack_plan_3d *);
 void unpack_3d_permute2_1(double *, double *, struct pack_plan_3d *);
 void unpack_3d_permute2_2(double *, double *, struct pack_plan_3d *);
 void unpack_3d_permute2_n(double *, double *, struct pack_plan_3d *);
+
+#endif // PACK_3D_HEADER

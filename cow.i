@@ -7,9 +7,19 @@
 #define SWIG_FILE_WITH_INIT
 #include <numpy/arrayobject.h>
 #include "cow.h"
-void setarray1(cow_dfield *f, double *x, int n0, int n1);
-void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2);
-void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3);
+void setarray1(cow_dfield *f, double *x, int n0, int n1)
+{
+  cow_dfield_setbuffer(f, x);
+}
+void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2)
+{
+  cow_dfield_setbuffer(f, x);
+}
+void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3)
+{
+  cow_dfield_setbuffer(f, x);
+}
+
   %}
 
 %typemap(in) (const char *name)
@@ -37,18 +47,10 @@ void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3);
 {(double **x, int *n0, int *n1)};
 
 %include "cow.h"
-void setarray1(cow_dfield *f, double *x, int n0, int n1)
-{
-  cow_dfield_setbuffer(f, x);
-}
-void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2)
-{
-  cow_dfield_setbuffer(f, x);
-}
-void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3)
-{
-  cow_dfield_setbuffer(f, x);
-}
+
+extern void setarray1(cow_dfield *f, double *x, int n0, int n1);
+extern void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2);
+extern void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3);
 
 %clear(double *x, int n0, int n1);
 %clear(double *x, int n0, int n1, int n2);

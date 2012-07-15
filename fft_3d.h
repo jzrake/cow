@@ -17,6 +17,8 @@
 /* FFT_PRECISION = 1 is single-precision complex (4-byte real, 4-byte imag) */
 /* FFT_PRECISION = 2 is double-precision complex (8-byte real, 8-byte imag) */
 
+#ifndef FFT_3D_HEADER
+
 #define FFT_PRECISION 2
 #define FFT_FFTW3
 
@@ -51,3 +53,5 @@ struct fft_plan_3d *fft_3d_create_plan
 void fft_3d_destroy_plan(struct fft_plan_3d *);
 void factor(int, int *, int *);
 void bifactor(int, int *, int *);
+
+#endif // FFT_3D_HEADER
