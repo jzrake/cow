@@ -42,7 +42,7 @@ class UnigridDatafield(object):
         cow_dfield_commit(self._cdfield)
         self._domain = domain
         self._members = members
-        self._lookup = {m : n for n,m in enumerate(members)}
+        self._lookup = dict([(m, n) for n,m in enumerate(members)])
 
     def __del__(self):
         cow_dfield_del(self._cdfield)

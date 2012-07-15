@@ -39,8 +39,7 @@ cow_module = Extension \
             'fft.c',
             'fft_3d.c',
             'remap_3d.c',
-            'pack_3d.c',
-            'factor.c'])
+            'pack_3d.c'])
 setup(name        = 'cow',
       version     = '0.4',
       author      = "Jonathan Zrake",

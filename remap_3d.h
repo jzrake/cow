@@ -14,6 +14,8 @@
 
 /* details of how to do a 3d remap */
 
+#ifndef REMAP_3D_HEADER
+
 struct remap_plan_3d {
   double *sendbuf;                  /* buffer for MPI sends */
   double *scratch;                  /* scratch buffer for MPI recvs */
@@ -54,12 +56,4 @@ void remap_3d_destroy_plan(struct remap_plan_3d *);
 int remap_3d_collide(struct extent_3d *, 
 		     struct extent_3d *, struct extent_3d *);
 
-/* machine specifics */
-
-#ifdef T3E_KLUDGE
-
-#define remap_3d_ REMAP_3D
-#define remap_3d_create_plan_ REMAP_3D_CREATE_PLAN
-#define remap_3d_destroy_plan_ REMAP_3D_DESTROY_PLAN
-
-#endif
+#endif // REMAP_3D_HEADER
