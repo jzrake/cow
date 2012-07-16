@@ -1,5 +1,6 @@
 
 import os
+import sys
 import atexit
 import numpy as np
 from cow import *
@@ -11,6 +12,7 @@ modes = 0
 hdf5_collective = os.getenv("COW_HDF5_COLLECTIVE", 0)
 modes |= (COW_NOREOPEN_STDOUT if os.getenv("COW_NOREOPEN_STDOUT", 0) else 0)
 modes |= (COW_DISABLE_MPI if os.getenv("COW_DISABLE_MPI", 0) else 0)
+modes |= (COW_DISABLE_MPI if '-s' in sys.argv else 0)
 
 def cow_exit():
     print "finalizing cow..."
@@ -19,6 +21,7 @@ def cow_exit():
 atexit.register(cow_exit)
 cow_init(0, None, modes)
 
+mpirunning = cow_mpirunning
 
 class DistributedDomain(object):
     def __init__(self, G_ntot, guard=0, x0=None, x1=None):
@@ -260,6 +263,7 @@ class VectorField3d(DataField):
         Returns the solenoidal (curl-like) part of the vector field's Helmholtz
         decomposition. Projection is done using the Fourier decomposition.
         """
+        assert mpirunning()
         if name is None: name = self._name + "-solenoidal"
         sol = VectorField3d(self._domain, members=self._members, name=name)
         sol.value[:] = self.value
@@ -271,6 +275,7 @@ class VectorField3d(DataField):
         Returns the dilatational (div-like) part of the vector field's Helmholtz
         decomposition. Projection is done using the Fourier decomposition.
         """
+        assert mpirunning()
         if name is None: name = self._name + "-dilatational"
         div = VectorField3d(self._domain, members=self._members, name=name)
         div.value[:] = self.value
@@ -282,6 +287,7 @@ class VectorField3d(DataField):
         Computes the spherically integrated power spectrum P(k) of the vector
         field, where P(k) = \vec{f}(\vec{k}) \cdot \vec{f}^*(\vec{k}).
         """
+        assert mpirunning()
         if name is None: name = self._name + "-pspec"
         pspec = Histogram1d(0.0, 1.0, bins=bins, spacing=spacing,
                             name=name, commit=False)
