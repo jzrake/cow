@@ -2,7 +2,13 @@
 import os
 import sys
 import atexit
+import warnings
 import numpy as np
+import h5py
+try:
+    import h5py
+except ImportError:
+    warnings.warn("h5py was not detected, you might be missing some functions")
 from cow import *
 
 
@@ -24,6 +30,10 @@ cow_init(0, None, modes)
 mpirunning = cow_mpirunning
 
 class DistributedDomain(object):
+    @classmethod
+    def fromfile(self, fname, group=None):
+        return "yup"
+
     def __init__(self, G_ntot, guard=0, x0=None, x1=None):
         self._nd = len(G_ntot)
         assert self._nd <= 3

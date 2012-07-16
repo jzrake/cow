@@ -119,7 +119,7 @@ void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname)
   hid_t file = H5Fopen(fname, H5F_ACC_RDONLY, d->fapl);
   hid_t dset = H5Dopen(file, dname, H5P_DEFAULT);
   hid_t fspc = H5Dget_space(dset);
-  hsize_t dims[3];
+  hsize_t dims[3] = { 1, 1, 1 };
   int ndims = H5Sget_simple_extent_dims(fspc, dims, NULL);
   H5Dclose(dset);
   H5Fclose(file);
@@ -127,8 +127,8 @@ void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname)
   for (int n=0; n<ndims; ++n) {
     cow_domain_setsize(d, n, dims[n]);
   }
-  printf("[%s] inferred %dd global domain size of (%lld %lld %lld) from %s/%s\n",
-	 MODULE, ndims, dims[0], dims[1], dims[2], fname, dname);
+  printf("[%s] inferred global domain size of (%lld %lld %lld) from %s/%s\n",
+	 MODULE, dims[0], dims[1], dims[2], fname, dname);
 #endif
 }
 void cow_dfield_write(cow_dfield *f, const char *fname)

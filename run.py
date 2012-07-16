@@ -2,6 +2,10 @@
 import numpy as np
 import cowpy
 
+def testfromfile():
+    domain = cowpy.DistributedDomain.fromfile("test.h5", group="prim")
+    print domain
+
 def testsamp():
     domain = cowpy.DistributedDomain([10,10,10], guard=3)
     dfield = cowpy.DataField(domain, ["vx", "vy", "vz"])
@@ -95,3 +99,4 @@ if __name__ == "__main__":
     testreduce()
     if cowpy.mpirunning():
         testhelm()
+    testfromfile()
