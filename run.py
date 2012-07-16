@@ -35,6 +35,7 @@ def testhist():
         hist.add_sample(np.random.rand())
     print hist.binloc
     assert abs(hist.binval.sum() - 1000) < 1e-16
+    hist.name = "myrealhist"
     hist.dump("hist.dat")
     hist.dump("test.h5", gname="G1/G2")
 

@@ -273,3 +273,9 @@ class Histogram1d(object):
     def binval(self):
         """ Returns the present bin values """
         return cow_histogram_getbinval1(self._chist).copy()
+
+    def __setattr__(self, key, value):
+        if key == "name":
+            cow_histogram_setnickname(self._chist, value)
+        else:
+            object.__setattr__(self, key, value)
