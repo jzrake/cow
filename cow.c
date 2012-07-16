@@ -658,7 +658,7 @@ static void _reduce(double *result, double **args, int **strides, void *udata)
   double *max = &((double*) u[1])[1];
   double *sum = &((double*) u[1])[2];
   double y;
-  f->transform(&y, args, strides, NULL);
+  f->transform(&y, args, strides, f->userdata);
   if (y > *max) *max = y;
   if (y < *min) *min = y;
   *sum += y;
@@ -731,6 +731,14 @@ void cow_dfield_pusharg(cow_dfield *f, cow_dfield *arg)
 void cow_dfield_setuserdata(cow_dfield *f, void *userdata)
 {
   f->userdata = userdata;
+}
+void cow_dfield_setiparam(cow_dfield *f, int p)
+{
+  f->iparam = p;
+}
+void cow_dfield_setfparam(cow_dfield *f, double p)
+{
+  f->dparam = p;
 }
 void cow_dfield_transformexecute(cow_dfield *f)
 {
@@ -1030,5 +1038,16 @@ void cow_trans_rot5(double *result, double **args, int **s, void *u)
 }
 void cow_trans_component(double *result, double **args, int **s, void *u)
 {
-  result[0] = args[0][0];
+  cow_dfield *f = (cow_dfield*) u;
+  result[0] = args[0][f->iparam];
+}
+#include <math.h>
+void cow_trans_magnitude(double *result, double **args, int **s, void *u)
+{
+  cow_dfield *f = (cow_dfield*) u;
+  double res2 = 0.0;
+  for (int n=0; n<f->n_members; ++n) {
+    res2 += args[0][n] * args[0][n];
+  }
+  result[0] = sqrt(res2);
 }

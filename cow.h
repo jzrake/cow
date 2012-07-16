@@ -80,6 +80,8 @@ void cow_dfield_settransform(cow_dfield *f, cow_transform op);
 void cow_dfield_clearargs(cow_dfield *f);
 void cow_dfield_pusharg(cow_dfield *f, cow_dfield *arg);
 void cow_dfield_setuserdata(cow_dfield *f, void *userdata);
+void cow_dfield_setiparam(cow_dfield *f, int p);
+void cow_dfield_setfparam(cow_dfield *f, double p);
 void cow_dfield_transformexecute(cow_dfield *f);
 const char *cow_dfield_iteratemembers(cow_dfield *f);
 const char *cow_dfield_nextmember(cow_dfield *f);
@@ -194,6 +196,8 @@ struct cow_dfield
   cow_dfield **transargs; // list of arguments for transform, used internally
   void *userdata; // shallow pointer to user-supplied data item
   int transargslen;
+  int iparam; // extra parameters that might be used by transform functions
+  double dparam;
   double *samplecoords;
   double *sampleresult;
   int samplecoordslen;

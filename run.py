@@ -39,7 +39,9 @@ def testio():
     assert abs(dfield["vz"] - 2.3).all() < 1e-16
 
 def testhist():
-    hist = cowpy.Histogram1d(0, 1, bins=10, binmode="counts", name="myhist")
+    domain = cowpy.DistributedDomain([12,12,16], guard=3)
+    hist = cowpy.Histogram1d(0, 1, bins=10, binmode="counts", name="myhist",
+                             domain=domain)
     for n in range(1000):
         hist.add_sample(np.random.rand())
     hist.seal()
@@ -76,16 +78,19 @@ def testreduce():
     J[0][2,12,2] = -20.0
     J[0][2,2,2] = 10.0
     J[0][2,2,3] =-10.0
-    min, max, sum = J.reduce(0)#cow.cow_trans_elem0)
+    min, max, sum = J.reduce_component("fx")
     assert abs(min + 10.0) < 1e-16
     assert abs(max - 10.0) < 1e-16
     assert abs(sum - 0.0) < 1e-16
+    min, max, sum = J.reduce_magnitude()
+    assert abs(max - 10.0) < 1e-16
+    assert abs(min - 0.0) < 1e-16
 
 if __name__ == "__main__":
-    #testhist()
-    #testsamp()
-    #testglobind()
-    #testio()
-    #testcb()
-    #testhelm()
+    testhist()
+    testsamp()
+    testglobind()
+    testio()
+    testcb()
+    testhelm()
     testreduce()

@@ -158,7 +158,7 @@ class DataField(object):
         i = [ind[n] if n < self.domain._nd else 0 for n in range(3)]
         return cow_dfield_sampleglobalind(self._cdfield, i[0], i[1], i[2])
 
-    def apply_transform(self, args, op, userdata=None):
+    def _apply_transform(self, args, op, userdata=None):
         cow_dfield_clearargs(self._cdfield)
         for arg in args:
             cow_dfield_pusharg(self._cdfield, arg._cdfield)
@@ -167,16 +167,28 @@ class DataField(object):
         cow_dfield_transformexecute(self._cdfield)
         return self
 
-    def reduce(self, member):
+    def reduce_component(self, member):
         """
-        Returns the min, max, and sum total of the data member `member`.
+        Returns the min, max, and sum of the data member `member`, which may be
+        int or str.
         """
         if type(member) is str:
             member = self._lookup[member]
         else:
             assert member < len(self._members)
+        cow_dfield_clearargs(self._cdfield)
         cow_dfield_settransform(self._cdfield, cow_trans_component)
-        cow_dfield_setuserdata(self._cdfield, None)
+        cow_dfield_setuserdata(self._cdfield, self._cdfield)
+        cow_dfield_setiparam(self._cdfield, member)
+        return cow_dfield_reduce(self._cdfield)
+
+    def reduce_magnitude(self):
+        """
+        Returns the min, max, and sum of the data fields's vector magnitude.
+        """
+        cow_dfield_clearargs(self._cdfield)
+        cow_dfield_settransform(self._cdfield, cow_trans_magnitude)
+        cow_dfield_setuserdata(self._cdfield, self._cdfield)
         return cow_dfield_reduce(self._cdfield)
 
     def __getitem__(self, key):
@@ -222,7 +234,7 @@ class VectorField3d(DataField):
         assert self.domain.guard >= 2
         if name is None: name = "del_cross_" + self._name
         res = VectorField3d(self._domain, name=name)
-        return res.apply_transform([self], cow_trans_rot5)
+        return res._apply_transform([self], cow_trans_rot5)
 
     def divergence(self, stencil="5point", name=None):
         """
@@ -241,7 +253,7 @@ class VectorField3d(DataField):
             raise ValueError("keyword 'stencil' must be one of ['5point', "
                              "'corner']")
         res = ScalarField3d(self._domain, name=name)
-        return res.apply_transform([self], op)
+        return res._apply_transform([self], op)
 
     def solenoidal(self, name=None):
         """
@@ -288,7 +300,7 @@ class Histogram1d(object):
                 "average": COW_HIST_BINMODE_AVERAGE}
 
     def __init__(self, x0, x1, bins=200, spacing="linear", binmode="counts",
-                 name="histogram", commit=True):
+                 name="histogram", domain=None, commit=True):
         self._chist = cow_histogram_new()
         self._name = name
         cow_histogram_setlower(self._chist, 0, x0)
@@ -297,6 +309,8 @@ class Histogram1d(object):
         cow_histogram_setbinmode(self._chist, self._binmode[binmode])
         cow_histogram_setspacing(self._chist, self._spacing[spacing])
         cow_histogram_setnickname(self._chist, name)
+        if domain:
+            cow_histogram_setdomaincomm(self._chist, domain._cdomain)
         if commit:
             cow_histogram_commit(self._chist)
 
