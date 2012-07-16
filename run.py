@@ -80,10 +80,10 @@ def testreduce():
     assert (sum - 0.0) < 1e-16
 
 if __name__ == "__main__":
-    #testhist()
-    #testsamp()
+    testhist()
+    testsamp()
     testglobind()
-    #testio()
-    #testcb()
-    #testhelm()
-    #testreduce()
+    testio()
+    testcb()
+    testhelm()
+    testreduce()

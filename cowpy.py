@@ -150,7 +150,13 @@ class DataField(object):
         return  x, P
 
     def index_global(self, ind):
-        return cow_dfield_sampleglobalind(self._cdfield, ind[0], ind[1], ind[2])
+        """
+        Indexes the distributed array with the global index `ind`. Must be
+        called on all ranks which own this array.
+        """
+        assert len(ind) == self.domain._nd
+        i = [ind[n] if n < self.domain._nd else 0 for n in range(3)]
+        return cow_dfield_sampleglobalind(self._cdfield, i[0], i[1], i[2])
 
     def apply_transform(self, args, op, userdata=None):
         cow_dfield_clearargs(self._cdfield)
