@@ -30,13 +30,20 @@ def testio():
     assert abs(dfield["vz"] - 2.3).all() < 1e-16
 
 def testhist():
-    hist = cowpy.Histogram1d(0, 1, N=10, binmode="counts", name="myhist")
+    hist = cowpy.Histogram1d(0, 1, bins=10, binmode="counts", name="myhist")
     for n in range(1000):
         hist.add_sample(np.random.rand())
     print hist.binloc
     assert abs(hist.binval.sum() - 1000) < 1e-16
     hist.dump("hist.dat")
     hist.dump("test.h5", gname="G1/G2")
+
+def testhelm():
+    domain = cowpy.DistributedDomain([10,10,10], guard=2)
+    A = cowpy.VectorField3d(domain, name="B")
+    Asol = A.solenoidal()
+    Adiv = A.dilatational()
+    pspec = Adiv.power_spectrum(bins=100, spacing="log")
 
 def testcb():
     domain = cowpy.DistributedDomain([10,10,10], guard=2)
@@ -45,8 +52,8 @@ def testcb():
     B[1] = 1.1
     B[2] = 1.2
     J = B.curl()
-    M1 = B.divergence(method="corner")
-    M2 = B.divergence(method="5point")
+    M1 = B.divergence(stencil="corner")
+    M2 = B.divergence(stencil="5point")
     print J
     print M1
 
@@ -55,3 +62,4 @@ if __name__ == "__main__":
     testsamp()
     testio()
     testcb()
+    testhelm()

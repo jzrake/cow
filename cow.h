@@ -126,7 +126,7 @@ void cow_histogram_getbinval1(cow_histogram *h, double **x, int *n0);
 void cow_histogram_getbinval2(cow_histogram *h, double **x, int *n0, int *n1);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
 
-void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout);
+void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *h);
 void cow_fft_helmholtzdecomp(cow_dfield *f, int mode);
 
 #ifdef COW_PRIVATE_DEFS

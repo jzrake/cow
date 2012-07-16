@@ -42,6 +42,7 @@ class DistributedDomain(object):
     @property
     def rank(self):
         return cow_domain_getcartrank(self._cdomain)
+
     @property
     def global_start(self):
         return tuple(cow_domain_getglobalstartindex(self._cdomain, n)
@@ -87,6 +88,7 @@ class DataField(object):
     @property
     def value(self):
         return self._buf
+
     @property
     def domain(self):
         return self._domain
@@ -141,27 +143,72 @@ class VectorField3d(DataField):
         assert domain._nd == 3
         super(VectorField3d, self).__init__(domain, members, name)
 
-    def curl(self):
+    def curl(self, name=None):
+        """
+        Takes the curl of the vector field using a 5-point stencil for the
+        partial derivatives.
+        """
         assert self.domain.guard >= 2
-        res = VectorField3d(self._domain, name="del_cross_"+self._name)
+        if name is None: name = "del_cross_" + self._name
+        res = VectorField3d(self._domain, name=name)
         cow_dfield_transf1(res._cdfield, self._cdfield, cow_trans_rot5, None)
         return res
 
-    def divergence(self, method="5point"):
+    def divergence(self, stencil="5point", name=None):
+        """
+        Takes the divergence of the vector field using a 5-point stencil for the
+        partial derivatives if `stencil` is '5point', or the corner-valued 2nd
+        order stencil of `stencil` is 'corner'.
+        """
         trans = cow_dfield_transf1
-        if method == "5point":
+        if name is None: name = "del_dot_" + self._name
+        if stencil == "5point":
             assert self.domain.guard >= 2
-            res = ScalarField3d(self._domain, name="del_dot_"+self._name)
+            res = ScalarField3d(self._domain, name=name)
             trans(res._cdfield, self._cdfield, cow_trans_div5, None)
             return res
-        elif method == "corner":
+        elif stencil == "corner":
             assert self.domain.guard >= 1
-            res = ScalarField3d(self._domain, name="del_dot_"+self._name)
+            res = ScalarField3d(self._domain, name=name)
             trans(res._cdfield, self._cdfield, cow_trans_divcorner, None)
             return res
         else:
-            raise ValueError("keyword 'method' must be one of ['5point', "
+            raise ValueError("keyword 'stencil' must be one of ['5point', "
                              "'corner']")
+
+    def solenoidal(self, name=None):
+        """
+        Returns the solenoidal (curl-like) part of the vector field's Helmholtz
+        decomposition. Projection is done using the Fourier decomposition.
+        """
+        if name is None: name = self._name + "-solenoidal"
+        sol = VectorField3d(self._domain, members=self._members, name=name)
+        sol.value[:] = self.value
+        cow_fft_helmholtzdecomp(sol._cdfield, COW_PROJECT_OUT_DIV)
+        return sol
+
+    def dilatational(self, name=None):
+        """
+        Returns the dilatational (div-like) part of the vector field's Helmholtz
+        decomposition. Projection is done using the Fourier decomposition.
+        """
+        if name is None: name = self._name + "-dilatational"
+        div = VectorField3d(self._domain, members=self._members, name=name)
+        div.value[:] = self.value
+        cow_fft_helmholtzdecomp(div._cdfield, COW_PROJECT_OUT_CURL)
+        return div
+
+    def power_spectrum(self, bins=200, spacing="linear", name=None):
+        """
+        Computes the spherically integrated power spectrum P(k) of the vector
+        field, where P(k) = \vec{f}(\vec{k}) \cdot \vec{f}^*(\vec{k}).
+        """
+        if name is None: name = self._name + "-pspec"
+        pspec = Histogram1d(0.0, 1.0, bins=bins, spacing=spacing,
+                            name=name, commit=False)
+        cow_fft_pspecvecfield(self._cdfield, pspec._chist)
+        return pspec
+
 
 class Histogram1d(object):
     """
@@ -173,17 +220,18 @@ class Histogram1d(object):
                 "density": COW_HIST_BINMODE_DENSITY,
                 "average": COW_HIST_BINMODE_AVERAGE}
 
-    def __init__(self, x0, x1, N=200, spacing="linear", binmode="counts",
-                 name="histogram"):
+    def __init__(self, x0, x1, bins=200, spacing="linear", binmode="counts",
+                 name="histogram", commit=True):
         self._chist = cow_histogram_new()
         self._name = name
         cow_histogram_setlower(self._chist, 0, x0)
         cow_histogram_setupper(self._chist, 0, x1)
-        cow_histogram_setnbins(self._chist, 0, N)
+        cow_histogram_setnbins(self._chist, 0, bins)
         cow_histogram_setbinmode(self._chist, self._binmode[binmode])
         cow_histogram_setspacing(self._chist, self._spacing[spacing])
         cow_histogram_setnickname(self._chist, name)
-        cow_histogram_commit(self._chist)
+        if commit:
+            cow_histogram_commit(self._chist)
 
     def __del__(self):
         cow_histogram_del(self._chist)
@@ -192,19 +240,22 @@ class Histogram1d(object):
         """ Bins the data point with value `val` and weight `weight` """
         cow_histogram_addsample1(self._chist, val, weight)
 
-    def dump(self, fname, gname="", format=None):
+    def dump(self, fname, gname="", format="guess"):
         """
         Writes the histogram to the HDF5 file `fname` under the group
         `gname`/self._name if `format` is 'hdf5', and an ascii table if
-        'ascii'. By default `format` to guessed from the file extension.
+        'ascii'. By default `format` is guessed from the file extension.
         """
         assert type(fname) is str
         assert type(gname) is str
-        if not format:
-            if fname.endswith('.h5'):
+        if format == "guess":
+            if fname.endswith('.h5') or fname.endswith('.hdf5'):
                 format = "hdf5" 
             elif fname.endswith('.dat') or fname.endswith('.txt'):
-                format = "ascii" 
+                format = "ascii"
+            else:
+                raise ValueError("file format could not be inferred from %s" %
+                                 fname)
         if format == "hdf5":
             cow_histogram_dumphdf5(self._chist, fname, gname)
         elif format == "ascii":
