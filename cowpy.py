@@ -2,12 +2,8 @@
 import os
 import atexit
 import numpy as np
-from _cow import *
+from cow import *
 
-
-def cow_exit():
-    print "finalizing cow..."
-    cow_finalize()
 
 KILOBYTES = 1 << 10
 MEGABYTES = 1 << 20
@@ -15,6 +11,10 @@ modes = 0
 hdf5_collective = os.getenv("COW_HDF5_COLLECTIVE", 0)
 modes |= (COW_NOREOPEN_STDOUT if os.getenv("COW_NOREOPEN_STDOUT", 0) else 0)
 modes |= (COW_DISABLE_MPI if os.getenv("COW_DISABLE_MPI", 0) else 0)
+
+def cow_exit():
+    print "finalizing cow..."
+    cow_finalize()
 
 atexit.register(cow_exit)
 cow_init(0, None, modes)
@@ -107,7 +107,18 @@ class DataField(object):
         cow_dfield_sampleexecute(self._cdfield)
         x = cow_dfield_getsamplecoords(self._cdfield).copy()
         P = cow_dfield_getsampleresult(self._cdfield).copy()
+        # To save memory, reset the sample coordinate buffer
+        cow_dfield_setsamplecoords(self._cdfield, [[0.0, 0.0, 0.0]])
         return  x, P
+
+    def apply_transform(self, args, op, userdata=None):
+        cow_dfield_clearargs(self._cdfield)
+        for arg in args:
+            cow_dfield_pusharg(self._cdfield, arg._cdfield)
+        cow_dfield_settransform(self._cdfield, op)
+        cow_dfield_setuserdata(self._cdfield, userdata)
+        cow_dfield_transformexecute(self._cdfield)
+        return self
 
     def __getitem__(self, key):
         if type(key) is int:
@@ -130,15 +141,16 @@ class DataField(object):
                  "padding: %s" % self.domain.guard]
         return "{" + "\n\t".join(props) + "}"
 
+
 class ScalarField3d(DataField):
-    def __init__(self, domain, members=["f"], name="scalarfield"):
+    def __init__(self, domain, members=("f",), name="scalarfield"):
         assert len(members) == 1
         assert domain._nd == 3
         super(ScalarField3d, self).__init__(domain, members, name)
 
 
 class VectorField3d(DataField):
-    def __init__(self, domain, members=["fx","fy","fz"], name="vectorfield"):
+    def __init__(self, domain, members=("fx","fy","fz"), name="vectorfield"):
         assert len(members) == 3
         assert domain._nd == 3
         super(VectorField3d, self).__init__(domain, members, name)
@@ -151,8 +163,7 @@ class VectorField3d(DataField):
         assert self.domain.guard >= 2
         if name is None: name = "del_cross_" + self._name
         res = VectorField3d(self._domain, name=name)
-        cow_dfield_transf1(res._cdfield, self._cdfield, cow_trans_rot5, None)
-        return res
+        return res.apply_transform([self], cow_trans_rot5)
 
     def divergence(self, stencil="5point", name=None):
         """
@@ -160,21 +171,18 @@ class VectorField3d(DataField):
         partial derivatives if `stencil` is '5point', or the corner-valued 2nd
         order stencil of `stencil` is 'corner'.
         """
-        trans = cow_dfield_transf1
         if name is None: name = "del_dot_" + self._name
         if stencil == "5point":
             assert self.domain.guard >= 2
-            res = ScalarField3d(self._domain, name=name)
-            trans(res._cdfield, self._cdfield, cow_trans_div5, None)
-            return res
+            op = cow_trans_div5
         elif stencil == "corner":
             assert self.domain.guard >= 1
-            res = ScalarField3d(self._domain, name=name)
-            trans(res._cdfield, self._cdfield, cow_trans_divcorner, None)
-            return res
+            op = cow_trans_divcorner
         else:
             raise ValueError("keyword 'stencil' must be one of ['5point', "
                              "'corner']")
+        res = ScalarField3d(self._domain, name=name)
+        return res.apply_transform([self], op)
 
     def solenoidal(self, name=None):
         """

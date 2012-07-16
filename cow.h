@@ -76,10 +76,11 @@ void cow_dfield_setname(cow_dfield *f, const char *name);
 void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out);
 void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out);
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata);
-void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
-			  cow_transform op, void *udata);
-void cow_dfield_transf1(cow_dfield *result, cow_dfield *args, cow_transform op,
-			void *udata);
+void cow_dfield_settransform(cow_dfield *f, cow_transform op);
+void cow_dfield_clearargs(cow_dfield *f);
+void cow_dfield_pusharg(cow_dfield *f, cow_dfield *arg);
+void cow_dfield_setuserdata(cow_dfield *f, void *userdata);
+void cow_dfield_transformexecute(cow_dfield *f);
 const char *cow_dfield_iteratemembers(cow_dfield *f);
 const char *cow_dfield_nextmember(cow_dfield *f);
 const char *cow_dfield_getname(cow_dfield *f);
@@ -190,6 +191,9 @@ struct cow_dfield
   int ownsdata; // client code can own the data: see setbuffer function
   cow_domain *domain; // pointer to an associated domain
   cow_transform transform; // used only by internal code
+  cow_dfield **transargs; // list of arguments for transform, used internally
+  void *userdata; // shallow pointer to user-supplied data item
+  int transargslen;
   double *samplecoords;
   double *sampleresult;
   int samplecoordslen;

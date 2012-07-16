@@ -323,6 +323,9 @@ cow_dfield *cow_dfield_new(cow_domain *domain, const char *name)
     .ownsdata = 0,
     .domain = domain,
     .transform = NULL,
+    .transargs = NULL,
+    .transargslen = 0,
+    .userdata = NULL,
     .samplecoords = NULL,
     .sampleresult = NULL,
     .samplecoordslen = 0,
@@ -343,6 +346,7 @@ void cow_dfield_del(cow_dfield *f)
   if (f->ownsdata) {
     free(f->data);
   }
+  free(f->transargs);
   free(f->samplecoords);
   free(f->sampleresult);
   free(f);
@@ -703,9 +707,33 @@ void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
     break;
   }
 }
-void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
-                          cow_transform op, void *udata)
+void cow_dfield_settransform(cow_dfield *f, cow_transform op)
 {
+  f->transform = op;
+}
+void cow_dfield_clearargs(cow_dfield *f)
+{
+  free(f->transargs);
+  f->transargs = NULL;
+  f->transargslen = 0;
+}
+void cow_dfield_pusharg(cow_dfield *f, cow_dfield *arg)
+{
+  int N = (f->transargslen += 1);
+  f->transargs = (cow_dfield**) realloc(f->transargs, N * sizeof(cow_dfield*));
+  f->transargs[N - 1] = arg;
+}
+void cow_dfield_setuserdata(cow_dfield *f, void *userdata)
+{
+  f->userdata = userdata;
+}
+void cow_dfield_transformexecute(cow_dfield *f)
+{
+  cow_dfield *result = f;
+  cow_dfield **args = f->transargs;
+  int nargs = f->transargslen;
+  cow_transform op = f->transform;
+  void *udata = f->userdata;
   int ni = cow_domain_getnumlocalzonesinterior(result->domain, 0);
   int nj = cow_domain_getnumlocalzonesinterior(result->domain, 1);
   int nk = cow_domain_getnumlocalzonesinterior(result->domain, 2);
@@ -754,11 +782,6 @@ void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
   free(S);
   free(x);
   cow_dfield_syncguard(result);
-}
-void cow_dfield_transf1(cow_dfield *result, cow_dfield *args, cow_transform op,
-			void *udata)
-{
-  cow_dfield_transform(result, &args, 1, op, udata);
 }
 
 #if (COW_MPI)
