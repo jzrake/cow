@@ -270,7 +270,7 @@ void _rem(cow_dfield *f, double *Ri, int Nsamp, double *Ro, double *Po,
     if (Nd>=1) while (r1[0] < gx0[0]) r1[0] += Lx;
     if (Nd>=2) while (r1[1] < gx0[1]) r1[1] += Ly;
     if (Nd>=3) while (r1[2] < gx0[2]) r1[2] += Lz;
-    int remote = cow_domain_subgridatposition(f->domain, r1);
+    int remote = cow_domain_subgridatposition(f->domain, r1[0], r1[1], r1[2]);
     double **remR = &remote_r1[remote];
     double **remP = &remote_P1[remote];
     for (int d=0; d<3; ++d) {

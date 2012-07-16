@@ -55,8 +55,20 @@ def testcb():
     J = B.curl()
     M1 = B.divergence(stencil="corner")
     M2 = B.divergence(stencil="5point")
-    print J
-    print M1
+    assert J.name == "del_cross_B"
+    assert M1.name == "del_dot_B"
+
+def testreduce():
+    import cow
+    domain = cowpy.DistributedDomain([10,10,10], guard=2)
+    J = cowpy.VectorField3d(domain, name="J")
+    J[0] = 0.0
+    J[0][2,2,2] = 10.0
+    J[0][2,2,3] =-10.0
+    min, max, sum = J.reduce(cow.cow_trans_elem0)
+    assert (min + 10.0) < 1e-16
+    assert (max - 10.0) < 1e-16
+    assert (sum - 0.0) < 1e-16
 
 if __name__ == "__main__":
     testhist()
@@ -64,3 +76,4 @@ if __name__ == "__main__":
     testio()
     testcb()
     testhelm()
+    testreduce()

@@ -268,14 +268,15 @@ int cow_domain_getcartrank(cow_domain *d)
   return 0;
 #endif
 }
-int cow_domain_subgridatposition(cow_domain *d, double *x)
+int cow_domain_subgridatposition(cow_domain *d, double x, double y, double z)
 {
 #if (COW_MPI)
   int index[3];
+  double r[3] = { x, y, z };
   double *x0 = d->glb_lower;
   double *x1 = d->glb_upper;
   for (int i=0; i<d->n_dims; ++i) {
-    index[i] = d->proc_sizes[i] * (x[i] - x0[i]) / (x1[i] - x0[i]);
+    index[i] = d->proc_sizes[i] * (r[i] - x0[i]) / (x1[i] - x0[i]);
   }
   int their_rank;
   MPI_Cart_rank(d->mpi_cart, index, &their_rank);
@@ -646,31 +647,30 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
 }
 static void _reduce(double *result, double **args, int **strides, void *udata)
 {
-  void **u = (void**)udata;
+  void **u = (void**) udata;
   cow_dfield *f = (cow_dfield*) u[0];
-  double *min = &((double*)u[1])[0];
-  double *max = &((double*)u[1])[1];
-  double *sum = &((double*)u[1])[2];
+  double *min = &((double*) u[1])[0];
+  double *max = &((double*) u[1])[1];
+  double *sum = &((double*) u[1])[2];
   double y;
   f->transform(&y, args, strides, NULL);
   if (y > *max) *max = y;
   if (y < *min) *min = y;
   *sum += y;
 }
-void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result)
+void cow_dfield_reduce(cow_dfield *f, double x[3])
 {
-  void *udata[2] = { f, result };
-  result[0] = 1e10; // min
-  result[1] =-1e10; // max
-  result[2] = 0.0; // sum
-  f->transform = op;
+  void *udata[2] = { f, x };
+  x[0] = 1e10; // min
+  x[1] =-1e10; // max
+  x[2] = 0.0; // sum
   cow_dfield_loop(f, _reduce, udata);
   if (!cow_mpirunning()) return;
 #if (COW_MPI)
   cow_domain *d = f->domain;
-  MPI_Allreduce(MPI_IN_PLACE, &result[0], 1, MPI_DOUBLE, MPI_MIN, d->mpi_cart);
-  MPI_Allreduce(MPI_IN_PLACE, &result[1], 1, MPI_DOUBLE, MPI_MAX, d->mpi_cart);
-  MPI_Allreduce(MPI_IN_PLACE, &result[2], 1, MPI_DOUBLE, MPI_SUM, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &x[0], 1, MPI_DOUBLE, MPI_MIN, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &x[1], 1, MPI_DOUBLE, MPI_MAX, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &x[2], 1, MPI_DOUBLE, MPI_SUM, d->mpi_cart);
 #endif
 }
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
@@ -1022,4 +1022,8 @@ void cow_trans_rot5(double *result, double **args, int **s, void *u)
   result[1] = diff5(f0, s[0][2]) - diff5(f2, s[0][0]);
   result[2] = diff5(f1, s[0][0]) - diff5(f0, s[0][1]);
 #undef diff5
+}
+void cow_trans_elem0(double *result, double **args, int **s, void *u)
+{
+  result[0] = args[0][0];
 }

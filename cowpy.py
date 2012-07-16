@@ -86,6 +86,10 @@ class DataField(object):
         cow_dfield_del(self._cdfield)
 
     @property
+    def name(self):
+        return cow_dfield_getname(self._cdfield)
+
+    @property
     def value(self):
         return self._buf
 
@@ -119,6 +123,14 @@ class DataField(object):
         cow_dfield_setuserdata(self._cdfield, userdata)
         cow_dfield_transformexecute(self._cdfield)
         return self
+
+    def reduce(self, op):
+        """
+        Returns the min, max, and sum total of the mapping `op` applied to the
+        data field.
+        """
+        cow_dfield_settransform(self._cdfield, op)
+        return cow_dfield_reduce(self._cdfield)
 
     def __getitem__(self, key):
         if type(key) is int:
@@ -244,6 +256,16 @@ class Histogram1d(object):
     def __del__(self):
         cow_histogram_del(self._chist)
 
+    @property
+    def binloc(self):
+        """ Returns the bin centers """
+        return cow_histogram_getbinlocx(self._chist).copy()
+
+    @property
+    def binval(self):
+        """ Returns the present bin values """
+        return cow_histogram_getbinval1(self._chist).copy()
+
     def add_sample(self, val, weight=1):
         """ Bins the data point with value `val` and weight `weight` """
         cow_histogram_addsample1(self._chist, val, weight)
@@ -271,16 +293,6 @@ class Histogram1d(object):
         else:
             raise ValueError("keyword 'format' must be one of ['hdf5', "
                              "'ascii']")
-
-    @property
-    def binloc(self):
-        """ Returns the bin centers """
-        return cow_histogram_getbinlocx(self._chist).copy()
-
-    @property
-    def binval(self):
-        """ Returns the present bin values """
-        return cow_histogram_getbinval1(self._chist).copy()
 
     def __setattr__(self, key, value):
         if key == "name":

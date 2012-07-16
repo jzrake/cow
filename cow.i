@@ -29,6 +29,7 @@ void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3)
 void cow_trans_divcorner(double *result, double **args, int **s, void *u);
 void cow_trans_div5(double *result, double **args, int **s, void *u);
 void cow_trans_rot5(double *result, double **args, int **s, void *u);
+void cow_trans_elem0(double *result, double **args, int **s, void *u);
 
   %}
 
@@ -43,7 +44,8 @@ void cow_trans_rot5(double *result, double **args, int **s, void *u);
 
 %include "numpy.i"
 
-%apply(double IN_ARRAY1[ANY]){(double x[3])};
+ //%apply(double IN_ARRAY1[ANY]){(double x[3])};
+%apply(double ARGOUT_ARRAY1[ANY]){(double x[3])};
 
 %apply(double *IN_ARRAY2, int DIM1, int DIM2)
 {(double *x, int n0, int n1)};
@@ -71,3 +73,4 @@ extern void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3);
 %constant void cow_trans_divcorner(double *result, double **args, int **s, void *u);
 %constant void cow_trans_div5(double *result, double **args, int **s, void *u);
 %constant void cow_trans_rot5(double *result, double **args, int **s, void *u);
+%constant void cow_trans_elem0(double *result, double **args, int **s, void *u);

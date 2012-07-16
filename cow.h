@@ -63,7 +63,7 @@ int cow_domain_getnumglobalzones(cow_domain *d, int dim);
 int cow_domain_getglobalstartindex(cow_domain *d, int dim);
 int cow_domain_getgridspacing(cow_domain *d, int dim);
 int cow_domain_getcartrank(cow_domain *d);
-int cow_domain_subgridatposition(cow_domain *d, double x[3]);
+int cow_domain_subgridatposition(cow_domain *d, double x, double y, double z);
 int cow_domain_indexatposition(cow_domain *d, int dim, double x);
 double cow_domain_positionatindex(cow_domain *d, int dim, int index);
 
@@ -100,7 +100,7 @@ void cow_dfield_sampleexecute(cow_dfield *f);
 int cow_dfield_getownsdata(cow_dfield *f);
 void *cow_dfield_getbuffer(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
-void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result);
+void cow_dfield_reduce(cow_dfield *f, double x[3]);
 void cow_dfield_write(cow_dfield *f, const char *fname);
 void cow_dfield_read(cow_dfield *f, const char *fname);
 
