@@ -42,7 +42,7 @@ def testhist():
     hist = cowpy.Histogram1d(0, 1, bins=10, binmode="counts", name="myhist")
     for n in range(1000):
         hist.add_sample(np.random.rand())
-    print hist.binloc
+    hist.seal()
     assert abs(hist.binval.sum() - 1000) < 1e-16
     hist.name = "myrealhist"
     hist.dump("hist.dat")
@@ -72,18 +72,20 @@ def testreduce():
     domain = cowpy.DistributedDomain([10,10,10], guard=2)
     J = cowpy.VectorField3d(domain, name="J")
     J[0] = 0.0
+    J[0][2,0,2] = 20.0 # guard cells should not be included in the reduction
+    J[0][2,12,2] = -20.0
     J[0][2,2,2] = 10.0
     J[0][2,2,3] =-10.0
-    min, max, sum = J.reduce(cow.cow_trans_elem0)
-    assert (min + 10.0) < 1e-16
-    assert (max - 10.0) < 1e-16
-    assert (sum - 0.0) < 1e-16
+    min, max, sum = J.reduce(0)#cow.cow_trans_elem0)
+    assert abs(min + 10.0) < 1e-16
+    assert abs(max - 10.0) < 1e-16
+    assert abs(sum - 0.0) < 1e-16
 
 if __name__ == "__main__":
-    testhist()
-    testsamp()
-    testglobind()
-    testio()
-    testcb()
-    testhelm()
+    #testhist()
+    #testsamp()
+    #testglobind()
+    #testio()
+    #testcb()
+    #testhelm()
     testreduce()

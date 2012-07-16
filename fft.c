@@ -59,10 +59,10 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
 // -----------------------------------------------------------------------------
 // This function computes the spherically integrated power spectrum of the
 // vector field represented in `f`. The user needs to supply a half-initialized
-// histogram, which has not yet been committed. This function will commit and
-// populate the histogram by doing the FFT's on the vector field components. The
-// user must have supplied the following fields like in the example below, all
-// other will be over-written.
+// histogram, which has not yet been committed. This function will commit,
+// populate, and seal the histogram by doing the FFT's on the vector field
+// components. The user must have supplied the following fields like in the
+// example below, all other will be over-written.
 //
 //  cow_histogram_setnbins(hist, 0, 200);
 //  cow_histogram_setspacing(hist, COW_HIST_SPACING_LOG/LINEAR);
@@ -144,6 +144,7 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
   free(gx);
   free(gy);
   free(gz);
+  cow_histogram_seal(hist);
   fft_3d_destroy_plan(plan);
   printf("[%s] %s took %3.2f seconds\n",
 	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);

@@ -167,12 +167,16 @@ class DataField(object):
         cow_dfield_transformexecute(self._cdfield)
         return self
 
-    def reduce(self, op):
+    def reduce(self, member):
         """
-        Returns the min, max, and sum total of the mapping `op` applied to the
-        data field.
+        Returns the min, max, and sum total of the data member `member`.
         """
-        cow_dfield_settransform(self._cdfield, op)
+        if type(member) is str:
+            member = self._lookup[member]
+        else:
+            assert member < len(self._members)
+        cow_dfield_settransform(self._cdfield, cow_trans_component)
+        cow_dfield_setuserdata(self._cdfield, None)
         return cow_dfield_reduce(self._cdfield)
 
     def __getitem__(self, key):
@@ -300,18 +304,33 @@ class Histogram1d(object):
         cow_histogram_del(self._chist)
 
     @property
+    def sealed(self):
+        return bool(cow_histogram_getsealed(self._chist))
+
+    @property
     def binloc(self):
         """ Returns the bin centers """
+        assert self.sealed
         return cow_histogram_getbinlocx(self._chist).copy()
 
     @property
     def binval(self):
         """ Returns the present bin values """
+        assert self.sealed
         return cow_histogram_getbinval1(self._chist).copy()
 
     def add_sample(self, val, weight=1):
         """ Bins the data point with value `val` and weight `weight` """
+        assert not self.sealed
         cow_histogram_addsample1(self._chist, val, weight)
+
+    def seal(self):
+        """
+        Locks out the addition of new samples. Also synchronizes across all
+        participating ranks. Must be called before any function that gets
+        histogram data or dumps it to file.
+        """
+        cow_histogram_seal(self._chist)
 
     def dump(self, fname, gname="", format="guess"):
         """
@@ -319,6 +338,7 @@ class Histogram1d(object):
         `gname`/self._name if `format` is 'hdf5', and an ascii table if
         'ascii'. By default `format` is guessed from the file extension.
         """
+        assert self.sealed
         assert type(fname) is str
         assert type(gname) is str
         if format == "guess":

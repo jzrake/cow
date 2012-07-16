@@ -31,6 +31,7 @@ cow_histogram *cow_histogram_new()
     .spacing = COW_HIST_SPACING_LINEAR,
     .n_dims = 0,
     .committed = 0,
+    .sealed = 0,
     .transform = NULL,
     .binlocx = NULL,
     .binlocy = NULL,
@@ -128,7 +129,7 @@ void cow_histogram_setdomaincomm(cow_histogram *h, cow_domain *d)
 }
 void cow_histogram_setbinmode(cow_histogram *h, int binmode)
 {
-  if (h->committed) return;
+  if (h->committed || h->sealed) return;
   switch (binmode) {
   case COW_HIST_BINMODE_DENSITY: h->binmode = binmode; break;
   case COW_HIST_BINMODE_AVERAGE: h->binmode = binmode; break;
@@ -138,7 +139,7 @@ void cow_histogram_setbinmode(cow_histogram *h, int binmode)
 }
 void cow_histogram_setspacing(cow_histogram *h, int spacing)
 {
-  if (h->committed) return;
+  if (h->committed || h->sealed) return;
   switch (spacing) {
   case COW_HIST_SPACING_LINEAR: h->spacing = spacing; break;
   case COW_HIST_SPACING_LOG: h->spacing = spacing; break;
@@ -147,7 +148,7 @@ void cow_histogram_setspacing(cow_histogram *h, int spacing)
 }
 void cow_histogram_setnbins(cow_histogram *h, int dim, int nbins)
 {
-  if (h->committed) return;
+  if (h->committed || h->sealed) return;
   switch (dim) {
   case 0: h->nbinsx = nbins; break;
   case 1: h->nbinsy = nbins; break;
@@ -157,7 +158,7 @@ void cow_histogram_setnbins(cow_histogram *h, int dim, int nbins)
 }
 void cow_histogram_setlower(cow_histogram *h, int dim, double v0)
 {
-  if (h->committed) return;
+  if (h->committed || h->sealed) return;
   switch (dim) {
   case 0: h->x0 = v0; break;
   case 1: h->y0 = v0; break;
@@ -167,7 +168,7 @@ void cow_histogram_setlower(cow_histogram *h, int dim, double v0)
 }
 void cow_histogram_setupper(cow_histogram *h, int dim, double v1)
 {
-  if (h->committed) return;
+  if (h->committed || h->sealed) return;
   switch (dim) {
   case 0: h->x1 = v1; break;
   case 1: h->y1 = v1; break;
@@ -199,6 +200,7 @@ static void popcb(double *result, double **args, int **s, void *u)
 }
 void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op)
 {
+  if (!h->committed || h->sealed) return;
   cow_domain *d = f->domain;
   h->transform = op;
   cow_histogram_setdomaincomm(h, d);
@@ -206,7 +208,7 @@ void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op)
 }
 void cow_histogram_addsample1(cow_histogram *h, double x, double w)
 {
-  if (!h->committed) return;
+  if (!h->committed || h->sealed) return;
   for (int n=0; n<h->nbinsx; ++n) {
     if (h->bedgesx[n] - 1e-14 < x && x < h->bedgesx[n+1] + 1e-14) {
       h->weight[n] += w;
@@ -214,11 +216,10 @@ void cow_histogram_addsample1(cow_histogram *h, double x, double w)
       return;
     }
   }
-  //  printf("value %16.14f not in range (%16.14f %16.14f)\n", x, h->x0, h->x1);
 }
 void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w)
 {
-  if (!h->committed) return;
+  if (!h->committed || h->sealed) return;
   int nx=-1, ny=-1;
   for (int n=0; n<h->nbinsx; ++n) {
     if (h->bedgesx[n] < x && x < h->bedgesx[n+1]) {
@@ -241,37 +242,58 @@ void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w)
     return;
   }
 }
-void cow_histogram_synchronize(cow_histogram *h)
+void cow_histogram_seal(cow_histogram *h)
 {
-  if (!h->committed || !cow_mpirunning()) return;
+  if (!h->committed || h->sealed) return;
 #if (COW_MPI)
-  int nbins = h->nbinsx * h->nbinsy;
-  MPI_Comm c = h->comm;
-  MPI_Allreduce(MPI_IN_PLACE, h->weight, nbins, MPI_DOUBLE, MPI_SUM, c);
-  MPI_Allreduce(MPI_IN_PLACE, h->counts, nbins, MPI_LONG, MPI_SUM, c);
+  if (cow_mpirunning()) {
+    int nbins = h->nbinsx * h->nbinsy;
+    MPI_Comm c = h->comm;
+    MPI_Allreduce(MPI_IN_PLACE, h->weight, nbins, MPI_DOUBLE, MPI_SUM, c);
+    MPI_Allreduce(MPI_IN_PLACE, h->counts, nbins, MPI_LONG, MPI_SUM, c);
+  }
 #endif
+  h->sealed = 1;
+  _filloutput(h);
+}
+int cow_histogram_getsealed(cow_histogram *h)
+{
+  return h->sealed;
 }
 void cow_histogram_getbinlocx(cow_histogram *h, double **x, int *n0)
 {
-  _filloutput(h);
+  if (!(h->committed && h->sealed)) {
+    *x = NULL;
+    *n0 = 0;
+  }
   if (n0) *n0 = h->nbinsx;
   if (x) *x = h->binlocx;
 }
 void cow_histogram_getbinlocy(cow_histogram *h, double **x, int *n0)
 {
-  _filloutput(h);
+  if (!(h->committed && h->sealed)) {
+    *x = NULL;
+    *n0 = 0;
+  }
   if (n0) *n0 = h->nbinsy;
   if (x) *x = h->binlocy;
 }
 void cow_histogram_getbinval1(cow_histogram *h, double **x, int *n0)
 {
-  _filloutput(h);
+  if (!(h->committed && h->sealed)) {
+    *x = NULL;
+    *n0 = 0;
+  }
   if (n0) *n0 = h->nbinsx;
   if (x) *x = h->binvalv;
 }
 void cow_histogram_getbinval2(cow_histogram *h, double **x, int *n0, int *n1)
 {
-  _filloutput(h);
+  if (!(h->committed && h->sealed)) {
+    *x = NULL;
+    *n0 = 0;
+    *n1 = 0;
+  }
   if (n0) *n0 = h->nbinsx;
   if (n1) *n1 = h->nbinsy;
   if (x) *x = h->binvalv;
@@ -279,6 +301,9 @@ void cow_histogram_getbinval2(cow_histogram *h, double **x, int *n0, int *n1)
 
 double cow_histogram_getbinval(cow_histogram *h, int i, int j)
 {
+  if (!(h->committed && h->sealed)) {
+    return 0.0;
+  }
   if (!h->committed) return 0.0;
   if (i > h->nbinsx || j > h->nbinsy) return 0.0;
   int c = h->counts[i*h->nbinsy + j];
@@ -300,13 +325,12 @@ double cow_histogram_getbinval(cow_histogram *h, int i, int j)
 void cow_histogram_dumpascii(cow_histogram *h, const char *fn)
 // -----------------------------------------------------------------------------
 // Dumps the histogram as ascii to the file named `fn`. Synchronizes it across
-// processes before doing so. All MPI processes must participate, the function
-// uses rank 0 to do the write.
+// processes before doing so. The function uses rank 0 to do the write.
 // -----------------------------------------------------------------------------
 {
-  if (!h->committed) return;
-  cow_histogram_synchronize(h);
-  _filloutput(h);
+  if (!(h->committed && h->sealed)) {
+    return;
+  }
 #if (COW_MPI)
   if (cow_mpirunning()) {
     int rank;
@@ -343,17 +367,16 @@ void cow_histogram_dumpascii(cow_histogram *h, const char *fn)
 void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *gn)
 // -----------------------------------------------------------------------------
 // Dumps the histogram to the HDF5 file named `fn`, under the group
-// `gn`/h->fullname. Synchronizes it across processes before doing so. All MPI
-// processes must participate, the function uses rank 0 to do the write.
+// `gn`/h->fullname. The function uses rank 0 to do the write.
 // -----------------------------------------------------------------------------
 {
 #if (COW_HDF5)
-  if (!h->committed) return;
+  if (!(h->committed && h->sealed)) {
+    return;
+  }
   char gname[1024];
   int rank = 0;
   snprintf(gname, 1024, "%s/%s", gn, h->nickname);
-  cow_histogram_synchronize(h);
-  _filloutput(h);
 #if (COW_MPI)
   if (cow_mpirunning()) {
     MPI_Comm_rank(h->comm, &rank);

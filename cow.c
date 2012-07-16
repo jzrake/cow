@@ -1028,7 +1028,7 @@ void cow_trans_rot5(double *result, double **args, int **s, void *u)
   result[2] = diff5(f1, s[0][0]) - diff5(f0, s[0][1]);
 #undef diff5
 }
-void cow_trans_elem0(double *result, double **args, int **s, void *u)
+void cow_trans_component(double *result, double **args, int **s, void *u)
 {
   result[0] = args[0][0];
 }

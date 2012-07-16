@@ -29,7 +29,7 @@ void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3)
 void cow_trans_divcorner(double *result, double **args, int **s, void *u);
 void cow_trans_div5(double *result, double **args, int **s, void *u);
 void cow_trans_rot5(double *result, double **args, int **s, void *u);
-void cow_trans_elem0(double *result, double **args, int **s, void *u);
+void cow_trans_component(double *result, double **args, int **s, void *u);
 
   %}
 
@@ -73,4 +73,4 @@ extern void setarray3(cow_dfield *f, double *x, int n0, int n1, int n2, int n3);
 %constant void cow_trans_divcorner(double *result, double **args, int **s, void *u);
 %constant void cow_trans_div5(double *result, double **args, int **s, void *u);
 %constant void cow_trans_rot5(double *result, double **args, int **s, void *u);
-%constant void cow_trans_elem0(double *result, double **args, int **s, void *u);
+%constant void cow_trans_component(double *result, double **args, int **s, void *u);

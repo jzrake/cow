@@ -118,7 +118,8 @@ void cow_histogram_addsample1(cow_histogram *h, double x, double w);
 void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w);
 void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
 void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
-void cow_histogram_synchronize(cow_histogram *h);
+void cow_histogram_seal(cow_histogram *h);
+int cow_histogram_getsealed(cow_histogram *h);
 void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op);
 void cow_histogram_getbinlocx(cow_histogram *h, double **x, int *n0);
 void cow_histogram_getbinlocy(cow_histogram *h, double **x, int *n0);
@@ -221,6 +222,7 @@ struct cow_histogram
   int spacing;
   int n_dims;
   int committed;
+  int sealed; // once sealed, is sync'ed and does not accept more samples
   cow_transform transform;
   double *binlocx; // Pointers to these arrays are returned by the getbinlocx
   double *binlocy; // getbinlocy, and getbinval functions.
