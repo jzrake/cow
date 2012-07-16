@@ -22,19 +22,21 @@ def testio():
     dfield["vx"] = 2.1
     dfield["vy"] = 2.2
     dfield["vz"] = 2.3
-    dfield.dump("iotest.h5")
+    dfield.dump("test.h5")
     dfield.value[:] = 0.0
-    dfield.read("iotest.h5")
+    dfield.read("test.h5")
     assert abs(dfield["vx"] - 2.1).all() < 1e-16
     assert abs(dfield["vy"] - 2.2).all() < 1e-16
     assert abs(dfield["vz"] - 2.3).all() < 1e-16
 
 def testhist():
-    hist = cowpy.Histogram1d(0, 1, N=10, binmode="counts")
+    hist = cowpy.Histogram1d(0, 1, N=10, binmode="counts", name="myhist")
     for n in range(1000):
         hist.add_sample(np.random.rand())
     print hist.binloc
     assert abs(hist.binval.sum() - 1000) < 1e-16
+    hist.dump("hist.dat")
+    hist.dump("test.h5", gname="G1/G2")
 
 def testcb():
     domain = cowpy.DistributedDomain([10,10,10], guard=2)
