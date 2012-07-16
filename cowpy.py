@@ -91,7 +91,29 @@ class DataField(object):
 
     @property
     def value(self):
+        """
+        Returns the numpy.ndarray object serving as the buffer for the
+        underlying C API. The last dimension contains the data members, so the
+        result is an (N+1)-d array for an N-d domain. The first and last zones
+        in the array are padding, or 'guard' zones.
+        """
         return self._buf
+
+    @property
+    def interior(self):
+        """
+        Returns a view of the buffer object which refers only to the interior
+        portion, excluding the guard zones.
+        """
+        ng = self.domain.guard
+        if ng == 0:
+            return self._buf
+        elif self.domain._nd == 1:
+            return self._buf[ng:-ng, :]
+        elif self.domain._nd == 2:
+            return self._buf[ng:-ng, ng:-ng, :]
+        elif self.domain._nd == 3:
+            return self._buf[ng:-ng, ng:-ng, ng:-ng, :]
 
     @property
     def domain(self):
@@ -105,15 +127,30 @@ class DataField(object):
         assert type(fname) is str
         cow_dfield_read(self._cdfield, fname)
 
-    def sample(self, points):
-        cow_dfield_setsamplecoords(self._cdfield, points)
+    def sample_global(self, points):
+        """
+        Samples the distributed domain at the provided list of physical
+        coordinates, `points` which has the shape (N x nd). Returns those
+        coordinates, but permuted arbitrarily, and their associated field
+        values. Values are multi-linearly interpolated from cell centers. This
+        function must be called by all ranks which own this array, although the
+        size of `points` may vary between ranks, and is allowed to be zero.
+        """
+        assert points.shape[1] == self.domain._nd
+        p3d = np.zeros([points.shape[0], 3])
+        for n in range(self.domain._nd):
+            p3d[:,n] = points[:,n]
+        cow_dfield_setsamplecoords(self._cdfield, p3d)
         cow_dfield_setsamplemode(self._cdfield, COW_SAMPLE_LINEAR)
         cow_dfield_sampleexecute(self._cdfield)
         x = cow_dfield_getsamplecoords(self._cdfield).copy()
         P = cow_dfield_getsampleresult(self._cdfield).copy()
         # To save memory, reset the sample coordinate buffer
-        cow_dfield_setsamplecoords(self._cdfield, [[0.0, 0.0, 0.0]])
+        cow_dfield_setsamplecoords(self._cdfield, np.zeros([0,3]))
         return  x, P
+
+    def index_global(self, ind):
+        return cow_dfield_sampleglobalind(self._cdfield, ind[0], ind[1], ind[2])
 
     def apply_transform(self, args, op, userdata=None):
         cow_dfield_clearargs(self._cdfield)

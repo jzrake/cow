@@ -10,11 +10,20 @@ def testsamp():
     dfield["vx"] = 2.1
     dfield["vy"] = 2.2
     dfield["vz"] = 2.3
-    x, P = dfield.sample(sampx)
+    x, P = dfield.sample_global(sampx)
     assert abs(P[:,0] - 2.1).all() < 1e-16
     assert abs(P[:,1] - 2.2).all() < 1e-16
     assert abs(P[:,2] - 2.3).all() < 1e-16
     assert len(x) == len(sampx)
+
+def testglobind():
+    domain = cowpy.DistributedDomain([10,10,10], guard=3)
+    dfield = cowpy.DataField(domain, ["vx", "vy", "vz"])
+    dfield.interior[:,:,:,:] = np.mgrid[0:10,0:10,0:10].transpose([1,2,3,0])
+    x, y, z = dfield.index_global([2, 3, 4])
+    assert abs(x - 2) < 1e-16
+    assert abs(y - 3) < 1e-16
+    assert abs(z - 4) < 1e-16
 
 def testio():
     domain = cowpy.DistributedDomain([12,12,16], guard=3)
@@ -71,9 +80,10 @@ def testreduce():
     assert (sum - 0.0) < 1e-16
 
 if __name__ == "__main__":
-    testhist()
-    testsamp()
-    testio()
-    testcb()
-    testhelm()
-    testreduce()
+    #testhist()
+    #testsamp()
+    testglobind()
+    #testio()
+    #testcb()
+    #testhelm()
+    #testreduce()

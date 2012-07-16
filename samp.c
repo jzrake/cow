@@ -43,6 +43,18 @@ void cow_dfield_setsamplemode(cow_dfield *f, int mode)
   f->samplemode = mode;
 }
 void cow_dfield_sampleexecute(cow_dfield *f)
+// -----------------------------------------------------------------------------
+// Samples `N` points on the global domain. `N` may vary between processes, or
+// be equal to zero. Points are output permuted relative to the input
+// coordinates, so take care to use `xout` as the coordinates associated with
+// samples in `P`.
+//
+// f:    IN   data field instance to sample
+// x:    IN   list of input coordinates at which to sample f's data (N x 3)
+// N:    IN   number of points to sample
+// xout: OUT  locations of returned samples, permutation of x (N x 3)
+// P:    OUT  list of filled samples (N x Q) where Q = f->n_members
+// -----------------------------------------------------------------------------
 {
   double *xout = (double*) malloc(f->samplecoordslen * 3 * sizeof(double));
   double *xin = f->samplecoords;
@@ -59,39 +71,21 @@ void cow_dfield_sampleexecute(cow_dfield *f)
   free(xout);
 }
 
-void cow_dfield_sampleglobalpos(cow_dfield *f, double *xin, int N, double *xout,
-				double *P, int mode)
-// -----------------------------------------------------------------------------
-// Samples `N` points on the global domain. `N` may vary between processes, or
-// be equal to zero. Points are output permuted relative to the input
-// coordinates, so take care to use `xout` as the coordinates associated with
-// samples in `P`.
-//
-// f:    IN   data field instance to sample
-// x:    IN   list of input coordinates at which to sample f's data (N x 3)
-// N:    IN   number of points to sample
-// xout: OUT  locations of returned samples, permutation of x (N x 3)
-// P:    OUT  list of filled samples (N x Q) where Q = f->n_members
-// -----------------------------------------------------------------------------
+void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double **x,
+				int *n0)
 {
-  if (cow_mpirunning()) {
-    _rem(f, xin, N, xout, P, mode);
-  }
-  else {
-    _loc(f, xin, N, xout, P, mode);
-  }
-}
-
-void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double *P)
-{
-  double x[3], xout[3];
+  int ng = f->domain->n_ghst;
+  double xin[3];
   i -= cow_domain_getglobalstartindex(f->domain, 0);
   j -= cow_domain_getglobalstartindex(f->domain, 1);
   k -= cow_domain_getglobalstartindex(f->domain, 2);
-  x[0] = cow_domain_positionatindex(f->domain, 0, i);
-  x[1] = cow_domain_positionatindex(f->domain, 1, j);
-  x[2] = cow_domain_positionatindex(f->domain, 2, k);
-  _rem(f, x, 1, xout, P, COW_SAMPLE_NEAREST);
+  xin[0] = cow_domain_positionatindex(f->domain, 0, i + ng);
+  xin[1] = cow_domain_positionatindex(f->domain, 1, j + ng);
+  xin[2] = cow_domain_positionatindex(f->domain, 2, k + ng);
+  cow_dfield_setsamplecoords(f, xin, 1, 3);
+  cow_dfield_setsamplemode(f, COW_SAMPLE_NEAREST);
+  cow_dfield_sampleexecute(f);
+  cow_dfield_getsampleresult(f, x, NULL, n0);
 }
 
 /* -----------------------------------------------------------------------------

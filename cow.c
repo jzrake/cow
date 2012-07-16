@@ -300,6 +300,11 @@ int cow_domain_indexatposition(cow_domain *d, int dim, double x)
   return d->n_ghst + (int)((x - d->loc_lower[dim]) / d->dx[dim]);
 }
 double cow_domain_positionatindex(cow_domain *d, int dim, int index)
+// -----------------------------------------------------------------------------
+// Returns the physical coordinates of the center of zone `index` along
+// dimension `dim`. The index includes padding, so that i=0 refers to ng zones
+// to the left of the domain boundary, where ng is the number of guard zones.
+// -----------------------------------------------------------------------------
 {
   if (dim >= 3 || !d->committed) return 0.0;
   return d->loc_lower[dim] + d->dx[dim] * (index - d->n_ghst + 0.5);
