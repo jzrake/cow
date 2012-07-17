@@ -26,26 +26,21 @@ except:
     print "No system config, using default settings"
 config['include_dirs'] += [np.get_include()]
 
-cow_module = Extension \
-('_cow',
- extra_compile_args = ['-std=c99'] + config['extra_compile_args'],
- extra_link_args = config['extra_link_args'],
- define_macros = [a for a in config.items() if a[0].startswith('COW')],
- include_dirs = config['include_dirs'],
- library_dirs = config['library_dirs'],
- libraries = config['libraries'],
- sources = ['cow.i',
-            'cow.c',
-            'io.c',
-            'hist.c',
-            'samp.c',
-            'fft.c',
-            'fft_3d.c',
-            'remap_3d.c',
-            'pack_3d.c'])
+csource = ['cow.c', 'io.c', 'hist.c', 'samp.c', 'fft.c', 'fft_3d.c',
+           'remap_3d.c', 'pack_3d.c']
+
+cow_module = Extension('_cow',
+        extra_compile_args = ['-std=c99'] + config['extra_compile_args'],
+        extra_link_args = config['extra_link_args'],
+        define_macros = [a for a in config.items() if a[0].startswith('COW')],
+        include_dirs = ["../src"] + config['include_dirs'],
+        library_dirs = config['library_dirs'],
+        libraries = config['libraries'],
+        sources = ['cow.i'] + ["../src/" + c for c in csource])
+
 setup(name        = 'cow',
       version     = '0.4',
       author      = "Jonathan Zrake",
       description = """C.O.W.""",
       ext_modules = [cow_module],
-      py_modules  = ["cow"])
+      py_modules  = ["cowpy"])

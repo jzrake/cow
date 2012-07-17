@@ -12,7 +12,7 @@
 #endif
 
 #include <numpy/arrayobject.h>
-#include "cow.h"
+#include "../src/cow.h"
 void setarray1(cow_dfield *f, double *x, int n0, int n1)
 {
   cow_dfield_setbuffer(f, x);
@@ -58,7 +58,7 @@ void cow_trans_magnitude(double *result, double **args, int **s, void *u);
 %apply(double **ARGOUTVIEW_ARRAY2, int *DIM1, int *DIM2)
 {(double **x, int *n0, int *n1)};
 
-%include "cow.h"
+%include "../src/cow.h"
 
 extern void setarray1(cow_dfield *f, double *x, int n0, int n1);
 extern void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2);
