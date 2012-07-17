@@ -55,7 +55,20 @@ static double khat_at(cow_domain *d, int i, int j, int k, double *khat);
 static double cnorm(FFT_DATA z);
 #endif
 
-void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
+void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
+// -----------------------------------------------------------------------------
+// This function computes the spherically integrated power spectrum of the
+// vector field represented in `f`. The user needs to supply a half-initialized
+// histogram, which has not yet been committed. This function will commit,
+// populate, and seal the histogram by doing the FFT's on the vector field
+// components. The user must have supplied the following fields like in the
+// example below, all other will be over-written.
+//
+//  cow_histogram_setnbins(hist, 0, 200);
+//  cow_histogram_setspacing(hist, COW_HIST_SPACING_LOG/LINEAR);
+//  cow_histogram_setnickname(hist, "mypspec");
+//
+// -----------------------------------------------------------------------------
 {
 #if (COW_FFTW && COW_MPI)
   if (!f->committed) return;
@@ -103,15 +116,11 @@ void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
   free(fx);
   free(fy);
   free(fz);
-  cow_histogram *hist = cow_histogram_new();
   cow_histogram_setlower(hist, 0, 1.0);
   cow_histogram_setupper(hist, 0, 0.5*sqrt(Nx*Nx + Ny*Ny + Nz*Nz));
-  cow_histogram_setnbins(hist, 0, NBINS);
   cow_histogram_setbinmode(hist, COW_HIST_BINMODE_DENSITY);
-  cow_histogram_setspacing(hist, COW_HIST_SPACING_LOG);
   cow_histogram_setdomaincomm(hist, f->domain);
   cow_histogram_commit(hist);
-  cow_histogram_setnickname(hist, cow_dfield_getname(f));
   for (int i=0; i<nx; ++i) {
     for (int j=0; j<ny; ++j) {
       for (int k=0; k<nz; ++k) {
@@ -135,8 +144,7 @@ void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout)
   free(gx);
   free(gy);
   free(gz);
-  cow_histogram_dumphdf5(hist, fout, gout);
-  cow_histogram_del(hist);
+  cow_histogram_seal(hist);
   fft_3d_destroy_plan(plan);
   printf("[%s] %s took %3.2f seconds\n",
 	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
@@ -250,6 +258,7 @@ void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
   free(fz_p);
 
   cow_dfield_replace(f, I0, I1, res);
+  cow_dfield_syncguard(f);
   free(res);
   fft_3d_destroy_plan(plan);
   printf("[%s] %s took %3.2f seconds\n",

@@ -40,6 +40,12 @@ typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
 
+void cow_trans_divcorner(double *result, double **args, int **s, void *u);
+void cow_trans_div5(double *result, double **args, int **s, void *u);
+void cow_trans_rot5(double *result, double **args, int **s, void *u);
+void cow_trans_component(double *result, double **args, int **s, void *u);
+void cow_trans_magnitude(double *result, double **args, int **s, void *u);
+
 void cow_init(int argc, char **argv, int modes);
 void cow_finalize(void);
 int cow_mpirunning(void);
@@ -63,7 +69,7 @@ int cow_domain_getnumglobalzones(cow_domain *d, int dim);
 int cow_domain_getglobalstartindex(cow_domain *d, int dim);
 int cow_domain_getgridspacing(cow_domain *d, int dim);
 int cow_domain_getcartrank(cow_domain *d);
-int cow_domain_subgridatposition(cow_domain *d, double x[3]);
+int cow_domain_subgridatposition(cow_domain *d, double x, double y, double z);
 int cow_domain_indexatposition(cow_domain *d, int dim, double x);
 double cow_domain_positionatindex(cow_domain *d, int dim, int index);
 
@@ -76,8 +82,13 @@ void cow_dfield_setname(cow_dfield *f, const char *name);
 void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out);
 void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out);
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata);
-void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
-			  cow_transform op, void *udata);
+void cow_dfield_settransform(cow_dfield *f, cow_transform op);
+void cow_dfield_clearargs(cow_dfield *f);
+void cow_dfield_pusharg(cow_dfield *f, cow_dfield *arg);
+void cow_dfield_setuserdata(cow_dfield *f, void *userdata);
+void cow_dfield_setiparam(cow_dfield *f, int p);
+void cow_dfield_setfparam(cow_dfield *f, double p);
+void cow_dfield_transformexecute(cow_dfield *f);
 const char *cow_dfield_iteratemembers(cow_dfield *f);
 const char *cow_dfield_nextmember(cow_dfield *f);
 const char *cow_dfield_getname(cow_dfield *f);
@@ -86,9 +97,8 @@ int cow_dfield_getstride(cow_dfield *f, int dim);
 int cow_dfield_getnmembers(cow_dfield *f);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
 void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
-void cow_dfield_sampleglobalpos(cow_dfield *f, double *xin, int N, double *xout,
-				double *P, int mode);
-void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double *P);
+void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double **x,
+				int *n0);
 void cow_dfield_setsamplecoords(cow_dfield *f, double *x, int n0, int n1);
 void cow_dfield_getsamplecoords(cow_dfield *f, double **x, int *n0, int *n1);
 void cow_dfield_getsampleresult(cow_dfield *f, double **x, int *n0, int *n1);
@@ -97,7 +107,7 @@ void cow_dfield_sampleexecute(cow_dfield *f);
 int cow_dfield_getownsdata(cow_dfield *f);
 void *cow_dfield_getbuffer(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
-void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result);
+void cow_dfield_reduce(cow_dfield *f, double x[3]);
 void cow_dfield_write(cow_dfield *f, const char *fname);
 void cow_dfield_read(cow_dfield *f, const char *fname);
 
@@ -116,7 +126,8 @@ void cow_histogram_addsample1(cow_histogram *h, double x, double w);
 void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w);
 void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
 void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
-void cow_histogram_synchronize(cow_histogram *h);
+void cow_histogram_seal(cow_histogram *h);
+int cow_histogram_getsealed(cow_histogram *h);
 void cow_histogram_populate(cow_histogram *h, cow_dfield *f, cow_transform op);
 void cow_histogram_getbinlocx(cow_histogram *h, double **x, int *n0);
 void cow_histogram_getbinlocy(cow_histogram *h, double **x, int *n0);
@@ -124,7 +135,7 @@ void cow_histogram_getbinval1(cow_histogram *h, double **x, int *n0);
 void cow_histogram_getbinval2(cow_histogram *h, double **x, int *n0, int *n1);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
 
-void cow_fft_pspecvecfield(cow_dfield *f, const char *fout, const char *gout);
+void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *h);
 void cow_fft_helmholtzdecomp(cow_dfield *f, int mode);
 
 #ifdef COW_PRIVATE_DEFS
@@ -188,6 +199,11 @@ struct cow_dfield
   int ownsdata; // client code can own the data: see setbuffer function
   cow_domain *domain; // pointer to an associated domain
   cow_transform transform; // used only by internal code
+  cow_dfield **transargs; // list of arguments for transform, used internally
+  void *userdata; // shallow pointer to user-supplied data item
+  int transargslen;
+  int iparam; // extra parameters that might be used by transform functions
+  double dparam;
   double *samplecoords;
   double *sampleresult;
   int samplecoordslen;
@@ -216,6 +232,7 @@ struct cow_histogram
   int spacing;
   int n_dims;
   int committed;
+  int sealed; // once sealed, is sync'ed and does not accept more samples
   cow_transform transform;
   double *binlocx; // Pointers to these arrays are returned by the getbinlocx
   double *binlocy; // getbinlocy, and getbinval functions.

@@ -6,12 +6,6 @@
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 
-void test_trans(double *result, double **args, int **strides,
-                void *udata)
-{
-  printf("in test_trans\n");
-}
-
 // -----------------------------------------------------------------------------
 //
 // private helper functions
@@ -274,14 +268,15 @@ int cow_domain_getcartrank(cow_domain *d)
   return 0;
 #endif
 }
-int cow_domain_subgridatposition(cow_domain *d, double *x)
+int cow_domain_subgridatposition(cow_domain *d, double x, double y, double z)
 {
 #if (COW_MPI)
   int index[3];
+  double r[3] = { x, y, z };
   double *x0 = d->glb_lower;
   double *x1 = d->glb_upper;
   for (int i=0; i<d->n_dims; ++i) {
-    index[i] = d->proc_sizes[i] * (x[i] - x0[i]) / (x1[i] - x0[i]);
+    index[i] = d->proc_sizes[i] * (r[i] - x0[i]) / (x1[i] - x0[i]);
   }
   int their_rank;
   MPI_Cart_rank(d->mpi_cart, index, &their_rank);
@@ -305,6 +300,11 @@ int cow_domain_indexatposition(cow_domain *d, int dim, double x)
   return d->n_ghst + (int)((x - d->loc_lower[dim]) / d->dx[dim]);
 }
 double cow_domain_positionatindex(cow_domain *d, int dim, int index)
+// -----------------------------------------------------------------------------
+// Returns the physical coordinates of the center of zone `index` along
+// dimension `dim`. The index includes padding, so that i=0 refers to ng zones
+// to the left of the domain boundary, where ng is the number of guard zones.
+// -----------------------------------------------------------------------------
 {
   if (dim >= 3 || !d->committed) return 0.0;
   return d->loc_lower[dim] + d->dx[dim] * (index - d->n_ghst + 0.5);
@@ -329,6 +329,9 @@ cow_dfield *cow_dfield_new(cow_domain *domain, const char *name)
     .ownsdata = 0,
     .domain = domain,
     .transform = NULL,
+    .transargs = NULL,
+    .transargslen = 0,
+    .userdata = NULL,
     .samplecoords = NULL,
     .sampleresult = NULL,
     .samplecoordslen = 0,
@@ -349,6 +352,7 @@ void cow_dfield_del(cow_dfield *f)
   if (f->ownsdata) {
     free(f->data);
   }
+  free(f->transargs);
   free(f->samplecoords);
   free(f->sampleresult);
   free(f);
@@ -648,31 +652,30 @@ void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
 }
 static void _reduce(double *result, double **args, int **strides, void *udata)
 {
-  void **u = (void**)udata;
+  void **u = (void**) udata;
   cow_dfield *f = (cow_dfield*) u[0];
-  double *min = &((double*)u[1])[0];
-  double *max = &((double*)u[1])[1];
-  double *sum = &((double*)u[1])[2];
+  double *min = &((double*) u[1])[0];
+  double *max = &((double*) u[1])[1];
+  double *sum = &((double*) u[1])[2];
   double y;
-  f->transform(&y, args, strides, NULL);
+  f->transform(&y, args, strides, f->userdata);
   if (y > *max) *max = y;
   if (y < *min) *min = y;
   *sum += y;
 }
-void cow_dfield_reduce(cow_dfield *f, cow_transform op, double *result)
+void cow_dfield_reduce(cow_dfield *f, double x[3])
 {
-  void *udata[2] = { f, result };
-  result[0] = 1e10; // min
-  result[1] =-1e10; // max
-  result[2] = 0.0; // sum
-  f->transform = op;
+  void *udata[2] = { f, x };
+  x[0] = 1e10; // min
+  x[1] =-1e10; // max
+  x[2] = 0.0; // sum
   cow_dfield_loop(f, _reduce, udata);
   if (!cow_mpirunning()) return;
 #if (COW_MPI)
   cow_domain *d = f->domain;
-  MPI_Allreduce(MPI_IN_PLACE, &result[0], 1, MPI_DOUBLE, MPI_MIN, d->mpi_cart);
-  MPI_Allreduce(MPI_IN_PLACE, &result[1], 1, MPI_DOUBLE, MPI_MAX, d->mpi_cart);
-  MPI_Allreduce(MPI_IN_PLACE, &result[2], 1, MPI_DOUBLE, MPI_SUM, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &x[0], 1, MPI_DOUBLE, MPI_MIN, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &x[1], 1, MPI_DOUBLE, MPI_MAX, d->mpi_cart);
+  MPI_Allreduce(MPI_IN_PLACE, &x[2], 1, MPI_DOUBLE, MPI_SUM, d->mpi_cart);
 #endif
 }
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
@@ -709,9 +712,41 @@ void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
     break;
   }
 }
-void cow_dfield_transform(cow_dfield *result, cow_dfield **args, int nargs,
-                          cow_transform op, void *udata)
+void cow_dfield_settransform(cow_dfield *f, cow_transform op)
 {
+  f->transform = op;
+}
+void cow_dfield_clearargs(cow_dfield *f)
+{
+  free(f->transargs);
+  f->transargs = NULL;
+  f->transargslen = 0;
+}
+void cow_dfield_pusharg(cow_dfield *f, cow_dfield *arg)
+{
+  int N = (f->transargslen += 1);
+  f->transargs = (cow_dfield**) realloc(f->transargs, N * sizeof(cow_dfield*));
+  f->transargs[N - 1] = arg;
+}
+void cow_dfield_setuserdata(cow_dfield *f, void *userdata)
+{
+  f->userdata = userdata;
+}
+void cow_dfield_setiparam(cow_dfield *f, int p)
+{
+  f->iparam = p;
+}
+void cow_dfield_setfparam(cow_dfield *f, double p)
+{
+  f->dparam = p;
+}
+void cow_dfield_transformexecute(cow_dfield *f)
+{
+  cow_dfield *result = f;
+  cow_dfield **args = f->transargs;
+  int nargs = f->transargslen;
+  cow_transform op = f->transform;
+  void *udata = f->userdata;
   int ni = cow_domain_getnumlocalzonesinterior(result->domain, 0);
   int nj = cow_domain_getnumlocalzonesinterior(result->domain, 1);
   int nk = cow_domain_getnumlocalzonesinterior(result->domain, 2);
@@ -953,3 +988,66 @@ void _dfield_freetype(cow_dfield *f)
   free(f->recv_type);
 }
 #endif
+
+
+// -----------------------------------------------------------------------------
+// Special derivative operators used on vector fields. These do not divide by
+// the grid zone spacing.
+// -----------------------------------------------------------------------------
+
+
+void cow_trans_divcorner(double *result, double **args, int **s, void *u)
+// -----------------------------------------------------------------------------
+// 3d divergence stencil maintained by the constraint transport scheme of Toth
+// (2000). Second order in space, gives the divergence at the upper right corner
+// of cell when the vectors are all given at the cell centers.
+// -----------------------------------------------------------------------------
+{
+#define M(i,j,k) ((i)*s[0][0] + (j)*s[0][1] + (k)*s[0][2])
+  double *fx = &args[0][0];
+  double *fy = &args[0][1];
+  double *fz = &args[0][2];
+  *result = ((fx[M(1,0,0)] + fx[M(1,1,0)] + fx[M(1,0,1)] + fx[M(1,1,1)]) -
+             (fx[M(0,0,0)] + fx[M(0,1,0)] + fx[M(0,0,1)] + fx[M(0,1,1)])) / 4.0
+    +       ((fy[M(0,1,0)] + fy[M(0,1,1)] + fy[M(1,1,0)] + fy[M(1,1,1)]) -
+             (fy[M(0,0,0)] + fy[M(0,0,1)] + fy[M(1,0,0)] + fy[M(1,0,1)])) / 4.0
+    +       ((fz[M(0,0,1)] + fz[M(1,0,1)] + fz[M(0,1,1)] + fz[M(1,1,1)]) -
+             (fz[M(0,0,0)] + fz[M(1,0,0)] + fz[M(0,1,0)] + fz[M(1,1,0)])) / 4.0;
+#undef M
+}
+void cow_trans_div5(double *result, double **args, int **s, void *u)
+{
+#define diff5(f,s) ((-f[2*s] + 8*f[s] - 8*f[-s] + f[-2*s]) / 12.0)
+  double *f0 = &args[0][0];
+  double *f1 = &args[0][1];
+  double *f2 = &args[0][2];
+  *result = diff5(f0, s[0][0]) + diff5(f1, s[0][1]) + diff5(f2, s[0][2]);
+#undef diff5
+}
+void cow_trans_rot5(double *result, double **args, int **s, void *u)
+{
+  // http://en.wikipedia.org/wiki/Five-point_stencil
+#define diff5(f,s) ((-f[2*s] + 8*f[s] - 8*f[-s] + f[-2*s]) / 12.0)
+  double *f0 = &args[0][0];
+  double *f1 = &args[0][1];
+  double *f2 = &args[0][2];
+  result[0] = diff5(f2, s[0][1]) - diff5(f1, s[0][2]);
+  result[1] = diff5(f0, s[0][2]) - diff5(f2, s[0][0]);
+  result[2] = diff5(f1, s[0][0]) - diff5(f0, s[0][1]);
+#undef diff5
+}
+void cow_trans_component(double *result, double **args, int **s, void *u)
+{
+  cow_dfield *f = (cow_dfield*) u;
+  result[0] = args[0][f->iparam];
+}
+#include <math.h>
+void cow_trans_magnitude(double *result, double **args, int **s, void *u)
+{
+  cow_dfield *f = (cow_dfield*) u;
+  double res2 = 0.0;
+  for (int n=0; n<f->n_members; ++n) {
+    res2 += args[0][n] * args[0][n];
+  }
+  result[0] = sqrt(res2);
+}

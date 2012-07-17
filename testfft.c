@@ -9,6 +9,16 @@
 #define GETENVINT(a,dflt) (getenv(a) ? atoi(getenv(a)) : dflt)
 #define GETENVDBL(a,dflt) (getenv(a) ? atof(getenv(a)) : dflt)
 
+void cow_fft_pspecvecfield2(cow_dfield *vel, const char *fout, const char *gname)
+{
+  cow_histogram *hist = cow_histogram_new();
+  cow_histogram_setnbins(hist, 0, 200);
+  cow_histogram_setspacing(hist, COW_HIST_SPACING_LOG);
+  cow_histogram_setnickname(hist, gname);
+  cow_fft_pspecvecfield(vel, hist);
+  cow_histogram_dumphdf5(hist, fout, gname);
+  cow_histogram_del(hist);
+}
 
 int main(int argc, char **argv)
 {
@@ -54,7 +64,7 @@ int main(int argc, char **argv)
   cow_dfield_commit(vel);
 
   cow_dfield_read(vel, finp);
-  cow_fft_pspecvecfield(vel, fout, "pspec");
+  cow_fft_pspecvecfield2(vel, fout, "pspec");
 
   cow_dfield *dil = cow_dfield_dup(vel);
   cow_dfield *sol = cow_dfield_dup(vel);
