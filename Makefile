@@ -27,9 +27,6 @@ default : $(EXE)
 %.o : %.c
 	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c -std=c99
 
-%.o : %.cpp
-	$(CC) $(CFLAGS) -o $@ $< $(DEFINES) $(INC) -c
-
 main : main.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
@@ -55,4 +52,4 @@ testsamp : testsamp.o $(OBJ)
 	$(CC) $(CFLAGS) -o $@ $^ $(LIB)
 
 clean :
-	rm -rf $(EXE) $(OBJ)
+	rm -rf $(EXE) *.o
