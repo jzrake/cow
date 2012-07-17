@@ -40,12 +40,6 @@ typedef struct cow_histogram cow_histogram;
 typedef void (*cow_transform)(double *result, double **args, int **strides,
 			      void *udata);
 
-void cow_trans_divcorner(double *result, double **args, int **s, void *u);
-void cow_trans_div5(double *result, double **args, int **s, void *u);
-void cow_trans_rot5(double *result, double **args, int **s, void *u);
-void cow_trans_component(double *result, double **args, int **s, void *u);
-void cow_trans_magnitude(double *result, double **args, int **s, void *u);
-
 void cow_init(int argc, char **argv, int modes);
 void cow_finalize(void);
 int cow_mpirunning(void);
@@ -137,6 +131,14 @@ double cow_histogram_getbinval(cow_histogram *h, int i, int j);
 
 void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *h);
 void cow_fft_helmholtzdecomp(cow_dfield *f, int mode);
+
+#ifndef SWIG // If wrapping with swig, let it handle these prototypes itself
+void cow_trans_divcorner(double *result, double **args, int **s, void *u);
+void cow_trans_div5(double *result, double **args, int **s, void *u);
+void cow_trans_rot5(double *result, double **args, int **s, void *u);
+void cow_trans_component(double *result, double **args, int **s, void *u);
+void cow_trans_magnitude(double *result, double **args, int **s, void *u);
+#endif SWIG
 
 #ifdef COW_PRIVATE_DEFS
 
