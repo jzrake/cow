@@ -30,10 +30,6 @@ cow_init(0, None, modes)
 mpirunning = cow_mpirunning
 
 class DistributedDomain(object):
-    @classmethod
-    def fromfile(self, fname, group=None):
-        return "yup"
-
     def __init__(self, G_ntot, guard=0, x0=None, x1=None):
         self._nd = len(G_ntot)
         assert self._nd <= 3
@@ -72,11 +68,9 @@ class DistributedDomain(object):
 
 class DataField(object):
     def __init__(self, domain, members, name="datafield"):
-        assert type(name) is str
         self._cdfield = cow_dfield_new(domain._cdomain, name)
         for m in members:
-            assert(type(m) is str)
-            cow_dfield_addmember(self._cdfield, m)
+            cow_dfield_addmember(self._cdfield, str(m))
         nd = cow_domain_getndim(domain._cdomain)
         dims = [ ]
         for i in range(nd):
@@ -133,12 +127,10 @@ class DataField(object):
         return self._domain
 
     def dump(self, fname):
-        assert type(fname) is str
-        cow_dfield_write(self._cdfield, fname)
+        cow_dfield_write(self._cdfield, str(fname))
 
     def read(self, fname):
-        assert type(fname) is str
-        cow_dfield_read(self._cdfield, fname)
+        cow_dfield_read(self._cdfield, str(fname))
 
     def sample_global(self, points):
         """
@@ -369,8 +361,8 @@ class Histogram1d(object):
         'ascii'. By default `format` is guessed from the file extension.
         """
         assert self.sealed
-        assert type(fname) is str
-        assert type(gname) is str
+        fname = str(fname)
+        gname = str(gname)
         if format == "guess":
             if fname.endswith('.h5') or fname.endswith('.hdf5'):
                 format = "hdf5" 
@@ -392,3 +384,39 @@ class Histogram1d(object):
             cow_histogram_setnickname(self._chist, value)
         else:
             object.__setattr__(self, key, value)
+
+
+def fromfile(fname, group, guard=0, members=None, vec3d=False):
+    """
+    Looks in the HDF5 file `fname` for a serialized DataField named `group`, and
+    creates a new data field from it if possible. All data sets in fname/group
+    must have the same shape. If `members` is iterable, then only the data
+    members it names will be read. If `vec3d` is True and there are exactly 3
+    data members then a VectorField3d instance is returned.
+    """
+    h5f = h5py.File(fname, "r")
+    grp = h5f[group]
+    mem = [ ]
+    for member in grp:
+        try:
+            if shape != grp[member].shape:
+                raise AttributeError # happens if grp[member] is not a dataset
+        except AttributeError:
+                raise ValueError("the group '%s' is not a DataField" % group)
+        except NameError:
+            shape = grp[member].shape # first time through
+        if not members or member in members:
+            mem.append(member)
+    h5f.close()
+    domain = DistributedDomain(shape, guard=guard)
+    if members:
+        for m in members:
+            if m not in mem:
+                warnings.warn("data member '%s' was not found in file" % m)
+    if vec3d:
+        assert len(mem) == 3
+        dfield = VectorField3d(domain, mem, name=group)
+    else:
+        dfield = DataField(domain, mem, name=group)
+    dfield.read(fname)
+    return dfield

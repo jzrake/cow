@@ -3,7 +3,7 @@ import numpy as np
 import cowpy
 
 def testfromfile():
-    domain = cowpy.DistributedDomain.fromfile("test.h5", group="prim")
+    domain = cowpy.fromfile("test.h5", group="vel")
     print domain
 
 def testsamp():
