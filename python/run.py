@@ -83,8 +83,11 @@ def testhelm():
     domain = cowpy.DistributedDomain([10,10,10], guard=2)
     A = cowpy.VectorField3d(domain, name="B")
     Asol = A.solenoidal()
-    Adiv = A.dilatational()
-    pspec = Adiv.power_spectrum(bins=100, spacing="log")
+    Adil = A.dilatational()
+    pspec = Adil.power_spectrum(bins=100, spacing="log")
+    Asol.dump("test.h5")
+    Adil.dump("test.h5")
+    pspec.dump("test.h5")
 
 def testcb():
     domain = cowpy.DistributedDomain([10,10,10], guard=2)
