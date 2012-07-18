@@ -207,16 +207,6 @@ class DataField(object):
         cow_dfield_setuserdata(self._c, self._c)
         return cow_dfield_reduce(self._c)
 
-    def hist_magnitude(self):
-        """
-        Returns a histogram of the vector field's magnitude.
-        """
-        cow_dfield_clearargs(self._c)
-        cow_dfield_settransform(self._c, cow_trans_magnitude)
-        cow_dfield_setuserdata(self._c, self._c)
-        cow_histogram_populate(hist, data, histcb);
-        return cow_dfield_reduce(self._c)
-
     def __getitem__(self, key):
         if type(key) is int:
             return self.value[..., key]
