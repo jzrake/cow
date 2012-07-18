@@ -107,6 +107,10 @@ class DataField(object):
         return cow_dfield_getname(self._c)
 
     @property
+    def members(self):
+        return self._members
+
+    @property
     def value(self):
         """
         Returns the numpy.ndarray object serving as the buffer for the
