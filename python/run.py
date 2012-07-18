@@ -12,6 +12,10 @@ def testfromfile():
     print field
     sparsefield = cowpy.fromfile("test.h5", group="vel", downsample=2)
     assert sparsefield.value.shape == (12/2, 12/2, 16/2, 3)
+    print sparsefield
+    sparsefield = cowpy.fromfile("test.h5", group="vel", downsample=3)
+    print sparsefield
+    assert sparsefield.value.shape == (4, 4, 6, 3)
 
 def testsamp():
     domain = cowpy.DistributedDomain([10,10,10], guard=3)

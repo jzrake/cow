@@ -421,7 +421,7 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
             if m not in mem:
                 warnings.warn("data member '%s' was not found in file" % m)
     if downsample != 0:
-        sprime = [s / downsample for s in shape]
+        sprime = [int(np.ceil(float(s) / downsample)) for s in shape]
         domain = DistributedDomain(sprime, guard=guard)
         if domain.cart_size != 1:
             raise ValueError("down-sampled loading only supported for serial"
@@ -437,11 +437,11 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
         s = downsample
         for m in mem:
             if domain.ndim == 1:
-                dfield[m][...] = h5f[group][m][::s]
+                dfield[m] = h5f[group][m][::s]
             elif domain.ndim == 2:
-                dfield[m][...] = h5f[group][m][::s,::s]
+                dfield[m] = h5f[group][m][::s,::s]
             elif domain.ndim == 3:
-                dfield[m][...] = h5f[group][m][::s,::s,::s]
+                dfield[m] = h5f[group][m][::s,::s,::s]
         del s
     else:
         dfield.read(fname)
