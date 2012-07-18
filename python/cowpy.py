@@ -98,7 +98,6 @@ class DataField(object):
         self._domain = domain
         self._members = tuple(members)
         self._lookup = dict([(m, n) for n,m in enumerate(members)])
-        self._name = name
 
     def __del__(self):
         cow_dfield_del(self._c)
@@ -208,6 +207,16 @@ class DataField(object):
         cow_dfield_setuserdata(self._c, self._c)
         return cow_dfield_reduce(self._c)
 
+    def hist_magnitude(self):
+        """
+        Returns a histogram of the vector field's magnitude.
+        """
+        cow_dfield_clearargs(self._c)
+        cow_dfield_settransform(self._c, cow_trans_magnitude)
+        cow_dfield_setuserdata(self._c, self._c)
+        cow_histogram_populate(hist, data, histcb);
+        return cow_dfield_reduce(self._c)
+
     def __getitem__(self, key):
         if type(key) is int:
             return self.value[..., key]
@@ -220,12 +229,19 @@ class DataField(object):
         else:
             self.value[..., self._lookup[key]] = val
 
+    def __setattr__(self, key, value):
+        if key == "name":
+            cow_dfield_setname(self._c, value)
+        else:
+            object.__setattr__(self, key, value)
+
     def __repr__(self):
         props = ["%s" % type(self),
+                 "name: %s" % self.name,
                  "members: %s" % str(self._members),
                  "local shape: %s" % str(self.value[..., 0].shape),
-                 "global shape: %s" % str(self._domain.global_shape),
-                 "global start: %s" % str(self._domain.global_start),
+                 "global shape: %s" % str(self.domain.global_shape),
+                 "global start: %s" % str(self.domain.global_start),
                  "padding: %s" % self.domain.guard]
         return "{" + "\n\t".join(props) + "}"
 
@@ -249,8 +265,8 @@ class VectorField3d(DataField):
         partial derivatives.
         """
         assert self.domain.guard >= 2
-        if name is None: name = "del_cross_" + self._name
-        res = VectorField3d(self._domain, name=name)
+        if name is None: name = "del_cross_" + self.name
+        res = VectorField3d(self.domain, name=name)
         return res._apply_transform([self], cow_trans_rot5)
 
     def divergence(self, stencil="5point", name=None):
@@ -259,7 +275,7 @@ class VectorField3d(DataField):
         partial derivatives if `stencil` is '5point', or the corner-valued 2nd
         order stencil of `stencil` is 'corner'.
         """
-        if name is None: name = "del_dot_" + self._name
+        if name is None: name = "del_dot_" + self.name
         if stencil == "5point":
             assert self.domain.guard >= 2
             op = cow_trans_div5
@@ -269,7 +285,7 @@ class VectorField3d(DataField):
         else:
             raise ValueError("keyword 'stencil' must be one of ['5point', "
                              "'corner']")
-        res = ScalarField3d(self._domain, name=name)
+        res = ScalarField3d(self.domain, name=name)
         return res._apply_transform([self], op)
 
     def solenoidal(self, name=None):
@@ -277,8 +293,8 @@ class VectorField3d(DataField):
         Returns the solenoidal (curl-like) part of the vector field's Helmholtz
         decomposition. Projection is done using the Fourier decomposition.
         """
-        if name is None: name = self._name + "-solenoidal"
-        sol = VectorField3d(self._domain, members=self._members, name=name)
+        if name is None: name = self.name + "-solenoidal"
+        sol = VectorField3d(self.domain, members=self._members, name=name)
         sol.value[:] = self.value
         cow_fft_helmholtzdecomp(sol._c, COW_PROJECT_OUT_DIV)
         return sol
@@ -288,8 +304,8 @@ class VectorField3d(DataField):
         Returns the dilatational (div-like) part of the vector field's Helmholtz
         decomposition. Projection is done using the Fourier decomposition.
         """
-        if name is None: name = self._name + "-dilatational"
-        div = VectorField3d(self._domain, members=self._members, name=name)
+        if name is None: name = self.name + "-dilatational"
+        div = VectorField3d(self.domain, members=self._members, name=name)
         div.value[:] = self.value
         cow_fft_helmholtzdecomp(div._c, COW_PROJECT_OUT_CURL)
         return div
@@ -299,7 +315,7 @@ class VectorField3d(DataField):
         Computes the spherically integrated power spectrum P(k) of the vector
         field, where P(k) = \vec{f}(\vec{k}) \cdot \vec{f}^*(\vec{k}).
         """
-        if name is None: name = self._name + "-pspec"
+        if name is None: name = self.name + "-pspec"
         pspec = Histogram1d(0.0, 1.0, bins=bins, spacing=spacing,
                             name=name, commit=False)
         cow_fft_pspecvecfield(self._c, pspec._c)
@@ -319,7 +335,6 @@ class Histogram1d(object):
     def __init__(self, x0, x1, bins=200, spacing="linear", binmode="counts",
                  name="histogram", domain=None, commit=True):
         self._c = cow_histogram_new()
-        self._name = name
         cow_histogram_setlower(self._c, 0, x0)
         cow_histogram_setupper(self._c, 0, x1)
         cow_histogram_setnbins(self._c, 0, bins)
@@ -333,6 +348,10 @@ class Histogram1d(object):
 
     def __del__(self):
         cow_histogram_del(self._c)
+
+    @property
+    def name(self):
+        return cow_histogram_getnickname(self._c)
 
     @property
     def sealed(self):
