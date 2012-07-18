@@ -433,7 +433,10 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
         dfield = VectorField3d(domain, mem, name=group)
     else:
         dfield = DataField(domain, mem, name=group)
-    if downsample:
+    if downsample == 0:
+        h5f.close() # make sure to close before opening another instance
+        dfield.read(fname)
+    else:
         s = downsample
         for m in mem:
             if domain.ndim == 1:
@@ -443,8 +446,5 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
             elif domain.ndim == 3:
                 dfield[m] = h5f[group][m][::s,::s,::s]
         del s
-    else:
-        dfield.read(fname)
-
-    h5f.close()
+        h5f.close()
     return dfield
