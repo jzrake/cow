@@ -65,6 +65,19 @@ def testhist():
     hist.dump("hist.dat")
     hist.dump("test.h5", gname="G1/G2")
 
+def testmaghist():
+    domain = cowpy.DistributedDomain([12,12,16], guard=3)
+    dfield = cowpy.VectorField3d(domain)
+    dfield.value[...] = np.random.rand(*dfield.value.shape)
+    min, max, sum = dfield.reduce_magnitude()
+    maghist = cowpy.Histogram1d(min, max, bins=100, binmode="counts", name="myhist",
+                                domain=domain)    
+    vx, vy, vz = dfield[0], dfield[1], dfield[2]
+    mag = (vx**2 + vy**2 + vz**2)**0.5
+    for a in mag.flatten(): maghist.add_sample(a)
+    maghist.seal()
+    print maghist.binval
+
 def testhelm():
     domain = cowpy.DistributedDomain([10,10,10], guard=2)
     A = cowpy.VectorField3d(domain, name="B")
@@ -107,6 +120,7 @@ if __name__ == "__main__":
     else:
         print "running all tests..."
         testhist()
+        testmaghist()
         testsamp()
         testglobind()
         testio()
