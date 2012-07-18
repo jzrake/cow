@@ -97,6 +97,5 @@ if __name__ == "__main__":
     testio()
     testcb()
     testreduce()
-    if cowpy.mpirunning():
-        testhelm()
+    testhelm()
     testfromfile()
