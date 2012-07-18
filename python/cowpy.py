@@ -137,6 +137,9 @@ class DataField(object):
     def domain(self):
         return self._domain
 
+    def sync_guard(self):
+        cow_dfield_syncguard(self._c)
+
     def dump(self, fname):
         cow_dfield_write(self._c, str(fname))
 
@@ -447,13 +450,14 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
         dfield.read(fname)
     else:
         s = downsample
-        for m in mem:
+        for n, m in enumerate(mem):
             if domain.ndim == 1:
-                dfield[m] = h5f[group][m][::s]
+                dfield.interior[...,n] = h5f[group][m][::s]
             elif domain.ndim == 2:
-                dfield[m] = h5f[group][m][::s,::s]
+                dfield.interior[...,n] = h5f[group][m][::s,::s]
             elif domain.ndim == 3:
-                dfield[m] = h5f[group][m][::s,::s,::s]
+                dfield.interior[...,n] = h5f[group][m][::s,::s,::s]
         del s
         h5f.close()
+        dfield.sync_guard()
     return dfield
