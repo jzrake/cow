@@ -341,7 +341,7 @@ class Histogram1d(object):
 
     @property
     def name(self):
-        return cow_histogram_getnickname(self._c)
+        return cow_histogram_getname(self._c)
 
     @property
     def sealed(self):
