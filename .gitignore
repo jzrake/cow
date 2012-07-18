@@ -21,3 +21,11 @@
 /src/testfft
 /src/testhist
 /src/testsamp
+/data/*
+
+/lib/*
+/python/build/*
+/python/cow.py
+/python/cow_config.py
+/python/cow_wrap.c
+/setup.sh
