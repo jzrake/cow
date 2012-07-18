@@ -13,3 +13,11 @@
 *.lai
 *.la
 *.a
+/src/main
+/src/mhdstats
+/src/makehist
+/src/milos
+/src/srhdhist
+/src/testfft
+/src/testhist
+/src/testsamp

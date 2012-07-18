@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-from distutils.core import setup, Extension
+#from distutils.core import setup, Extension
+from numpy.distutils.core import setup, Extension
 import numpy as np
 
 # Helpful info on linker environment:
