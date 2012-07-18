@@ -31,74 +31,81 @@ mpirunning = cow_mpirunning
 
 class DistributedDomain(object):
     def __init__(self, G_ntot, guard=0, x0=None, x1=None):
-        self._nd = len(G_ntot)
-        assert self._nd <= 3
-        self._cdomain = cow_domain_new()
-        self._G_ntot = tuple(G_ntot)
+        nd = len(G_ntot)
+        assert nd <= 3
+        self._c = cow_domain_new()
         for n, ni in enumerate(G_ntot):
-            cow_domain_setsize(self._cdomain, n, ni)
-        cow_domain_setndim(self._cdomain, self._nd)
-        cow_domain_setguard(self._cdomain, guard)
-        cow_domain_commit(self._cdomain)
+            cow_domain_setsize(self._c, n, ni)
+        cow_domain_setndim(self._c, nd)
+        cow_domain_setguard(self._c, guard)
+        cow_domain_commit(self._c)
         # Set up the IO scheme
-        cow_domain_setchunk(self._cdomain, 1)
-        cow_domain_setcollective(self._cdomain, hdf5_collective)
-        cow_domain_setalign(self._cdomain, 4*KILOBYTES, 4*MEGABYTES)
+        cow_domain_setchunk(self._c, 1)
+        cow_domain_setcollective(self._c, hdf5_collective)
+        cow_domain_setalign(self._c, 4*KILOBYTES, 4*MEGABYTES)
 
     def __del__(self):
-        cow_domain_del(self._cdomain)
+        cow_domain_del(self._c)
 
     @property
     def cart_rank(self):
-        return cow_domain_getcartrank(self._cdomain)
+        return cow_domain_getcartrank(self._c)
 
     @property
     def cart_size(self):
-        return cow_domain_getcartsize(self._cdomain)
+        return cow_domain_getcartsize(self._c)
 
     @property
     def global_start(self):
-        return tuple(cow_domain_getglobalstartindex(self._cdomain, n)
-                     for n in range(self._nd))
+        return tuple(cow_domain_getglobalstartindex(self._c, n)
+                     for n in range(self.ndim))
+    @property
+    def global_shape(self):
+        return tuple(cow_domain_getnumglobalzones(self._c, n)
+                     for n in range(self.ndim))
+    @property
+    def ndim(self):
+        return cow_domain_getndim(self._c)
+
     @property
     def guard(self):
-        return cow_domain_getguard(self._cdomain)
+        return cow_domain_getguard(self._c)
 
     def coordinate(self, ind):
-        assert len(ind) == self._nd
-        return [cow_domain_positionatindex(self._cdomain, n, i)
+        assert len(ind) == self.ndim
+        return [cow_domain_positionatindex(self._c, n, i)
                 for n, i in enumerate(ind)]
 
 
 class DataField(object):
     def __init__(self, domain, members, name="datafield"):
-        self._cdfield = cow_dfield_new(domain._cdomain, name)
+        self._c = cow_dfield_new(domain._c, name)
         for m in members:
-            cow_dfield_addmember(self._cdfield, str(m))
-        nd = cow_domain_getndim(domain._cdomain)
+            cow_dfield_addmember(self._c, str(m))
+        nd = domain.ndim
         dims = [ ]
         for i in range(nd):
-            dims.append(cow_domain_getnumlocalzonesincguard(domain._cdomain, i))
+            dims.append(cow_domain_getnumlocalzonesincguard(domain._c, i))
         dims.append(len(members))
         self._buf = np.zeros(dims)
         if nd == 1:
-            setarray1(self._cdfield, self._buf)
+            setarray1(self._c, self._buf)
         if nd == 2:
-            setarray2(self._cdfield, self._buf)
+            setarray2(self._c, self._buf)
         if nd == 3:
-            setarray3(self._cdfield, self._buf)
-        cow_dfield_commit(self._cdfield)
+            setarray3(self._c, self._buf)
+        cow_dfield_commit(self._c)
         self._domain = domain
         self._members = tuple(members)
         self._lookup = dict([(m, n) for n,m in enumerate(members)])
         self._name = name
 
     def __del__(self):
-        cow_dfield_del(self._cdfield)
+        cow_dfield_del(self._c)
 
     @property
     def name(self):
-        return cow_dfield_getname(self._cdfield)
+        return cow_dfield_getname(self._c)
 
     @property
     def value(self):
@@ -117,13 +124,14 @@ class DataField(object):
         portion, excluding the guard zones.
         """
         ng = self.domain.guard
+        nd = self.domain.ndim
         if ng == 0:
             return self._buf
-        elif self.domain._nd == 1:
+        elif nd == 1:
             return self._buf[ng:-ng, :]
-        elif self.domain._nd == 2:
+        elif nd == 2:
             return self._buf[ng:-ng, ng:-ng, :]
-        elif self.domain._nd == 3:
+        elif nd == 3:
             return self._buf[ng:-ng, ng:-ng, ng:-ng, :]
 
     @property
@@ -131,10 +139,10 @@ class DataField(object):
         return self._domain
 
     def dump(self, fname):
-        cow_dfield_write(self._cdfield, str(fname))
+        cow_dfield_write(self._c, str(fname))
 
     def read(self, fname):
-        cow_dfield_read(self._cdfield, str(fname))
+        cow_dfield_read(self._c, str(fname))
 
     def sample_global(self, points):
         """
@@ -145,17 +153,17 @@ class DataField(object):
         function must be called by all ranks which own this array, although the
         size of `points` may vary between ranks, and is allowed to be zero.
         """
-        assert points.shape[1] == self.domain._nd
+        assert points.shape[1] == self.domain.ndim
         p3d = np.zeros([points.shape[0], 3])
-        for n in range(self.domain._nd):
+        for n in range(self.domain.ndim):
             p3d[:,n] = points[:,n]
-        cow_dfield_setsamplecoords(self._cdfield, p3d)
-        cow_dfield_setsamplemode(self._cdfield, COW_SAMPLE_LINEAR)
-        cow_dfield_sampleexecute(self._cdfield)
-        x = cow_dfield_getsamplecoords(self._cdfield).copy()
-        P = cow_dfield_getsampleresult(self._cdfield).copy()
+        cow_dfield_setsamplecoords(self._c, p3d)
+        cow_dfield_setsamplemode(self._c, COW_SAMPLE_LINEAR)
+        cow_dfield_sampleexecute(self._c)
+        x = cow_dfield_getsamplecoords(self._c).copy()
+        P = cow_dfield_getsampleresult(self._c).copy()
         # To save memory, reset the sample coordinate buffer
-        cow_dfield_setsamplecoords(self._cdfield, np.zeros([0,3]))
+        cow_dfield_setsamplecoords(self._c, np.zeros([0,3]))
         return  x, P
 
     def index_global(self, ind):
@@ -163,17 +171,17 @@ class DataField(object):
         Indexes the distributed array with the global index `ind`. Must be
         called on all ranks which own this array.
         """
-        assert len(ind) == self.domain._nd
-        i = [ind[n] if n < self.domain._nd else 0 for n in range(3)]
-        return cow_dfield_sampleglobalind(self._cdfield, i[0], i[1], i[2])
+        assert len(ind) == self.domain.ndim
+        i = [ind[n] if n < self.domain.ndim else 0 for n in range(3)]
+        return cow_dfield_sampleglobalind(self._c, i[0], i[1], i[2])
 
     def _apply_transform(self, args, op, userdata=None):
-        cow_dfield_clearargs(self._cdfield)
+        cow_dfield_clearargs(self._c)
         for arg in args:
-            cow_dfield_pusharg(self._cdfield, arg._cdfield)
-        cow_dfield_settransform(self._cdfield, op)
-        cow_dfield_setuserdata(self._cdfield, userdata)
-        cow_dfield_transformexecute(self._cdfield)
+            cow_dfield_pusharg(self._c, arg._c)
+        cow_dfield_settransform(self._c, op)
+        cow_dfield_setuserdata(self._c, userdata)
+        cow_dfield_transformexecute(self._c)
         return self
 
     def reduce_component(self, member):
@@ -185,20 +193,20 @@ class DataField(object):
             member = self._lookup[member]
         else:
             assert member < len(self._members)
-        cow_dfield_clearargs(self._cdfield)
-        cow_dfield_settransform(self._cdfield, cow_trans_component)
-        cow_dfield_setuserdata(self._cdfield, self._cdfield)
-        cow_dfield_setiparam(self._cdfield, member)
-        return cow_dfield_reduce(self._cdfield)
+        cow_dfield_clearargs(self._c)
+        cow_dfield_settransform(self._c, cow_trans_component)
+        cow_dfield_setuserdata(self._c, self._c)
+        cow_dfield_setiparam(self._c, member)
+        return cow_dfield_reduce(self._c)
 
     def reduce_magnitude(self):
         """
         Returns the min, max, and sum of the data fields's vector magnitude.
         """
-        cow_dfield_clearargs(self._cdfield)
-        cow_dfield_settransform(self._cdfield, cow_trans_magnitude)
-        cow_dfield_setuserdata(self._cdfield, self._cdfield)
-        return cow_dfield_reduce(self._cdfield)
+        cow_dfield_clearargs(self._c)
+        cow_dfield_settransform(self._c, cow_trans_magnitude)
+        cow_dfield_setuserdata(self._c, self._c)
+        return cow_dfield_reduce(self._c)
 
     def __getitem__(self, key):
         if type(key) is int:
@@ -216,7 +224,7 @@ class DataField(object):
         props = ["%s" % type(self),
                  "members: %s" % str(self._members),
                  "local shape: %s" % str(self.value[..., 0].shape),
-                 "global shape: %s" % str(self._domain._G_ntot),
+                 "global shape: %s" % str(self._domain.global_shape),
                  "global start: %s" % str(self._domain.global_start),
                  "padding: %s" % self.domain.guard]
         return "{" + "\n\t".join(props) + "}"
@@ -225,14 +233,14 @@ class DataField(object):
 class ScalarField3d(DataField):
     def __init__(self, domain, members=("f",), name="scalarfield"):
         assert len(members) == 1
-        assert domain._nd == 3
+        assert domain.ndim == 3
         super(ScalarField3d, self).__init__(domain, members, name)
 
 
 class VectorField3d(DataField):
     def __init__(self, domain, members=("fx","fy","fz"), name="vectorfield"):
         assert len(members) == 3
-        assert domain._nd == 3
+        assert domain.ndim == 3
         super(VectorField3d, self).__init__(domain, members, name)
 
     def curl(self, name=None):
@@ -272,7 +280,7 @@ class VectorField3d(DataField):
         if name is None: name = self._name + "-solenoidal"
         sol = VectorField3d(self._domain, members=self._members, name=name)
         sol.value[:] = self.value
-        cow_fft_helmholtzdecomp(sol._cdfield, COW_PROJECT_OUT_DIV)
+        cow_fft_helmholtzdecomp(sol._c, COW_PROJECT_OUT_DIV)
         return sol
 
     def dilatational(self, name=None):
@@ -283,7 +291,7 @@ class VectorField3d(DataField):
         if name is None: name = self._name + "-dilatational"
         div = VectorField3d(self._domain, members=self._members, name=name)
         div.value[:] = self.value
-        cow_fft_helmholtzdecomp(div._cdfield, COW_PROJECT_OUT_CURL)
+        cow_fft_helmholtzdecomp(div._c, COW_PROJECT_OUT_CURL)
         return div
 
     def power_spectrum(self, bins=200, spacing="linear", name=None):
@@ -294,7 +302,7 @@ class VectorField3d(DataField):
         if name is None: name = self._name + "-pspec"
         pspec = Histogram1d(0.0, 1.0, bins=bins, spacing=spacing,
                             name=name, commit=False)
-        cow_fft_pspecvecfield(self._cdfield, pspec._chist)
+        cow_fft_pspecvecfield(self._c, pspec._c)
         return pspec
 
 
@@ -310,42 +318,42 @@ class Histogram1d(object):
 
     def __init__(self, x0, x1, bins=200, spacing="linear", binmode="counts",
                  name="histogram", domain=None, commit=True):
-        self._chist = cow_histogram_new()
+        self._c = cow_histogram_new()
         self._name = name
-        cow_histogram_setlower(self._chist, 0, x0)
-        cow_histogram_setupper(self._chist, 0, x1)
-        cow_histogram_setnbins(self._chist, 0, bins)
-        cow_histogram_setbinmode(self._chist, self._binmode[binmode])
-        cow_histogram_setspacing(self._chist, self._spacing[spacing])
-        cow_histogram_setnickname(self._chist, name)
+        cow_histogram_setlower(self._c, 0, x0)
+        cow_histogram_setupper(self._c, 0, x1)
+        cow_histogram_setnbins(self._c, 0, bins)
+        cow_histogram_setbinmode(self._c, self._binmode[binmode])
+        cow_histogram_setspacing(self._c, self._spacing[spacing])
+        cow_histogram_setnickname(self._c, name)
         if domain:
-            cow_histogram_setdomaincomm(self._chist, domain._cdomain)
+            cow_histogram_setdomaincomm(self._c, domain._c)
         if commit:
-            cow_histogram_commit(self._chist)
+            cow_histogram_commit(self._c)
 
     def __del__(self):
-        cow_histogram_del(self._chist)
+        cow_histogram_del(self._c)
 
     @property
     def sealed(self):
-        return bool(cow_histogram_getsealed(self._chist))
+        return bool(cow_histogram_getsealed(self._c))
 
     @property
     def binloc(self):
         """ Returns the bin centers """
         assert self.sealed
-        return cow_histogram_getbinlocx(self._chist).copy()
+        return cow_histogram_getbinlocx(self._c).copy()
 
     @property
     def binval(self):
         """ Returns the present bin values """
         assert self.sealed
-        return cow_histogram_getbinval1(self._chist).copy()
+        return cow_histogram_getbinval1(self._c).copy()
 
     def add_sample(self, val, weight=1):
         """ Bins the data point with value `val` and weight `weight` """
         assert not self.sealed
-        cow_histogram_addsample1(self._chist, val, weight)
+        cow_histogram_addsample1(self._c, val, weight)
 
     def seal(self):
         """
@@ -353,7 +361,7 @@ class Histogram1d(object):
         participating ranks. Must be called before any function that gets
         histogram data or dumps it to file.
         """
-        cow_histogram_seal(self._chist)
+        cow_histogram_seal(self._c)
 
     def dump(self, fname, gname="", format="guess"):
         """
@@ -373,16 +381,16 @@ class Histogram1d(object):
                 raise ValueError("file format could not be inferred from %s" %
                                  fname)
         if format == "hdf5":
-            cow_histogram_dumphdf5(self._chist, fname, gname)
+            cow_histogram_dumphdf5(self._c, fname, gname)
         elif format == "ascii":
-            cow_histogram_dumpascii(self._chist, fname)
+            cow_histogram_dumpascii(self._c, fname)
         else:
             raise ValueError("keyword 'format' must be one of ['hdf5', "
                              "'ascii']")
 
     def __setattr__(self, key, value):
         if key == "name":
-            cow_histogram_setnickname(self._chist, value)
+            cow_histogram_setnickname(self._c, value)
         else:
             object.__setattr__(self, key, value)
 
@@ -428,11 +436,11 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
     if downsample:
         s = downsample
         for m in mem:
-            if domain._nd == 1:
+            if domain.ndim == 1:
                 dfield[m][...] = h5f[group][m][::s]
-            elif domain._nd == 2:
+            elif domain.ndim == 2:
                 dfield[m][...] = h5f[group][m][::s,::s]
-            elif domain._nd == 3:
+            elif domain.ndim == 3:
                 dfield[m][...] = h5f[group][m][::s,::s,::s]
         del s
     else:
