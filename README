@@ -11,7 +11,8 @@ The functions provided in this library are written to do analysis of
 hydrodynamic and magnetohydrodynamic turbulence, especially on the unigrid
 periodic cube, A.K.A. the swirly cube or Cube of Wonder.
 
-Everything here is written in C. Optional libraries are MPI, HDF5, and FFTW.
+Everything here is written in C and Python. Optional libraries are MPI, HDF5,
+and FFTW.
 
 
 Features planned or implemented
@@ -33,14 +34,14 @@ Features planned or implemented
 
 [+] Transforms (including stencils) via C callback functions
 
-[-] Vector field derivative operations: div, grad, curl, etc.
+[+] Vector field derivative operations: div, grad, curl, etc.
 
 [+] Parallel 3d FFT functions: allows arbitrary data layout, no need to keep 3d
     data in 2d slabs
 
 [ ] 2d parallel FFT's
 
-[ ] Serial versions (for use without MPI) of 1d, 2d, and 3d FFT's
+[-] Serial versions (for use without MPI) of 1d, 2d, and 3d FFT's
 
 [+] Helmholtz decomposition of vector fields
 
@@ -49,7 +50,7 @@ Features planned or implemented
 
 [ ] Support for domains with complex-valued data
 
-[ ] Two-point correlations, structure functions
+[-] Two-point correlations, structure functions
 
 [ ] Bi-spectra
 
@@ -59,4 +60,4 @@ Features planned or implemented
 
 [ ] Low/high pass filtering; course-graining
 
-[-] Python wrappers
+[+] Python wrappers
