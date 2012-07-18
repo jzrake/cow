@@ -407,6 +407,18 @@ class Histogram1d(object):
             object.__setattr__(self, key, value)
 
 
+def dot_product(v, w):
+    res = ScalarField3d(v.domain)
+    res.name = v.name + "-dot-" + w.name
+    return res._apply_transform([v, w], cow_trans_dot3)
+
+
+def cross_product(v, w):
+    res = VectorField3d(v.domain)
+    res.name = v.name + "-cross-" + w.name
+    return res._apply_transform([v, w], cow_trans_cross)
+
+
 def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
     """
     Looks in the HDF5 file `fname` for a serialized DataField named `group`, and
