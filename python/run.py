@@ -1,15 +1,22 @@
 
+import sys
 import numpy as np
 import cowpy
 
+"""
+All tests here are written assuming one MPI process.
+"""
+
 def testfromfile():
-    domain = cowpy.fromfile("test.h5", group="vel")
-    print domain
+    field = cowpy.fromfile("test.h5", group="vel")
+    print field
+    sparsefield = cowpy.fromfile("test.h5", group="vel", downsample=2)
+    assert sparsefield.value.shape == (12/2, 12/2, 16/2, 3)
 
 def testsamp():
     domain = cowpy.DistributedDomain([10,10,10], guard=3)
     dfield = cowpy.DataField(domain, ["vx", "vy", "vz"])
-    np.random.seed(domain.rank)
+    np.random.seed(domain.cart_rank)
     sampx = np.random.rand(10,3)
     dfield["vx"] = 2.1
     dfield["vy"] = 2.2
@@ -74,7 +81,6 @@ def testcb():
     assert M1.name == "del_dot_B"
 
 def testreduce():
-    import cow
     domain = cowpy.DistributedDomain([10,10,10], guard=2)
     J = cowpy.VectorField3d(domain, name="J")
     J[0] = 0.0
@@ -91,11 +97,16 @@ def testreduce():
     assert abs(min - 0.0) < 1e-16
 
 if __name__ == "__main__":
-    testhist()
-    testsamp()
-    testglobind()
-    testio()
-    testcb()
-    testreduce()
-    testhelm()
-    testfromfile()
+    if len(sys.argv) > 1:
+        print "running test", sys.argv[1]
+        globals()["test" + sys.argv[1]]()
+    else:
+        print "running all tests..."
+        testhist()
+        testsamp()
+        testglobind()
+        testio()
+        testcb()
+        testreduce()
+        testhelm()
+        testfromfile()

@@ -11,4 +11,4 @@ COWPY :
 
 clean :
 	python setup.py clean --all
-	rm -rf cow.py *.pyc lib
+	rm -rf cow.py cow_wrap.c *.pyc lib

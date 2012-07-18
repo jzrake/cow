@@ -9,7 +9,7 @@ try:
     import h5py
 except ImportError:
     warnings.warn("h5py was not detected, you might be missing some functions")
-from cow import *
+from _cow import *
 
 
 KILOBYTES = 1 << 10
@@ -49,8 +49,12 @@ class DistributedDomain(object):
         cow_domain_del(self._cdomain)
 
     @property
-    def rank(self):
+    def cart_rank(self):
         return cow_domain_getcartrank(self._cdomain)
+
+    @property
+    def cart_size(self):
+        return cow_domain_getcartsize(self._cdomain)
 
     @property
     def global_start(self):
@@ -383,7 +387,7 @@ class Histogram1d(object):
             object.__setattr__(self, key, value)
 
 
-def fromfile(fname, group, guard=0, members=None, vec3d=False):
+def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
     """
     Looks in the HDF5 file `fname` for a serialized DataField named `group`, and
     creates a new data field from it if possible. All data sets in fname/group
@@ -404,16 +408,35 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False):
             shape = grp[member].shape # first time through
         if not members or member in members:
             mem.append(member)
-    h5f.close()
-    domain = DistributedDomain(shape, guard=guard)
     if members:
         for m in members:
             if m not in mem:
                 warnings.warn("data member '%s' was not found in file" % m)
+    if downsample != 0:
+        sprime = [s / downsample for s in shape]
+        domain = DistributedDomain(sprime, guard=guard)
+        if domain.cart_size != 1:
+            raise ValueError("down-sampled loading only supported for serial"
+                             " jobs right now")
+    else:
+        domain = DistributedDomain(shape, guard=guard)
     if vec3d:
         assert len(mem) == 3
         dfield = VectorField3d(domain, mem, name=group)
     else:
         dfield = DataField(domain, mem, name=group)
-    dfield.read(fname)
+    if downsample:
+        s = downsample
+        for m in mem:
+            if domain._nd == 1:
+                dfield[m][...] = h5f[group][m][::s]
+            elif domain._nd == 2:
+                dfield[m][...] = h5f[group][m][::s,::s]
+            elif domain._nd == 3:
+                dfield[m][...] = h5f[group][m][::s,::s,::s]
+        del s
+    else:
+        dfield.read(fname)
+
+    h5f.close()
     return dfield
