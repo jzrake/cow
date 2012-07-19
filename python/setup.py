@@ -27,21 +27,27 @@ except:
     print "No system config, using default settings"
 config['include_dirs'] += [np.get_include()]
 
-csource = ['cow.c', 'io.c', 'hist.c', 'samp.c', 'fft.c', 'fft_3d.c',
-           'remap_3d.c', 'pack_3d.c']
-
-cow_module = Extension('_cow',
+def make_ext(name, sources):
+    return Extension(
+        name,
         extra_compile_args = ['-std=c99'] + config['extra_compile_args'],
-        extra_link_args = config['extra_link_args'],
-        define_macros = [a for a in config.items() if a[0].startswith('COW')],
-        include_dirs = ["../src"] + config['include_dirs'],
-        library_dirs = config['library_dirs'],
-        libraries = config['libraries'],
-        sources = ['cow.i'] + ["../src/" + c for c in csource])
+        extra_link_args    = config['extra_link_args'],
+        define_macros      = [a for a in config.items() if a[0].startswith('COW')],
+        include_dirs       = ["../src"] + config['include_dirs'],
+        library_dirs       = config['library_dirs'],
+        libraries          = config['libraries'],
+        sources            = sources)
 
-setup(name        = 'cow',
+cowsource = ['cow.c', 'io.c', 'hist.c', 'samp.c', 'fft.c', 'fft_3d.c',
+           'remap_3d.c', 'pack_3d.c']
+cow = make_ext('cowpy.capi._ccow',
+               sources=['cow.i'] + ["../src/" + c for c in cowsource])
+srhdpack = make_ext('cowpy.capi._csrhdpack',
+                    sources=['srhdpack.i'] + ["../src/srhdpack.c"])
+
+setup(name        = 'cowpy',
       version     = '0.4',
       author      = "Jonathan Zrake",
       description = """C.O.W.""",
-      ext_modules = [cow_module],
-      py_modules  = ["cowpy"])
+      ext_modules = [cow, srhdpack],
+      packages    = ["cowpy", "cowpy.capi"])

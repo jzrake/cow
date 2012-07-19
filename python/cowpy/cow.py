@@ -9,7 +9,8 @@ try:
     import h5py
 except ImportError:
     warnings.warn("h5py was not detected, you might be missing some functions")
-from _cow import *
+from capi.ccow import *
+
 
 
 KILOBYTES = 1 << 10
@@ -20,12 +21,9 @@ modes |= (COW_NOREOPEN_STDOUT if int(os.getenv("COW_NOREOPEN_STDOUT", 0)) else 0
 modes |= (COW_DISABLE_MPI if int(os.getenv("COW_DISABLE_MPI", 0)) else 0)
 modes |= (COW_DISABLE_MPI if '-s' in sys.argv else 0)
 
-def cow_exit():
-    print "finalizing cow..."
-    cow_finalize()
-
-atexit.register(cow_exit)
-cow_init(0, None, modes)
+if __name__ != "__main__":
+    atexit.register(cow_finalize)
+    cow_init(0, None, modes)
 
 mpirunning = cow_mpirunning
 

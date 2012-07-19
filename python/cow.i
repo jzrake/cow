@@ -2,7 +2,7 @@
 
 // http://www.scipy.org/Cookbook/SWIG_NumPy_examples
 
-%module cow
+%module ccow
 %{
 #define SWIG_FILE_WITH_INIT
 
@@ -45,8 +45,6 @@ void cow_trans_dot3(double *result, double **args, int **s, void *u);
 
 
 %include "numpy.i"
-
- //%apply(double IN_ARRAY1[ANY]){(double x[3])};
 %apply(double ARGOUT_ARRAY1[ANY]){(double x[3])};
 
 %apply(double *IN_ARRAY2, int DIM1, int DIM2)
