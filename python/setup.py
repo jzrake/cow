@@ -39,15 +39,13 @@ def make_ext(name, sources):
         sources            = sources)
 
 cowsrc = ["../src/" + c for c in ['cow.c', 'io.c', 'hist.c', 'samp.c', 'fft.c',
-                                  'fft_3d.c', 'remap_3d.c', 'pack_3d.c']]
-cow = make_ext('cowpy.capi._ccow',
-               sources=['cow.i'] + cowsrc)
-srhdpack = make_ext('cowpy.capi._csrhdpack',
-                    sources=['srhdpack.i'] + cowsrc)
+                                  'fft_3d.c', 'remap_3d.c', 'pack_3d.c',
+                                  'srhdpack.c']]
+cow = make_ext('cowpy.capi._ccow', sources=['cow.i'] + cowsrc)
 
 setup(name        = 'cowpy',
       version     = '0.4',
       author      = "Jonathan Zrake",
       description = """C.O.W.""",
-      ext_modules = [cow, srhdpack],
+      ext_modules = [cow],
       packages    = ["cowpy", "cowpy.capi"])

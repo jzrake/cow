@@ -13,6 +13,7 @@
 
 #include <numpy/arrayobject.h>
 #include "../src/cow.h"
+#include "../src/srhdpack.h"
 void setarray1(cow_dfield *f, double *x, int n0, int n1)
 {
   cow_dfield_setbuffer(f, x);
@@ -59,6 +60,7 @@ void cow_trans_dot3(double *result, double **args, int **s, void *u);
 {(double **x, int *n0, int *n1)};
 
 %include "../src/cow.h"
+%include "../src/srhdpack.h"
 
 extern void setarray1(cow_dfield *f, double *x, int n0, int n1);
 extern void setarray2(cow_dfield *f, double *x, int n0, int n1, int n2);
