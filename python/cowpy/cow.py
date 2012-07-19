@@ -64,7 +64,7 @@ class DistributedDomain(object):
     @property
     def ndim(self):
         return cow_domain_getndim(self._c)
-
+        
     @property
     def guard(self):
         return cow_domain_getguard(self._c)
@@ -157,11 +157,15 @@ class DataField(object):
         function must be called by all ranks which own this array, although the
         size of `points` may vary between ranks, and is allowed to be zero.
         """
+        points = np.array(points)
         assert points.shape[1] == self.domain.ndim
+        assert self.domain.guard >= 1
         p3d = np.zeros([points.shape[0], 3])
         for n in range(self.domain.ndim):
             p3d[:,n] = points[:,n]
-        cow_dfield_setsamplecoords(self._c, p3d)
+        err = cow_dfield_setsamplecoords(self._c, p3d)
+        if err != 0:
+            raise RuntimeError("off-bounds sample coordinates")
         cow_dfield_setsamplemode(self._c, COW_SAMPLE_LINEAR)
         cow_dfield_sampleexecute(self._c)
         x = cow_dfield_getsamplecoords(self._c).copy()
