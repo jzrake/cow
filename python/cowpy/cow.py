@@ -16,7 +16,7 @@ from capi.ccow import *
 KILOBYTES = 1 << 10
 MEGABYTES = 1 << 20
 modes = 0
-hdf5_collective = os.getenv("COW_HDF5_COLLECTIVE", 0)
+hdf5_collective = int(os.getenv("COW_HDF5_COLLECTIVE", 0))
 modes |= (COW_NOREOPEN_STDOUT if int(os.getenv("COW_NOREOPEN_STDOUT", 0)) else 0)
 modes |= (COW_DISABLE_MPI if int(os.getenv("COW_DISABLE_MPI", 0)) else 0)
 modes |= (COW_DISABLE_MPI if '-s' in sys.argv else 0)

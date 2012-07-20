@@ -6,7 +6,7 @@ import cowpy
 from cowpy.srhdpack import relative_lorentz_pairs as pairs
 
 
-def runstats(fname, opts):
+def cversion(fname, opts):
     V = cowpy.fromfile(fname, "prim", members=["vx","vy","vz"], vec3d=True,
                        guard=2, downsample=opts.downsample)
     histpro, histlab = pairs(V, opts.pairs, bins=opts.bins)
