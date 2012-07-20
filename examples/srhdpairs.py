@@ -51,6 +51,7 @@ def gammarel(fname, opts):
         dg = P[i0][0]*P[i1][0] - np.dot(P[i0][1:], P[i1][1:])
         histP.add_sample(dx, weight=dg)
     histP.seal()
+    histP.name = "gamma-rel-drlab-hist"
 
     if opts.output:
         histP.dump(opts.output)
