@@ -1,8 +1,9 @@
 #!/usr/bin/env python
 
-import cowpy
-import numpy as np
+import sys
 import itertools
+import numpy as np
+import cowpy
 
 # General convention is that local indices include guard zones, and global ones
 # do not.
@@ -37,22 +38,42 @@ def test1():
 
 def test2():
     ng = 1
-    domain = cowpy.DistributedDomain([16,16,16], guard=ng)
+    nx = 32
+    domain = cowpy.DistributedDomain([nx,nx,nx], guard=ng)
     dfield = cowpy.VectorField3d(domain)
     ishape = dfield.interior.shape
     oshape = dfield.value.shape
+    np.random.seed(domain.cart_rank)
 
     for i,j,k in itertools.product(*(range(n) for n in oshape[0:3])):
         dfield.value[i,j,k] = domain.coordinate([i,j,k])
-    dfield.sync_guard()
 
-    sampx = [domain.coordinate([i+ng, j+ng, k+ng]) for i,j,k in
-             itertools.product(*(range(n) for n in ishape[0:3]))]
+    domain.sequential(lambda: sys.stdout.write("before: %s\n" % dfield.value[-1,-1,-1]))
+    dfield.sync_guard()
+    domain.sequential(lambda: sys.stdout.write("after:  %s\n" % dfield.value[-1,-1,-1]))
+
+    nsamp = 10000
+    npair = 100000
+    sampx = np.random.rand(nsamp, 3)
+
     x, P = dfield.sample_global(sampx)
-    print x[0], P[0]
-    print x[1], P[1]
-    print x[2], P[2]
+    histx = cowpy.Histogram1d(0.0, 1.5, bins=36, binmode="counts")
+    histP = cowpy.Histogram1d(0.0, 1.5, bins=36, binmode="counts")
+
+    for n in range(npair):
+        i0 = np.random.randint(0, len(P))
+        i1 = np.random.randint(0, len(P))
+        histx.add_sample(np.dot(x[i1] - x[i0], x[i1] - x[i0])**0.5)
+        histP.add_sample(np.dot(P[i1] - P[i0], P[i1] - P[i0])**0.5)
+    histx.seal()
+    histP.seal()
+
+    if domain.cart_rank == 0:
+        import matplotlib.pyplot as plt
+        plt.plot(histx.binloc, histx.binval, label="x")
+        plt.plot(histP.binloc, histP.binval, label="P")
+        plt.show()
 
 
 if __name__ == "__main__":
-    test2()
+    test1()
