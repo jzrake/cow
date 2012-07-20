@@ -52,7 +52,10 @@ def gammarel(fname, opts):
         histP.add_sample(dx, weight=dg)
     histP.seal()
 
-    if V.domain.cart_rank == 0:
+    if opts.output:
+        histP.dump(opts.output)
+
+    if opts.plot and V.domain.cart_rank == 0:
         import matplotlib.pyplot as plt
         plt.plot(histP.binloc, histP.binval, label="P")
         plt.legend(loc='best')
@@ -94,6 +97,6 @@ if __name__ == "__main__":
     parser.add_option("--bins", type=int, default=72)
     opts, args = parser.parse_args()
     for arg in args:
-        cversion(arg, opts)
+        #cversion(arg, opts)
         #vrel(arg, opts)
-        #gammarel(arg, opts)
+        gammarel(arg, opts)
