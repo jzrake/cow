@@ -77,6 +77,12 @@ class DistributedDomain(object):
     def barrier(self):
         cow_domain_barrier(self._c)
 
+    def sequential(self, func, args=()):
+        for i in range(self.cart_size):
+            if self.cart_rank == i:
+                func(*args)
+            self.barrier()
+
 
 class DataField(object):
     def __init__(self, domain, members, name="datafield"):
