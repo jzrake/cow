@@ -366,6 +366,10 @@ class Histogram1d(object):
         return bool(cow_histogram_getsealed(self._c))
 
     @property
+    def counts(self):
+        return cow_histogram_gettotalcounts(self._c)
+
+    @property
     def binloc(self):
         """ Returns the bin centers """
         assert self.sealed
