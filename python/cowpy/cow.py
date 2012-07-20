@@ -74,6 +74,9 @@ class DistributedDomain(object):
         return [cow_domain_positionatindex(self._c, n, i)
                 for n, i in enumerate(ind)]
 
+    def barrier(self):
+        cow_domain_barrier(self._c)
+
 
 class DataField(object):
     def __init__(self, domain, members, name="datafield"):
