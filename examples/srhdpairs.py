@@ -98,6 +98,6 @@ if __name__ == "__main__":
     parser.add_option("--bins", type=int, default=72)
     opts, args = parser.parse_args()
     for arg in args:
-        #cversion(arg, opts)
+        cversion(arg, opts)
         #vrel(arg, opts)
-        gammarel(arg, opts)
+        #gammarel(arg, opts)
