@@ -35,9 +35,12 @@ def test1():
             errors += 1
     assert errors == 0
 
-
 def test2():
-    ng = 1
+    """
+    Demonstrates that the samples coorindates that go out are the same ones that
+    come back, as long as they are re-sorted.
+    """
+    ng = 3
     nx = 32
     domain = cowpy.DistributedDomain([nx,nx,nx], guard=ng)
     dfield = cowpy.VectorField3d(domain)
@@ -47,33 +50,27 @@ def test2():
 
     for i,j,k in itertools.product(*(range(n) for n in oshape[0:3])):
         dfield.value[i,j,k] = domain.coordinate([i,j,k])
-
-    domain.sequential(lambda: sys.stdout.write("before: %s\n" % dfield.value[-1,-1,-1]))
     dfield.sync_guard()
-    domain.sequential(lambda: sys.stdout.write("after:  %s\n" % dfield.value[-1,-1,-1]))
 
-    nsamp = 10000
-    npair = 100000
-    sampx = np.random.rand(nsamp, 3)
+    # Syncing guard zones will throw off the sampling if they're near the
+    # boundary, so choose them suffieciently far away. This is not a problem
+    # when the data is periodic.
+    nsamp = 100
+    sampx = 0.125 + 0.25*np.random.rand(nsamp, 3)
 
+    # Indexing trick to sort array by first index:
+    # http://stackoverflow.com/questions/2828059/sorting-arrays-in-numpy-by-column
     x, P = dfield.sample_global(sampx)
-    histx = cowpy.Histogram1d(0.0, 1.5, bins=36, binmode="counts")
-    histP = cowpy.Histogram1d(0.0, 1.5, bins=36, binmode="counts")
+    xi = sampx[sampx[:,0].argsort(),:] # x in
+    xo = x[x[:,0].argsort(),:] # x out
+    sP = P[P[:,0].argsort(),:]
 
-    for n in range(npair):
-        i0 = np.random.randint(0, len(P))
-        i1 = np.random.randint(0, len(P))
-        histx.add_sample(np.dot(x[i1] - x[i0], x[i1] - x[i0])**0.5)
-        histP.add_sample(np.dot(P[i1] - P[i0], P[i1] - P[i0])**0.5)
-    histx.seal()
-    histP.seal()
+    # The samples that go out are the same that come back
+    assert (abs(xo - xi) < 1e-14).all()
 
-    if domain.cart_rank == 0:
-        import matplotlib.pyplot as plt
-        plt.plot(histx.binloc, histx.binval, label="x")
-        plt.plot(histP.binloc, histP.binval, label="P")
-        plt.show()
+    # The samples are correctly matched with their coordinates
+    assert (abs(x - P) < 1e-14).all()
 
 
 if __name__ == "__main__":
-    test1()
+    test2()
