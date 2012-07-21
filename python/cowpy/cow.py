@@ -9,7 +9,7 @@ try:
     import h5py
 except ImportError:
     warnings.warn("h5py was not detected, you might be missing some functions")
-from capi.ccow import *
+from capi._ccow import *
 
 
 

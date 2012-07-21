@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
-#from distutils.core import setup, Extension
-from numpy.distutils.core import setup, Extension
+from distutils.core import setup, Extension
+#from numpy.distutils.core import setup, Extension
 import numpy as np
 
 # Helpful info on linker environment:
@@ -14,7 +14,7 @@ config = {
     'COW_MPI': 0,
     'include_dirs': [ ],
     'library_dirs': [ ],
-    'libraries': [ ], # e.g. ['hdf5', 'z', 'fftw']
+    'libraries': [ ],
     'extra_compile_args': [ ],
     'extra_link_args': [ ],
     'NPY_INC': np.get_include() }
@@ -25,7 +25,10 @@ try:
     print "Using system config"
 except:
     print "No system config, using default settings"
-config['include_dirs'] += [np.get_include()]
+
+config['include_dirs'] += ['../include', np.get_include()]
+config['library_dirs'] += ['../lib']
+config['extra_link_args'] += ['../lib/libcow.a']
 
 def make_ext(name, sources):
     return Extension(
@@ -41,7 +44,7 @@ def make_ext(name, sources):
 cowsrc = ["../src/" + c for c in ['cow.c', 'io.c', 'hist.c', 'samp.c', 'fft.c',
                                   'fft_3d.c', 'remap_3d.c', 'pack_3d.c',
                                   'srhdpack.c']]
-cow = make_ext('cowpy.capi._ccow', sources=['cow.i'] + cowsrc)
+cow = make_ext('cowpy.capi._ccow', sources=['cow.i'])# + cowsrc)
 
 setup(name        = 'cowpy',
       version     = '0.4',

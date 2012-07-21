@@ -14,5 +14,5 @@ python :
 
 clean :
 	@make -C src clean
-#	@make -C python clean
+	@make -C python clean
 	@rm -rf lib bin include
