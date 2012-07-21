@@ -37,3 +37,6 @@
 /bin/srhdhist
 /include/cow.h
 /include/srhdpack.h
+/cython/cow.c
+/cython/cow_config.py
+/python/ccow.py

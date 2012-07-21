@@ -1,6 +1,6 @@
 
 
-.PHONY : clib python
+.PHONY : clib python cython
 
 default : clib
 
@@ -12,7 +12,11 @@ clib :
 python :
 	@make -C python
 
+cython : clib
+	@make -C cython
+
 clean :
 	@make -C src clean
 	@make -C python clean
+	@make -C cython clean
 	@rm -rf lib bin include
