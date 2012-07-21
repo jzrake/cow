@@ -29,3 +29,11 @@
 /python/cow_config.py
 /python/cow_wrap.c
 /setup.sh
+/tests/testcow
+/tests/testfft
+/tests/testhist
+/tests/testsamp
+/bin/mhdstats
+/bin/srhdhist
+/include/cow.h
+/include/srhdpack.h
