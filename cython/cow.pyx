@@ -123,13 +123,57 @@ cdef extern from "cow.h":
     void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
 
 
+import os
+import sys
+import atexit
+import warnings
+import numpy as np
+import h5py
+try:
+    import h5py
+except ImportError:
+    warnings.warn("h5py was not detected, you might be missing some functions")
 
-cdef class DistrbutedDomain(object):
+_hdf5_collective = 0
+
+def _getie(s):
+    return int(os.getenv(s, 0))
+def exitfunc():
+    cow_finalize()
+
+cdef _init_cow():
+    modes = 0
+    _hdf5_collective = _getie("COW_HDF5_COLLECTIVE")
+    modes |= (COW_NOREOPEN_STDOUT if _getie("COW_NOREOPEN_STDOUT") else 0)
+    modes |= (COW_DISABLE_MPI if _getie("DISABLE_MPI") else 0)
+    modes |= (COW_DISABLE_MPI if '-s' in sys.argv else 0)
+    cdef int argc = 0
+    cdef char *argv[1]
+    cow_init(argc, argv, modes)
+    atexit.register(exitfunc)
+
+_init_cow()
+
+cdef class DistributedDomain(object):
     cdef cow_domain *_c
-    def __cinit__(self):
-        print "building domain"
+    def __cinit__(self, G_ntot, guard=0, *args, **kwargs):
+        cdef int KILOBYTES = 1 << 10
+        cdef int MEGABYTES = 1 << 20
+        print "building domain", G_ntot
+        nd = len(G_ntot)
+        assert nd <= 3
         self._c = cow_domain_new()
+        for n, ni in enumerate(G_ntot):
+            cow_domain_setsize(self._c, n, ni)
+        cow_domain_setndim(self._c, nd)
+        cow_domain_setguard(self._c, guard)
+        cow_domain_commit(self._c)
+        # Set up the IO scheme
+        cow_domain_setchunk(self._c, 1)
+        cow_domain_setcollective(self._c, _hdf5_collective)
+        cow_domain_setalign(self._c, 4*KILOBYTES, 4*MEGABYTES)
 
     def __dealloc__(self):
         print "killing domain"
-        cow_domain_del(self._c)
+        if self._c:
+            cow_domain_del(self._c)
