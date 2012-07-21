@@ -1,16 +1,18 @@
 
-.PHONY : python
+
+.PHONY : clib python
 
 default : clib
 
-clib :
-	make -C src
-
-python :
-	make -C python
-
 all : python clib
 
+clib : 
+	@make -C src
+
+python :
+	@make -C python
+
 clean :
-	make -C src clean
-	make -C python clean
+	@make -C src clean
+#	@make -C python clean
+	@rm -rf lib bin include
