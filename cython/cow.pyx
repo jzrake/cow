@@ -1,6 +1,4 @@
 
-print "Hello world!"
-
 cimport numpy as np
 
 cdef extern from "cow.h":
@@ -122,6 +120,14 @@ cdef extern from "cow.h":
     void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *h)
     void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
 
+    void cow_trans_divcorner(double *result, double **args, int **s, void *u)
+    void cow_trans_div5(double *result, double **args, int **s, void *u)
+    void cow_trans_rot5(double *result, double **args, int **s, void *u)
+    void cow_trans_component(double *result, double **args, int **s, void *u)
+    void cow_trans_magnitude(double *result, double **args, int **s, void *u)
+    void cow_trans_cross(double *result, double **args, int **s, void *u)
+    void cow_trans_dot3(double *result, double **args, int **s, void *u)
+
 
 import os
 import sys
@@ -134,7 +140,7 @@ try:
 except ImportError:
     warnings.warn("h5py was not detected, you might be missing some functions")
 
-_hdf5_collective = 0
+
 
 def _getie(s):
     return int(os.getenv(s, 0))
@@ -153,6 +159,8 @@ cdef _init_cow():
     atexit.register(exitfunc)
 
 _init_cow()
+_hdf5_collective = 0
+
 
 cdef class DistributedDomain(object):
     cdef cow_domain *_c
@@ -168,13 +176,11 @@ cdef class DistributedDomain(object):
         cow_domain_setndim(self._c, nd)
         cow_domain_setguard(self._c, guard)
         cow_domain_commit(self._c)
-        # Set up the IO scheme
-        cow_domain_setchunk(self._c, 1)
+        cow_domain_setchunk(self._c, 1) # set up the IO scheme after commit
         cow_domain_setcollective(self._c, _hdf5_collective)
         cow_domain_setalign(self._c, 4*KILOBYTES, 4*MEGABYTES)
 
     def __dealloc__(self):
-        print "killing domain"
         if self._c: # in case __cinit__ raised something, don't clean this up
             cow_domain_del(self._c)
 
@@ -224,6 +230,7 @@ cdef class DataField(object):
     cdef DistributedDomain _domain
     def __cinit__(self, DistributedDomain domain, members, name="datafield", *args, **kwargs):
         self._c = cow_dfield_new(domain._c, name)
+        self._domain = domain
         for m in members:
             cow_dfield_addmember(self._c, m)
         nd = domain.ndim
@@ -250,13 +257,29 @@ cdef class DataField(object):
             cow_dfield_setbuffer(self._c, <double*>_buf3.data)
 
         cow_dfield_commit(self._c)
-        self._domain = domain
-        #self._members = tuple(members)
+
         #self._lookup = dict([(m, n) for n,m in enumerate(members)])
 
     def __dealloc__(self):
         if self._c: # in case __cinit__ raised something, don't clean this up
             cow_dfield_del(self._c)
+
+    @property
+    def domain(self):
+        return self._domain
+
+    property name:
+        def __get__(self):
+            return cow_dfield_getname(self._c)
+        def __set__(self, name):
+            cow_dfield_setname(self._c, name)
+
+    property members:
+        def __get__(self):
+            mem = [cow_dfield_iteratemembers(self._c)]
+            for n in range(cow_dfield_getnmembers(self._c) - 1):
+                mem.append(cow_dfield_nextmember(self._c))
+            return mem
 
     property value:
         def __get__(self):
@@ -292,6 +315,73 @@ cdef class DataField(object):
             elif nd == 3:
                 self._buf[ng:-ng, ng:-ng, ng:-ng, :] = val
 
-    @property
-    def domain(self):
-        return self._domain
+    cdef sync_guard(self):
+        cow_dfield_syncguard(self._c)
+
+    cdef dump(self, fname):
+        cow_dfield_write(self._c, fname)
+
+    cdef read(self, fname):
+        cow_dfield_read(self._c, fname)
+
+    cdef _apply_transform(self, args, cow_transform op, void *userdata=NULL):
+        """
+        Private method, removes redundant code in the two functions that follow.
+        """
+        cow_dfield_clearargs(self._c)
+        for arg in args:
+            cow_dfield_pusharg(self._c, <cow_dfield*>arg._c)
+        cow_dfield_settransform(self._c, op)
+        cow_dfield_setuserdata(self._c, userdata)
+        cow_dfield_transformexecute(self._c)
+        return self
+
+    cdef reduce_component(self, member):
+        """
+        Returns the min, max, and sum of the data member `member`, which may be
+        int or str.
+        """
+        if type(member) is str:
+            member = self._lookup[member]
+        else:
+            assert member < len(self._members)
+        cow_dfield_clearargs(self._c)
+        cow_dfield_settransform(self._c, cow_trans_component)
+        cow_dfield_setuserdata(self._c, self._c)
+        cow_dfield_setiparam(self._c, member)
+        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
+        cow_dfield_reduce(self._c, <double*>res.data)
+        return res
+    
+    cdef reduce_magnitude(self):
+        """
+        Returns the min, max, and sum of the data fields's vector magnitude.
+        """
+        cow_dfield_clearargs(self._c)
+        cow_dfield_settransform(self._c, cow_trans_magnitude)
+        cow_dfield_setuserdata(self._c, self._c)
+        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
+        cow_dfield_reduce(self._c, <double*>res.data)
+        return res
+
+    def __getitem__(self, key):
+        if type(key) is int:
+            return self.value[..., key]
+        else:
+            return self.value[..., self._lookup[key]]
+
+    def __setitem__(self, key, val):
+        if type(key) is int:
+            self.value[..., key] = val 
+        else:
+            self.value[..., self._lookup[key]] = val
+
+    def __repr__(self):
+        props = ["%s" % type(self),
+                 "name: %s" % self.name,
+                 "members: %s" % str(self.members),
+                 "local shape: %s" % str(self.value[..., 0].shape),
+                 "global shape: %s" % str(self.domain.global_shape),
+                 "global start: %s" % str(self.domain.global_start),
+                 "padding: %s" % self.domain.guard]
+        return "{" + "\n\t".join(props) + "}"
