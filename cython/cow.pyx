@@ -255,10 +255,7 @@ cdef class DataField(object):
             _buf3 = np.zeros(dims)
             self._buf = _buf3
             cow_dfield_setbuffer(self._c, <double*>_buf3.data)
-
         cow_dfield_commit(self._c)
-
-        #self._lookup = dict([(m, n) for n,m in enumerate(members)])
 
     def __dealloc__(self):
         if self._c: # in case __cinit__ raised something, don't clean this up
@@ -336,15 +333,15 @@ cdef class DataField(object):
         cow_dfield_transformexecute(self._c)
         return self
 
-    cdef reduce_component(self, member):
+    cpdef reduce_component(self, member):
         """
         Returns the min, max, and sum of the data member `member`, which may be
         int or str.
         """
         if type(member) is str:
-            member = self._lookup[member]
+            member = self.members.index(member)
         else:
-            assert member < len(self._members)
+            assert member < len(self.members)
         cow_dfield_clearargs(self._c)
         cow_dfield_settransform(self._c, cow_trans_component)
         cow_dfield_setuserdata(self._c, self._c)
@@ -353,7 +350,7 @@ cdef class DataField(object):
         cow_dfield_reduce(self._c, <double*>res.data)
         return res
     
-    cdef reduce_magnitude(self):
+    cpdef reduce_magnitude(self):
         """
         Returns the min, max, and sum of the data fields's vector magnitude.
         """
@@ -368,13 +365,13 @@ cdef class DataField(object):
         if type(key) is int:
             return self.value[..., key]
         else:
-            return self.value[..., self._lookup[key]]
+            return self.value[..., self.members.index(key)]
 
     def __setitem__(self, key, val):
         if type(key) is int:
             self.value[..., key] = val 
         else:
-            self.value[..., self._lookup[key]] = val
+            self.value[..., self.members.index(key)] = val
 
     def __repr__(self):
         props = ["%s" % type(self),
