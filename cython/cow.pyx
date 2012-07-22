@@ -175,5 +175,123 @@ cdef class DistributedDomain(object):
 
     def __dealloc__(self):
         print "killing domain"
-        if self._c:
+        if self._c: # in case __cinit__ raised something, don't clean this up
             cow_domain_del(self._c)
+
+    @property
+    def cart_rank(self):
+        return cow_domain_getcartrank(self._c)
+
+    @property
+    def cart_size(self):
+        return cow_domain_getcartsize(self._c)
+
+    @property
+    def global_start(self):
+        return tuple([cow_domain_getglobalstartindex(self._c, n)
+                      for n in range(self.ndim)])
+
+    @property
+    def global_shape(self):
+        return tuple([cow_domain_getnumglobalzones(self._c, n)
+                      for n in range(self.ndim)])
+    @property
+    def ndim(self):
+        return cow_domain_getndim(self._c)
+
+    @property
+    def guard(self):
+        return cow_domain_getguard(self._c)
+
+    def coordinate(self, ind):
+        assert len(ind) == self.ndim
+        return tuple([cow_domain_positionatindex(self._c, n, i)
+                      for n, i in enumerate(ind)])
+
+    def barrier(self):
+        cow_domain_barrier(self._c)
+
+    def sequential(self, func, args=()):
+        for i in range(self.cart_size):
+            if self.cart_rank == i:
+                func(*args)
+            self.barrier()
+
+
+cdef class DataField(object):
+    cdef cow_dfield *_c
+    cdef np.ndarray _buf
+    cdef DistributedDomain _domain
+    def __cinit__(self, DistributedDomain domain, members, name="datafield", *args, **kwargs):
+        self._c = cow_dfield_new(domain._c, name)
+        for m in members:
+            cow_dfield_addmember(self._c, m)
+        nd = domain.ndim
+        dims = [ ]
+        for i in range(nd):
+            dims.append(cow_domain_getnumlocalzonesincguard(domain._c, i))
+        dims.append(len(members))
+
+        cdef np.ndarray[np.double_t,ndim=2] _buf1
+        cdef np.ndarray[np.double_t,ndim=3] _buf2
+        cdef np.ndarray[np.double_t,ndim=4] _buf3
+
+        if nd == 1:
+            _buf1 = np.zeros(dims)
+            self._buf = _buf1
+            cow_dfield_setbuffer(self._c, <double*>_buf1.data)
+        elif nd == 2:
+            _buf2 = np.zeros(dims)
+            self._buf = _buf2
+            cow_dfield_setbuffer(self._c, <double*>_buf2.data)
+        elif nd == 3:
+            _buf3 = np.zeros(dims)
+            self._buf = _buf3
+            cow_dfield_setbuffer(self._c, <double*>_buf3.data)
+
+        cow_dfield_commit(self._c)
+        self._domain = domain
+        #self._members = tuple(members)
+        #self._lookup = dict([(m, n) for n,m in enumerate(members)])
+
+    def __dealloc__(self):
+        if self._c: # in case __cinit__ raised something, don't clean this up
+            cow_dfield_del(self._c)
+
+    property value:
+        def __get__(self):
+            return self._buf
+        def __set__(self, val):
+            self._buf[...] = val
+
+    property interior:
+        """
+        Opertates on a view of the buffer object which refers only to the
+        interior portion, excluding the guard zones.
+        """
+        def __get__(self):
+            ng = self.domain.guard
+            nd = self.domain.ndim
+            if ng == 0:
+                return self._buf
+            elif nd == 1:
+                return self._buf[ng:-ng, :]
+            elif nd == 2:
+                return self._buf[ng:-ng, ng:-ng, :]
+            elif nd == 3:
+                return self._buf[ng:-ng, ng:-ng, ng:-ng, :]
+        def __set__(self, val):
+            ng = self.domain.guard
+            nd = self.domain.ndim
+            if ng == 0:
+                self._buf[:] = val
+            elif nd == 1:
+                self._buf[ng:-ng, :] = val
+            elif nd == 2:
+                self._buf[ng:-ng, ng:-ng, :] = val
+            elif nd == 3:
+                self._buf[ng:-ng, ng:-ng, ng:-ng, :] = val
+
+    @property
+    def domain(self):
+        return self._domain
