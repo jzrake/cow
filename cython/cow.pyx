@@ -321,6 +321,67 @@ cdef class DataField(object):
     cdef read(self, fname):
         cow_dfield_read(self._c, fname)
 
+    cpdef sample_global(self, pnts):
+        """
+        Samples the distributed domain at the provided list of physical
+        coordinates, `pnts` which has the shape (N x nd). Returns those
+        coordinates, but permuted arbitrarily, and their associated field
+        values. Values are multi-linearly interpolated from cell centers. This
+        function must be called by all ranks which own this array, although the
+        size of `points` may vary between ranks, and is allowed to be zero.
+        """
+        cdef np.ndarray[np.double_t,ndim=2] points = np.array(pnts)
+        if points.shape[1] != self.domain.ndim:
+            raise ValueError("dimension of sample coordinates must match those "
+                             "of the domain")
+        if self.domain.guard <= 0:
+            raise ValueError("sampling requires at least one guard zone")
+        cdef np.ndarray[np.double_t,ndim=2] p3d = np.zeros([points.shape[0], 3])
+        for n in range(self.domain.ndim):
+            p3d[:,n] = points[:,n]
+        err = cow_dfield_setsamplecoords(self._c, <double*>p3d.data,
+                                         p3d.shape[0], 3)
+        if err != 0:
+            raise RuntimeError("off-bounds sample coordinates")
+        cow_dfield_setsamplemode(self._c, COW_SAMPLE_LINEAR)
+        cow_dfield_sampleexecute(self._c)
+        cdef double *x
+        cdef double *P
+        cdef int nd = self.domain.ndim
+        cdef int nq
+        cdef int Nx
+        cdef int NP
+        cow_dfield_getsamplecoords(self._c, &x, &Nx, NULL)
+        cow_dfield_getsampleresult(self._c, &P, &NP, &nq)
+        cdef np.ndarray[np.double_t,ndim=2] x0 = np.zeros([points.shape[0], nd])
+        cdef np.ndarray[np.double_t,ndim=2] P0 = np.zeros([points.shape[0], nq])
+        cdef int i, j
+        for i in range(Nx):
+            for j in range(nd):
+                x0[i,j] = x[3*i + j]
+        for i in range(NP):
+            for j in range(nq):
+                P0[i,j] = P[nq*i + j]
+        cow_dfield_setsamplecoords(self._c, NULL, 0, 3) # to save memory
+        return x0, P0
+
+    def index_global(self, ind):
+        """
+        Indexes the distributed array with the global index `ind`. Must be
+        called on all ranks which own this array.
+        """
+        if len(ind) != self.domain.ndim:
+            raise ValueError("wrong number of indices")
+        i = [ind[n] if n < self.domain.ndim else 0 for n in range(3)]
+        cdef double *P
+        cdef int nq
+        cow_dfield_sampleglobalind(self._c, i[0], i[1], i[2], &P, &nq)
+        cdef np.ndarray[np.double_t,ndim=1] P0 = np.zeros(nq)
+        cdef int m
+        for m in range(nq):
+            P0[m] = P[m]
+        return P0
+
     cdef _apply_transform(self, args, cow_transform op, void *userdata=NULL):
         """
         Private method, removes redundant code in the two functions that follow.
