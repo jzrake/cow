@@ -229,6 +229,8 @@ cdef class DataField(object):
     cdef np.ndarray _buf
     cdef DistributedDomain _domain
     def __cinit__(self, DistributedDomain domain, members, name="datafield", *args, **kwargs):
+        if domain is None or len(members) == 0:
+            raise ValueError("bad argument list")
         self._c = cow_dfield_new(domain._c, name)
         self._domain = domain
         for m in members:
