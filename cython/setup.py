@@ -1,7 +1,7 @@
-#!/usr/bin/env python
 
-from distutils.core import setup, Extension
-#from numpy.distutils.core import setup, Extension
+from distutils.core import setup
+from distutils.extension import Extension
+from Cython.Distutils import build_ext
 import numpy as np
 
 # Helpful info on linker environment:
@@ -30,25 +30,22 @@ config['include_dirs'] += ['../include', np.get_include()]
 config['library_dirs'] += ['../lib']
 config['extra_link_args'] += ['../lib/libcow.a']
 
-def make_ext(name, sources):
+def make_ext(name, sources, link=True):
     return Extension(
         name,
         extra_compile_args = ['-std=c99'] + config['extra_compile_args'],
-        extra_link_args    = config['extra_link_args'],
+        extra_link_args    = config['extra_link_args'] if link else [ ],
         define_macros      = [a for a in config.items() if a[0].startswith('COW')],
-        include_dirs       = ["../src"] + config['include_dirs'],
-        library_dirs       = config['library_dirs'],
-        libraries          = config['libraries'],
+        include_dirs       = config['include_dirs'],
+        library_dirs       = config['library_dirs'] if link else [ ],
+        libraries          = config['libraries'] if link else [ ],
         sources            = sources)
 
-cowsrc = ["../src/" + c for c in ['cow.c', 'io.c', 'hist.c', 'samp.c', 'fft.c',
-                                  'fft_3d.c', 'remap_3d.c', 'pack_3d.c',
-                                  'srhdpack.c']]
-cow = make_ext('cowpy.capi._ccow', sources=['cow.i'])# + cowsrc)
+cowpy = make_ext('cowpy', sources=['cowpy.pyx'])
 
 setup(name        = 'cowpy',
       version     = '0.4',
       author      = "Jonathan Zrake",
       description = """C.O.W.""",
-      ext_modules = [cow],
-      packages    = ["cowpy", "cowpy.capi"])
+      ext_modules = [cowpy],
+      cmdclass    = {'build_ext': build_ext})

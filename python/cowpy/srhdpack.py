@@ -1,5 +1,5 @@
 
-from capi.ccow import srhdpack_relativelorentzpairs
+from capi._ccow import srhdpack_relativelorentzpairs
 from cowpy import Histogram1d
 
 def relative_lorentz_pairs(vel, nsamples, bins=36, nperbatch=10000, seed=True):

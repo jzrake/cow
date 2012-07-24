@@ -1,48 +1,60 @@
 
+cimport numpy as np
+cimport cowpy
+
 import os
 import sys
 import atexit
 import warnings
 import numpy as np
-import h5py
 try:
     import h5py
 except ImportError:
     warnings.warn("h5py was not detected, you might be missing some functions")
-from capi._ccow import *
 
 
 
-KILOBYTES = 1 << 10
-MEGABYTES = 1 << 20
-modes = 0
-hdf5_collective = int(os.getenv("COW_HDF5_COLLECTIVE", 0))
-modes |= (COW_NOREOPEN_STDOUT if int(os.getenv("COW_NOREOPEN_STDOUT", 0)) else 0)
-modes |= (COW_DISABLE_MPI if int(os.getenv("COW_DISABLE_MPI", 0)) else 0)
-modes |= (COW_DISABLE_MPI if '-s' in sys.argv else 0)
+def _getie(s):
+    return int(os.getenv(s, 0))
+def exitfunc():
+    cow_finalize()
 
-if __name__ != "__main__":
-    atexit.register(cow_finalize)
-    cow_init(0, None, modes)
+cdef _init_cow():
+    modes = 0
+    _hdf5_collective = _getie("COW_HDF5_COLLECTIVE")
+    modes |= (COW_NOREOPEN_STDOUT if _getie("COW_NOREOPEN_STDOUT") else 0)
+    modes |= (COW_DISABLE_MPI if _getie("DISABLE_MPI") else 0)
+    modes |= (COW_DISABLE_MPI if '-s' in sys.argv else 0)
+    cdef int argc = 0
+    cdef char *argv[1]
+    cow_init(argc, argv, modes)
+    atexit.register(exitfunc)
 
-mpirunning = cow_mpirunning
+_init_cow()
+_hdf5_collective = 0
 
-class DistributedDomain(object):
-    def __init__(self, G_ntot, guard=0, x0=None, x1=None):
-        nd = len(G_ntot)
-        assert nd <= 3
+
+cdef class DistributedDomain(object):
+    def __cinit__(self):
         self._c = cow_domain_new()
+
+    def __init__(self, G_ntot, guard=0, *args, **kwargs):
+        cdef int KILOBYTES = 1 << 10
+        cdef int MEGABYTES = 1 << 20
+        print "building domain", G_ntot
+        nd = len(G_ntot)
+        if nd > 3:
+            raise ValueError("domain dims must be no larger 3")
         for n, ni in enumerate(G_ntot):
             cow_domain_setsize(self._c, n, ni)
         cow_domain_setndim(self._c, nd)
         cow_domain_setguard(self._c, guard)
         cow_domain_commit(self._c)
-        # Set up the IO scheme
-        cow_domain_setchunk(self._c, 1)
-        cow_domain_setcollective(self._c, hdf5_collective)
+        cow_domain_setchunk(self._c, 1) # set up the IO scheme after commit
+        cow_domain_setcollective(self._c, _hdf5_collective)
         cow_domain_setalign(self._c, 4*KILOBYTES, 4*MEGABYTES)
 
-    def __del__(self):
+    def __dealloc__(self):
         cow_domain_del(self._c)
 
     @property
@@ -55,24 +67,25 @@ class DistributedDomain(object):
 
     @property
     def global_start(self):
-        return tuple(cow_domain_getglobalstartindex(self._c, n)
-                     for n in range(self.ndim))
+        return tuple([cow_domain_getglobalstartindex(self._c, n)
+                      for n in range(self.ndim)])
+
     @property
     def global_shape(self):
-        return tuple(cow_domain_getnumglobalzones(self._c, n)
-                     for n in range(self.ndim))
+        return tuple([cow_domain_getnumglobalzones(self._c, n)
+                      for n in range(self.ndim)])
     @property
     def ndim(self):
         return cow_domain_getndim(self._c)
-        
+
     @property
     def guard(self):
         return cow_domain_getguard(self._c)
 
     def coordinate(self, ind):
         assert len(ind) == self.ndim
-        return [cow_domain_positionatindex(self._c, n, i)
-                for n, i in enumerate(ind)]
+        return tuple([cow_domain_positionatindex(self._c, n, i)
+                      for n, i in enumerate(ind)])
 
     def barrier(self):
         cow_domain_barrier(self._c)
@@ -84,118 +97,185 @@ class DistributedDomain(object):
             self.barrier()
 
 
-class DataField(object):
-    def __init__(self, domain, members, name="datafield"):
-        self._c = cow_dfield_new(domain._c, name)
+cdef class DataField(object):
+    def __cinit__(self):
+        self._c = cow_dfield_new()
+
+    def __init__(self, DistributedDomain domain, members=[], name="datafield",
+                 *args, **kwargs):
+        if domain is None or len(members) == 0:
+            raise ValueError("bad argument list")
+
+        cow_dfield_setdomain(self._c, domain._c)
+        cow_dfield_setname(self._c, name)
+        self._domain = domain
+
         for m in members:
-            cow_dfield_addmember(self._c, str(m))
+            cow_dfield_addmember(self._c, m)
         nd = domain.ndim
         dims = [ ]
         for i in range(nd):
             dims.append(cow_domain_getnumlocalzonesincguard(domain._c, i))
         dims.append(len(members))
-        self._buf = np.zeros(dims)
+
+        cdef np.ndarray[np.double_t,ndim=2] _buf1
+        cdef np.ndarray[np.double_t,ndim=3] _buf2
+        cdef np.ndarray[np.double_t,ndim=4] _buf3
+
         if nd == 1:
-            setarray1(self._c, self._buf)
-        if nd == 2:
-            setarray2(self._c, self._buf)
-        if nd == 3:
-            setarray3(self._c, self._buf)
-        cow_dfield_commit(self._c)
-        self._domain = domain
-        self._members = tuple(members)
-        self._lookup = dict([(m, n) for n,m in enumerate(members)])
-
-    def __del__(self):
-        cow_dfield_del(self._c)
-
-    @property
-    def name(self):
-        return cow_dfield_getname(self._c)
-
-    @property
-    def members(self):
-        return self._members
-
-    @property
-    def value(self):
-        """
-        Returns the numpy.ndarray object serving as the buffer for the
-        underlying C API. The last dimension contains the data members, so the
-        result is an (N+1)-d array for an N-d domain. The first and last zones
-        in the array are padding, or 'guard' zones.
-        """
-        return self._buf
-
-    @property
-    def interior(self):
-        """
-        Returns a view of the buffer object which refers only to the interior
-        portion, excluding the guard zones.
-        """
-        ng = self.domain.guard
-        nd = self.domain.ndim
-        if ng == 0:
-            return self._buf
-        elif nd == 1:
-            return self._buf[ng:-ng, :]
+            _buf1 = np.zeros(dims)
+            self._buf = _buf1
+            cow_dfield_setbuffer(self._c, <double*>_buf1.data)
         elif nd == 2:
-            return self._buf[ng:-ng, ng:-ng, :]
+            _buf2 = np.zeros(dims)
+            self._buf = _buf2
+            cow_dfield_setbuffer(self._c, <double*>_buf2.data)
         elif nd == 3:
-            return self._buf[ng:-ng, ng:-ng, ng:-ng, :]
+            _buf3 = np.zeros(dims)
+            self._buf = _buf3
+            cow_dfield_setbuffer(self._c, <double*>_buf3.data)
+        cow_dfield_commit(self._c)
+
+    def __dealloc__(self):
+        cow_dfield_del(self._c)
 
     @property
     def domain(self):
         return self._domain
 
+    property name:
+        def __get__(self):
+            return cow_dfield_getname(self._c)
+        def __set__(self, name):
+            cow_dfield_setname(self._c, name)
+
+    property members:
+        def __get__(self):
+            mem = [cow_dfield_iteratemembers(self._c)]
+            for n in range(cow_dfield_getnmembers(self._c) - 1):
+                mem.append(cow_dfield_nextmember(self._c))
+            return mem
+
+    property value:
+        def __get__(self):
+            return self._buf
+        def __set__(self, val):
+            self._buf[...] = val
+
+    property interior:
+        """
+        Opertates on a view of the buffer object which refers only to the
+        interior portion, excluding the guard zones.
+        """
+        def __get__(self):
+            ng = self.domain.guard
+            nd = self.domain.ndim
+            if ng == 0:
+                return self._buf
+            elif nd == 1:
+                return self._buf[ng:-ng, :]
+            elif nd == 2:
+                return self._buf[ng:-ng, ng:-ng, :]
+            elif nd == 3:
+                return self._buf[ng:-ng, ng:-ng, ng:-ng, :]
+        def __set__(self, val):
+            ng = self.domain.guard
+            nd = self.domain.ndim
+            if ng == 0:
+                self._buf[:] = val
+            elif nd == 1:
+                self._buf[ng:-ng, :] = val
+            elif nd == 2:
+                self._buf[ng:-ng, ng:-ng, :] = val
+            elif nd == 3:
+                self._buf[ng:-ng, ng:-ng, ng:-ng, :] = val
+
     def sync_guard(self):
         cow_dfield_syncguard(self._c)
 
     def dump(self, fname):
-        cow_dfield_write(self._c, str(fname))
+        cow_dfield_write(self._c, fname)
 
     def read(self, fname):
-        cow_dfield_read(self._c, str(fname))
+        cow_dfield_read(self._c, fname)
 
-    def sample_global(self, points):
+    def sample_global(self, pnts):
         """
         Samples the distributed domain at the provided list of physical
-        coordinates, `points` which has the shape (N x nd). Returns those
-        coordinates, but permuted arbitrarily, and their associated field
-        values. Values are multi-linearly interpolated from cell centers. This
-        function must be called by all ranks which own this array, although the
-        size of `points` may vary between ranks, and is allowed to be zero.
+        coordinates, `pnts` which has the shape (N x nd). Returns a permutation
+        of those coordinates, and their associated field values. Values are
+        multi-linearly interpolated from cell centers. This function must be
+        called by all ranks which own this array, although the size of `pnts`
+        may vary between ranks, and is allowed to be zero.
+
+        NOTE: Typically this function is used for the calculation of structure
+        functions over various fields. Due to the choice of algorithm for
+        distributing the data among parallel processes, the list of output
+        points is sorted according to the subgrid containing the target
+        coordinate, and thus contains spatial correlations in the ordering of
+        the output points. This means that a random sampling of pairs (or
+        triplets, etc.) requires the user to randomly permute the output vector,
+        or to index it with randomly selected indices.
         """
-        points = np.array(points)
-        assert points.shape[1] == self.domain.ndim
-        assert self.domain.guard >= 1
-        p3d = np.zeros([points.shape[0], 3])
+        cdef np.ndarray[np.double_t,ndim=2] points = np.array(pnts)
+        if points.shape[1] != self.domain.ndim:
+            raise ValueError("dimension of sample coordinates must match those "
+                             "of the domain")
+        if self.domain.guard <= 0:
+            raise ValueError("sampling requires at least one guard zone")
+        cdef np.ndarray[np.double_t,ndim=2] p3d = np.zeros([points.shape[0], 3])
         for n in range(self.domain.ndim):
             p3d[:,n] = points[:,n]
-        err = cow_dfield_setsamplecoords(self._c, p3d)
+        err = cow_dfield_setsamplecoords(self._c, <double*>p3d.data,
+                                         p3d.shape[0], 3)
         if err != 0:
             raise RuntimeError("off-bounds sample coordinates")
         cow_dfield_setsamplemode(self._c, COW_SAMPLE_LINEAR)
         cow_dfield_sampleexecute(self._c)
-        x = cow_dfield_getsamplecoords(self._c).copy()
-        P = cow_dfield_getsampleresult(self._c).copy()
-        # To save memory, reset the sample coordinate buffer
-        cow_dfield_setsamplecoords(self._c, np.zeros([0,3]))
-        return  x, P
+        cdef double *x
+        cdef double *P
+        cdef int nd = self.domain.ndim
+        cdef int nq
+        cdef int Nx
+        cdef int NP
+        cow_dfield_getsamplecoords(self._c, &x, &Nx, NULL)
+        cow_dfield_getsampleresult(self._c, &P, &NP, &nq)
+        cdef np.ndarray[np.double_t,ndim=2] x0 = np.zeros([points.shape[0], nd])
+        cdef np.ndarray[np.double_t,ndim=2] P0 = np.zeros([points.shape[0], nq])
+        cdef int i, j
+        for i in range(Nx):
+            for j in range(nd):
+                x0[i,j] = x[3*i + j]
+        for i in range(NP):
+            for j in range(nq):
+                P0[i,j] = P[nq*i + j]
+        cow_dfield_setsamplecoords(self._c, NULL, 0, 3) # to save memory
+        return x0, P0
 
     def index_global(self, ind):
         """
         Indexes the distributed array with the global index `ind`. Must be
         called on all ranks which own this array.
         """
-        assert len(ind) == self.domain.ndim
+        if len(ind) != self.domain.ndim:
+            raise ValueError("wrong number of indices")
         i = [ind[n] if n < self.domain.ndim else 0 for n in range(3)]
-        return cow_dfield_sampleglobalind(self._c, i[0], i[1], i[2])
+        cdef double *P
+        cdef int nq
+        cow_dfield_sampleglobalind(self._c, i[0], i[1], i[2], &P, &nq)
+        cdef np.ndarray[np.double_t,ndim=1] P0 = np.zeros(nq)
+        cdef int m
+        for m in range(nq):
+            P0[m] = P[m]
+        return P0
 
-    def _apply_transform(self, args, op, userdata=None):
+    cdef _apply_transform(self, args, cow_transform op, void *userdata=NULL):
+        """
+        Private method, removes redundant code in the two functions that follow.
+        """
         cow_dfield_clearargs(self._c)
         for arg in args:
-            cow_dfield_pusharg(self._c, arg._c)
+            cow_dfield_pusharg(self._c, (<DataField?>arg)._c)
         cow_dfield_settransform(self._c, op)
         cow_dfield_setuserdata(self._c, userdata)
         cow_dfield_transformexecute(self._c)
@@ -207,15 +287,17 @@ class DataField(object):
         int or str.
         """
         if type(member) is str:
-            member = self._lookup[member]
+            member = self.members.index(member)
         else:
-            assert member < len(self._members)
+            assert member < len(self.members)
         cow_dfield_clearargs(self._c)
         cow_dfield_settransform(self._c, cow_trans_component)
         cow_dfield_setuserdata(self._c, self._c)
         cow_dfield_setiparam(self._c, member)
-        return cow_dfield_reduce(self._c)
-
+        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
+        cow_dfield_reduce(self._c, <double*>res.data)
+        return res
+    
     def reduce_magnitude(self):
         """
         Returns the min, max, and sum of the data fields's vector magnitude.
@@ -223,30 +305,26 @@ class DataField(object):
         cow_dfield_clearargs(self._c)
         cow_dfield_settransform(self._c, cow_trans_magnitude)
         cow_dfield_setuserdata(self._c, self._c)
-        return cow_dfield_reduce(self._c)
+        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
+        cow_dfield_reduce(self._c, <double*>res.data)
+        return res
 
     def __getitem__(self, key):
         if type(key) is int:
             return self.value[..., key]
         else:
-            return self.value[..., self._lookup[key]]
+            return self.value[..., self.members.index(key)]
 
     def __setitem__(self, key, val):
         if type(key) is int:
             self.value[..., key] = val 
         else:
-            self.value[..., self._lookup[key]] = val
-
-    def __setattr__(self, key, value):
-        if key == "name":
-            cow_dfield_setname(self._c, value)
-        else:
-            object.__setattr__(self, key, value)
+            self.value[..., self.members.index(key)] = val
 
     def __repr__(self):
         props = ["%s" % type(self),
                  "name: %s" % self.name,
-                 "members: %s" % str(self._members),
+                 "members: %s" % str(self.members),
                  "local shape: %s" % str(self.value[..., 0].shape),
                  "global shape: %s" % str(self.domain.global_shape),
                  "global start: %s" % str(self.domain.global_start),
@@ -254,17 +332,18 @@ class DataField(object):
         return "{" + "\n\t".join(props) + "}"
 
 
-class ScalarField3d(DataField):
+
+cdef class ScalarField3d(DataField):
     def __init__(self, domain, members=("f",), name="scalarfield"):
-        assert len(members) == 1
-        assert domain.ndim == 3
+        if len(members) != 1 or domain.ndim != 3:
+            raise ValueError("bad argument list")
         super(ScalarField3d, self).__init__(domain, members, name)
 
 
-class VectorField3d(DataField):
+cdef class VectorField3d(DataField):
     def __init__(self, domain, members=("fx","fy","fz"), name="vectorfield"):
-        assert len(members) == 3
-        assert domain.ndim == 3
+        if len(members) != 3 or domain.ndim != 3:
+            raise ValueError("bad argument list")
         super(VectorField3d, self).__init__(domain, members, name)
 
     def curl(self, name=None):
@@ -274,7 +353,7 @@ class VectorField3d(DataField):
         """
         assert self.domain.guard >= 2
         if name is None: name = "del_cross_" + self.name
-        res = VectorField3d(self.domain, name=name)
+        cdef VectorField3d res = VectorField3d(self.domain, name=name)
         return res._apply_transform([self], cow_trans_rot5)
 
     def divergence(self, stencil="5point", name=None):
@@ -284,6 +363,7 @@ class VectorField3d(DataField):
         order stencil of `stencil` is 'corner'.
         """
         if name is None: name = "del_dot_" + self.name
+        cdef cow_transform op
         if stencil == "5point":
             assert self.domain.guard >= 2
             op = cow_trans_div5
@@ -293,7 +373,7 @@ class VectorField3d(DataField):
         else:
             raise ValueError("keyword 'stencil' must be one of ['5point', "
                              "'corner']")
-        res = ScalarField3d(self.domain, name=name)
+        cdef ScalarField3d res = ScalarField3d(self.domain, name=name)
         return res._apply_transform([self], op)
 
     def solenoidal(self, name=None):
@@ -302,7 +382,8 @@ class VectorField3d(DataField):
         decomposition. Projection is done using the Fourier decomposition.
         """
         if name is None: name = self.name + "-solenoidal"
-        sol = VectorField3d(self.domain, members=self._members, name=name)
+        cdef VectorField3d sol = VectorField3d(self.domain,
+                                               members=self.members, name=name)
         sol.value[:] = self.value
         cow_fft_helmholtzdecomp(sol._c, COW_PROJECT_OUT_DIV)
         return sol
@@ -313,10 +394,11 @@ class VectorField3d(DataField):
         decomposition. Projection is done using the Fourier decomposition.
         """
         if name is None: name = self.name + "-dilatational"
-        div = VectorField3d(self.domain, members=self._members, name=name)
-        div.value[:] = self.value
-        cow_fft_helmholtzdecomp(div._c, COW_PROJECT_OUT_CURL)
-        return div
+        cdef VectorField3d dil = VectorField3d(self.domain,
+                                               members=self.members, name=name)
+        dil.value[:] = self.value
+        cow_fft_helmholtzdecomp(dil._c, COW_PROJECT_OUT_CURL)
+        return dil
 
     def power_spectrum(self, bins=200, spacing="linear", name=None):
         """
@@ -324,13 +406,14 @@ class VectorField3d(DataField):
         field, where P(k) = \vec{f}(\vec{k}) \cdot \vec{f}^*(\vec{k}).
         """
         if name is None: name = self.name + "-pspec"
-        pspec = Histogram1d(0.0, 1.0, bins=bins, spacing=spacing,
-                            name=name, commit=False)
+        cdef Histogram1d pspec = Histogram1d(0.0, 1.0, bins=bins,
+                                             spacing=spacing, name=name,
+                                             commit=False)
         cow_fft_pspecvecfield(self._c, pspec._c)
         return pspec
 
 
-class Histogram1d(object):
+cdef class Histogram1d(object):
     """
     Class that represents a 1 dimensional histogram.
     """
@@ -339,10 +422,11 @@ class Histogram1d(object):
     _binmode = {"counts": COW_HIST_BINMODE_COUNTS,
                 "density": COW_HIST_BINMODE_DENSITY,
                 "average": COW_HIST_BINMODE_AVERAGE}
+    def __cinit__(self):
+        self._c = cow_histogram_new()
 
     def __init__(self, x0, x1, bins=200, spacing="linear", binmode="counts",
                  name="histogram", domain=None, commit=True):
-        self._c = cow_histogram_new()
         cow_histogram_setlower(self._c, 0, x0)
         cow_histogram_setupper(self._c, 0, x1)
         cow_histogram_setnbins(self._c, 0, bins)
@@ -350,16 +434,18 @@ class Histogram1d(object):
         cow_histogram_setspacing(self._c, self._spacing[spacing])
         cow_histogram_setnickname(self._c, name)
         if domain:
-            cow_histogram_setdomaincomm(self._c, domain._c)
+            cow_histogram_setdomaincomm(self._c, (<DistributedDomain?>domain)._c)
         if commit:
             cow_histogram_commit(self._c)
 
-    def __del__(self):
+    def __dealloc__(self):
         cow_histogram_del(self._c)
 
-    @property
-    def name(self):
-        return cow_histogram_getname(self._c)
+    property name:
+        def __get__(self):
+            return cow_histogram_getname(self._c)
+        def __set__(self, value):
+            cow_histogram_setnickname(self._c, value)
 
     @property
     def sealed(self):
@@ -373,13 +459,27 @@ class Histogram1d(object):
     def binloc(self):
         """ Returns the bin centers """
         assert self.sealed
-        return cow_histogram_getbinlocx(self._c).copy()
+        cdef double *x
+        cdef int N
+        cow_histogram_getbinlocx(self._c, &x, &N)
+        cdef np.ndarray[np.double_t,ndim=1] x0 = np.zeros(N)
+        cdef int i
+        for i in range(N):
+            x0[i] = x[i]
+        return x0
 
     @property
     def binval(self):
         """ Returns the present bin values """
         assert self.sealed
-        return cow_histogram_getbinval1(self._c).copy()
+        cdef double *x
+        cdef int N
+        cow_histogram_getbinval1(self._c, &x, &N)
+        cdef np.ndarray[np.double_t,ndim=1] x0 = np.zeros(N)
+        cdef int i
+        for i in range(N):
+            x0[i] = x[i]
+        return x0
 
     def add_sample(self, val, weight=1):
         """ Bins the data point with value `val` and weight `weight` """
@@ -419,12 +519,6 @@ class Histogram1d(object):
             raise ValueError("keyword 'format' must be one of ['hdf5', "
                              "'ascii']")
 
-    def __setattr__(self, key, value):
-        if key == "name":
-            cow_histogram_setnickname(self._c, value)
-        else:
-            object.__setattr__(self, key, value)
-
 
 def dot_product(v, w):
     res = ScalarField3d(v.domain)
@@ -449,14 +543,12 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
     h5f = h5py.File(fname, "r")
     grp = h5f[group]
     mem = [ ]
+    shape = None
     for member in grp:
-        try:
-            if shape != grp[member].shape:
-                raise AttributeError # happens if grp[member] is not a dataset
-        except AttributeError:
-                raise ValueError("the group '%s' is not a DataField" % group)
-        except NameError:
+        if shape is None:
             shape = grp[member].shape # first time through
+        if shape != grp[member].shape:
+                raise ValueError("the group '%s' is not a DataField" % group)
         if not members or member in members:
             mem.append(member)
     if members:
@@ -488,7 +580,26 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
                 dfield.interior[...,n] = h5f[group][m][::s,::s]
             elif domain.ndim == 3:
                 dfield.interior[...,n] = h5f[group][m][::s,::s,::s]
-        del s
         h5f.close()
         dfield.sync_guard()
     return dfield
+
+
+
+
+
+
+cdef extern from "srhdpack.h":
+    void srhdpack_relativelorentzpairs(cow_dfield *vel,
+                                       cow_histogram *histpro,
+                                       cow_histogram *histlab,
+                                       int nbatch,
+                                       int nperbatch,
+                                       int seed)
+
+def relative_lorentz_pairs(DataField vel, nsamples, bins=36, nperbatch=10000, seed=True):
+    histpro = Histogram1d(0.0, 2.5, bins=bins, spacing="linear", commit=False)
+    histlab = Histogram1d(0.0, 2.5, bins=bins, spacing="linear", commit=False)
+    srhdpack_relativelorentzpairs(vel._c, histpro._c, histlab._c,
+                                  int(nsamples/nperbatch), nperbatch, seed)
+    return histpro, histlab
