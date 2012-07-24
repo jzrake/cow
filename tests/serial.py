@@ -117,6 +117,31 @@ def testreduce():
     assert abs(max - 10.0) < 1e-16
     assert abs(min - 0.0) < 1e-16
 
+def testbadsetup():
+    try:
+        e = None
+        domain = cowpy.DistributedDomain([6,6,6,5], guard=2)
+    except ValueError as e:
+        print e
+    assert isinstance(e, ValueError)
+
+    try:
+        e = None
+        domain = cowpy.DistributedDomain([6,6,6], guard=2)
+        vfield = cowpy.VectorField3d(domain, name=3)
+    except TypeError as e:
+        print e
+    assert isinstance(e, TypeError)
+
+    try:
+        e = None
+        domain = cowpy.DistributedDomain([6,6,6], guard=2)
+        vfield = cowpy.VectorField3d(domain, members=["gx", "gy"])
+    except ValueError as e:
+        print e
+    assert isinstance(e, ValueError)
+
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         print "running test", sys.argv[1]
@@ -132,3 +157,5 @@ if __name__ == "__main__":
         testreduce()
         testhelm()
         testfromfile()
+        testbadsetup()
+        
