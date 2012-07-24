@@ -42,10 +42,11 @@ def make_ext(name, sources):
         sources            = sources)
 
 cowpy = make_ext('cowpy', sources=['cowpy.pyx'])
+srhdpack = make_ext('srhdpack', sources=['srhdpack.pyx'])
 
 setup(name        = 'cowpy',
       version     = '0.4',
       author      = "Jonathan Zrake",
       description = """C.O.W.""",
-      ext_modules = [cowpy],
+      ext_modules = [cowpy, srhdpack],
       cmdclass    = {'build_ext': build_ext})
