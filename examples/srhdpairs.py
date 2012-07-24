@@ -3,7 +3,7 @@
 import optparse
 import numpy as np
 import cowpy
-from cowpy.srhdpack import relative_lorentz_pairs as pairs
+from cowpy import relative_lorentz_pairs as pairs
 
 
 def cversion(fname, opts):

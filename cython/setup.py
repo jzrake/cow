@@ -30,15 +30,15 @@ config['include_dirs'] += ['../include', np.get_include()]
 config['library_dirs'] += ['../lib']
 config['extra_link_args'] += ['../lib/libcow.a']
 
-def make_ext(name, sources):
+def make_ext(name, sources, link=True):
     return Extension(
         name,
         extra_compile_args = ['-std=c99'] + config['extra_compile_args'],
-        extra_link_args    = config['extra_link_args'],
+        extra_link_args    = config['extra_link_args'] if link else [ ],
         define_macros      = [a for a in config.items() if a[0].startswith('COW')],
         include_dirs       = config['include_dirs'],
-        library_dirs       = config['library_dirs'],
-        libraries          = config['libraries'],
+        library_dirs       = config['library_dirs'] if link else [ ],
+        libraries          = config['libraries'] if link else [ ],
         sources            = sources)
 
 cowpy = make_ext('cowpy', sources=['cowpy.pyx'])
