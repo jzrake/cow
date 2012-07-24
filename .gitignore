@@ -40,3 +40,5 @@
 /cython/cow.c
 /cython/cow_config.py
 /python/ccow.py
+/cython/cowpy.c
+/cow_config.py

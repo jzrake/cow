@@ -36,12 +36,12 @@ def make_ext(name, sources):
         extra_compile_args = ['-std=c99'] + config['extra_compile_args'],
         extra_link_args    = config['extra_link_args'],
         define_macros      = [a for a in config.items() if a[0].startswith('COW')],
-        include_dirs       = ["../src"] + config['include_dirs'],
+        include_dirs       = config['include_dirs'],
         library_dirs       = config['library_dirs'],
         libraries          = config['libraries'],
         sources            = sources)
 
-cowpy = make_ext('cowpy', sources=['cow.pyx'])
+cowpy = make_ext('cowpy', sources=['cowpy.pyx'])
 
 setup(name        = 'cowpy',
       version     = '0.4',
