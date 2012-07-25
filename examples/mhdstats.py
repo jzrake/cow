@@ -2,8 +2,6 @@
 
 import optparse
 import numpy as np
-import matplotlib.pyplot as plt
-import h5py
 import cowpy
 
 def maghist(field):
@@ -43,10 +41,11 @@ def runstats(fname, opts):
     f["vcrossBcrossB"] = cowpy.cross_product(f["vcrossB"], B)
     f["divvcrossBcrossB"] = f["vcrossBcrossB"].divergence()
 
-    for thing in f:
-        hist = maghist(f[thing])
-        hist.name = thing + "-hist"
-        hist.dump(opts.output or fname)
+    if opts.output:
+        for thing in f:
+            hist = maghist(f[thing])
+            hist.name = thing + "-hist"
+            hist.dump(opts.output)
 
 if __name__ == "__main__":
     parser = optparse.OptionParser()
