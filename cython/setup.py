@@ -16,8 +16,7 @@ config = {
     'library_dirs': [ ],
     'libraries': [ ],
     'extra_compile_args': [ ],
-    'extra_link_args': [ ],
-    'NPY_INC': np.get_include() }
+    'extra_link_args': [ ] }
 
 try:
     import cow_config
@@ -28,24 +27,26 @@ except:
 
 config['include_dirs'] += ['../include', np.get_include()]
 config['library_dirs'] += ['../lib']
-config['extra_link_args'] += ['../lib/libcow.a']
+#config['extra_link_args'] += ['../lib/libcow.a'] # for static linking
+config['libraries'] += ['cow'] # dynamic link
 
-def make_ext(name, sources, link=True):
+def make_ext(name, sources):
     return Extension(
         name,
         extra_compile_args = ['-std=c99'] + config['extra_compile_args'],
-        extra_link_args    = config['extra_link_args'] if link else [ ],
+        extra_link_args    = config['extra_link_args'],
         define_macros      = [a for a in config.items() if a[0].startswith('COW')],
         include_dirs       = config['include_dirs'],
-        library_dirs       = config['library_dirs'] if link else [ ],
-        libraries          = config['libraries'] if link else [ ],
+        library_dirs       = config['library_dirs'],
+        libraries          = config['libraries'],
         sources            = sources)
 
 cowpy = make_ext('cowpy', sources=['cowpy.pyx'])
+srhdpack = make_ext('srhdpack', sources=['srhdpack.pyx'])
 
 setup(name        = 'cowpy',
       version     = '0.4',
       author      = "Jonathan Zrake",
       description = """C.O.W.""",
-      ext_modules = [cowpy],
+      ext_modules = [cowpy, srhdpack],
       cmdclass    = {'build_ext': build_ext})
