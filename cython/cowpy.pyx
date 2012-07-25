@@ -23,7 +23,7 @@ cdef _init_cow():
     modes = 0
     _hdf5_collective = _getie("COW_HDF5_COLLECTIVE")
     modes |= (COW_NOREOPEN_STDOUT if _getie("COW_NOREOPEN_STDOUT") else 0)
-    modes |= (COW_DISABLE_MPI if _getie("DISABLE_MPI") else 0)
+    modes |= (COW_DISABLE_MPI if _getie("COW_DISABLE_MPI") else 0)
     modes |= (COW_DISABLE_MPI if '-s' in sys.argv else 0)
     cdef int argc = 0
     cdef char *argv[1]
