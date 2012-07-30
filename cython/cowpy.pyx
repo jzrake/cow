@@ -346,13 +346,14 @@ cdef class VectorField3d(DataField):
             raise ValueError("bad argument list")
         super(VectorField3d, self).__init__(domain, members, name)
 
-    def curl(self, name=None):
+    def curl(self, name=None, members=None):
         """
         Takes the curl of the vector field using a 5-point stencil for the
         partial derivatives.
         """
         assert self.domain.guard >= 2
         if name is None: name = "del_cross_" + self.name
+        if members is None: members = self.members
         cdef VectorField3d res = VectorField3d(self.domain, name=name)
         return res._apply_transform([self], cow_trans_rot5)
 
@@ -400,7 +401,7 @@ cdef class VectorField3d(DataField):
         cow_fft_helmholtzdecomp(dil._c, COW_PROJECT_OUT_CURL)
         return dil
 
-    def power_spectrum(self, bins=200, spacing="linear", name=None):
+    def power_spectrum(self, bins=128, spacing="linear", name=None):
         """
         Computes the spherically integrated power spectrum P(k) of the vector
         field, where P(k) = \vec{f}(\vec{k}) \cdot \vec{f}^*(\vec{k}).
