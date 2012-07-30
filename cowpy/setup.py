@@ -27,8 +27,7 @@ except:
 
 config['include_dirs'] += ['../include', np.get_include()]
 config['library_dirs'] += ['../lib']
-#config['extra_link_args'] += ['../lib/libcow.a'] # for static linking
-config['libraries'] += ['cow'] # dynamic link
+config['libraries'] += ['cow']
 
 def make_ext(name, sources):
     return Extension(
@@ -45,8 +44,8 @@ cowpy = make_ext('cowpy', sources=['cowpy.pyx'])
 srhdpack = make_ext('srhdpack', sources=['srhdpack.pyx'])
 
 setup(name        = 'cowpy',
-      version     = '0.4',
+      version     = '0.5.0',
       author      = "Jonathan Zrake",
-      description = """C.O.W.""",
+      description = """C.O.W. Parallel analysis tools for the Cube of Wonder""",
       ext_modules = [cowpy, srhdpack],
       cmdclass    = {'build_ext': build_ext})

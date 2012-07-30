@@ -1,25 +1,22 @@
 
 
 # install prefix (use as command line variable)
-PREFIX ?= /usr/local
+PREFIX ?= $(pwd)
 
 # install prefix (use as environment variable)
 COWLIB_INSTALL ?= $(PREFIX)
 
-.PHONY : clib python cython install
+.PHONY : clib install cowpy
 
 default : clib
 
-all : python clib
+all : clib cowpy
 
 clib : 
 	@make -C src
 
-python :
-	@make -C python
-
-cython : clib
-	@make -C cython
+cowpy : clib
+	@make -C cowpy
 
 install : clib
 	mkdir -p $(COWLIB_INSTALL)/include; cp include/* $(COWLIB_INSTALL)/include
@@ -28,6 +25,5 @@ install : clib
 
 clean :
 	@make -C src clean
-	@make -C python clean
-	@make -C cython clean
+	@make -C cowpy clean
 	@rm -rf lib bin include

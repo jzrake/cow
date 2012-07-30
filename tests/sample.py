@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 
 import sys
 import itertools
@@ -14,7 +13,7 @@ def test1():
     dfield = cowpy.VectorField3d(domain)
     ishape = dfield.interior.shape
     oshape = dfield.value.shape
-
+    
     i0, j0, k0 = domain.global_start
 
     # domain.coordinate returns the position at the requested index- which is
