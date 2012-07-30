@@ -339,6 +339,18 @@ cdef class ScalarField3d(DataField):
             raise ValueError("bad argument list")
         super(ScalarField3d, self).__init__(domain, members, name)
 
+    def power_spectrum(self, bins=128, spacing="linear", name=None):
+        """
+        Computes the spherically integrated power spectrum P(k) of the vector
+        field, where P(k) = f(\vec{k}).
+        """
+        if name is None: name = self.name + "-pspec"
+        cdef Histogram1d pspec = Histogram1d(0.0, 1.0, bins=bins,
+                                             spacing=spacing, name=name,
+                                             commit=False)
+        cow_fft_pspecscafield(self._c, pspec._c)
+        return pspec
+
 
 cdef class VectorField3d(DataField):
     def __init__(self, domain, members=("fx","fy","fz"), name="vectorfield"):
