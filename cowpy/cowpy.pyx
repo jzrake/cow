@@ -359,14 +359,13 @@ cdef class VectorField3d(DataField):
             raise ValueError("bad argument list")
         super(VectorField3d, self).__init__(domain, members, name)
 
-    def curl(self, name=None, members=None):
+    def curl(self, name=None):
         """
         Takes the curl of the vector field using a 5-point stencil for the
         partial derivatives.
         """
         assert self.domain.guard >= 2
         if name is None: name = "del_cross_" + self.name
-        if members is None: members = self.members
         cdef VectorField3d res = VectorField3d(self.domain, name=name)
         return res._apply_transform([self], cow_trans_rot5)
 
@@ -396,8 +395,7 @@ cdef class VectorField3d(DataField):
         decomposition. Projection is done using the Fourier decomposition.
         """
         if name is None: name = self.name + "-solenoidal"
-        cdef VectorField3d sol = VectorField3d(self.domain,
-                                               members=self.members, name=name)
+        cdef VectorField3d sol = VectorField3d(self.domain, name=name)
         sol.value[:] = self.value
         cow_fft_helmholtzdecomp(sol._c, COW_PROJECT_OUT_DIV)
         return sol
@@ -408,8 +406,7 @@ cdef class VectorField3d(DataField):
         decomposition. Projection is done using the Fourier decomposition.
         """
         if name is None: name = self.name + "-dilatational"
-        cdef VectorField3d dil = VectorField3d(self.domain,
-                                               members=self.members, name=name)
+        cdef VectorField3d dil = VectorField3d(self.domain, name=name)
         dil.value[:] = self.value
         cow_fft_helmholtzdecomp(dil._c, COW_PROJECT_OUT_CURL)
         return dil
