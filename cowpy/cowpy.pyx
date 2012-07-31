@@ -19,9 +19,10 @@ def _getie(s):
 def exitfunc():
     cow_finalize()
 
+
 cdef _init_cow():
     modes = 0
-    _hdf5_collective = _getie("COW_HDF5_COLLECTIVE")
+    _runtime_cfg['hdf5_collective'] = _getie("COW_HDF5_COLLECTIVE")
     modes |= (COW_NOREOPEN_STDOUT if _getie("COW_NOREOPEN_STDOUT") else 0)
     modes |= (COW_DISABLE_MPI if _getie("COW_DISABLE_MPI") else 0)
     modes |= (COW_DISABLE_MPI if '-s' in sys.argv else 0)
@@ -30,8 +31,8 @@ cdef _init_cow():
     cow_init(argc, argv, modes)
     atexit.register(exitfunc)
 
+_runtime_cfg = {'hdf5_collective': 0}
 _init_cow()
-_hdf5_collective = 0
 
 
 cdef class DistributedDomain(object):
@@ -51,7 +52,7 @@ cdef class DistributedDomain(object):
         cow_domain_setguard(self._c, guard)
         cow_domain_commit(self._c)
         cow_domain_setchunk(self._c, 1) # set up the IO scheme after commit
-        cow_domain_setcollective(self._c, _hdf5_collective)
+        cow_domain_setcollective(self._c, _runtime_cfg['hdf5_collective'])
         cow_domain_setalign(self._c, 4*KILOBYTES, 4*MEGABYTES)
 
     def __dealloc__(self):
