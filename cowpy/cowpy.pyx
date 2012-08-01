@@ -26,7 +26,6 @@ cdef _init_cow():
     _runtime_cfg['hdf5_chunk'] = _getie("COW_HDF5_CHUNK", dflt=1)
     modes |= (COW_NOREOPEN_STDOUT if _getie("COW_NOREOPEN_STDOUT") else 0)
     modes |= (COW_DISABLE_MPI if _getie("COW_DISABLE_MPI") else 0)
-    modes |= (COW_DISABLE_MPI if '-s' in sys.argv else 0)
     cdef int argc = 0
     cdef char *argv[1]
     cow_init(argc, argv, modes)
@@ -333,7 +332,6 @@ cdef class DataField(object):
                  "global start: %s" % str(self.domain.global_start),
                  "padding: %s" % self.domain.guard]
         return "{" + "\n\t".join(props) + "}"
-
 
 
 cdef class ScalarField3d(DataField):
