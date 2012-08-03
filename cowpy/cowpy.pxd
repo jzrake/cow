@@ -144,6 +144,7 @@ cdef class DistributedDomain(object):
 cdef class DataField(object):
     cdef cow_dfield *_c
     cdef np.ndarray _buf
+    cdef np.ndarray _flg
     cdef DistributedDomain _domain
     cdef _apply_transform(self, args, cow_transform op, void *userdata=*)
 
