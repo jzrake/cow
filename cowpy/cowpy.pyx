@@ -311,6 +311,12 @@ cdef class DataField(object):
         cow_dfield_reduce(self._c, <double*>res.data)
         return res
 
+    def verify(self):
+        """
+        Returns the number if inf's/nan's in the whole field.
+        """
+        return cow_dfield_getnuminfnan(self._c)
+
     def __getitem__(self, key):
         if type(key) is int:
             return self.value[..., key]
