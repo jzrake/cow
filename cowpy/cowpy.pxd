@@ -70,6 +70,7 @@ cdef extern from "cow.h":
     void cow_dfield_setuserdata(cow_dfield *f, void *userdata)
     void cow_dfield_setiparam(cow_dfield *f, int p)
     void cow_dfield_setfparam(cow_dfield *f, double p)
+    void cow_dfield_setflag(cow_dfield *f, int index, int flag)
     void cow_dfield_transformexecute(cow_dfield *f)
     char *cow_dfield_iteratemembers(cow_dfield *f)
     char *cow_dfield_nextmember(cow_dfield *f)
@@ -78,16 +79,21 @@ cdef extern from "cow.h":
     int cow_dfield_getstride(cow_dfield *f, int dim)
     int cow_dfield_getnmembers(cow_dfield *f)
     int cow_dfield_getnuminfnan(cow_dfield *f)
+    int cow_dfield_getflag(cow_dfield *f, int index)
     size_t cow_dfield_getdatabytes(cow_dfield *f)
-    void cow_dfield_setbuffer(cow_dfield *f, void *buffer)
-    void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double **x, int *n0)
+    void cow_dfield_setdatabuffer(cow_dfield *f, void *buffer)
+    void cow_dfield_setflagbuffer(cow_dfield *f, int *buffer)
+    void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double **x,
+                                    int *n0)
     int cow_dfield_setsamplecoords(cow_dfield *f, double *x, int n0, int n1)
     void cow_dfield_getsamplecoords(cow_dfield *f, double **x, int *n0, int *n1)
     void cow_dfield_getsampleresult(cow_dfield *f, double **x, int *n0, int *n1)
     void cow_dfield_setsamplemode(cow_dfield *f, int mode)
     void cow_dfield_sampleexecute(cow_dfield *f)
     int cow_dfield_getownsdata(cow_dfield *f)
-    void *cow_dfield_getbuffer(cow_dfield *f)
+    void *cow_dfield_getdatabuffer(cow_dfield *f)
+    int cow_dfield_getownsflag(cow_dfield *f)
+    int *cow_dfield_getflagbuffer(cow_dfield *f)
     void cow_dfield_syncguard(cow_dfield *f)
     void cow_dfield_reduce(cow_dfield *f, double x[3])
     void cow_dfield_write(cow_dfield *f, char *fname)
@@ -130,7 +136,6 @@ cdef extern from "cow.h":
     void cow_trans_magnitude(double *result, double **args, int **s, void *u)
     void cow_trans_cross(double *result, double **args, int **s, void *u)
     void cow_trans_dot3(double *result, double **args, int **s, void *u)
-
 
 
 cdef class DistributedDomain(object):

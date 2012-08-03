@@ -127,15 +127,15 @@ cdef class DataField(object):
         if nd == 1:
             _buf1 = np.zeros(dims)
             self._buf = _buf1
-            cow_dfield_setbuffer(self._c, <double*>_buf1.data)
+            cow_dfield_setdatabuffer(self._c, <double*>_buf1.data)
         elif nd == 2:
             _buf2 = np.zeros(dims)
             self._buf = _buf2
-            cow_dfield_setbuffer(self._c, <double*>_buf2.data)
+            cow_dfield_setdatabuffer(self._c, <double*>_buf2.data)
         elif nd == 3:
             _buf3 = np.zeros(dims)
             self._buf = _buf3
-            cow_dfield_setbuffer(self._c, <double*>_buf3.data)
+            cow_dfield_setdatabuffer(self._c, <double*>_buf3.data)
         cow_dfield_commit(self._c)
 
     def __dealloc__(self):
@@ -292,11 +292,11 @@ cdef class DataField(object):
             member = self.members.index(member)
         else:
             assert member < len(self.members)
+        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
         cow_dfield_clearargs(self._c)
         cow_dfield_settransform(self._c, cow_trans_component)
         cow_dfield_setuserdata(self._c, self._c)
         cow_dfield_setiparam(self._c, member)
-        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
         cow_dfield_reduce(self._c, <double*>res.data)
         return res
     
@@ -304,16 +304,16 @@ cdef class DataField(object):
         """
         Returns the min, max, and sum of the data fields's vector magnitude.
         """
+        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
         cow_dfield_clearargs(self._c)
         cow_dfield_settransform(self._c, cow_trans_magnitude)
         cow_dfield_setuserdata(self._c, self._c)
-        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
         cow_dfield_reduce(self._c, <double*>res.data)
         return res
 
     def verify(self):
         """
-        Returns the number if inf's/nan's in the whole field.
+        Returns the number of inf's/nan's in the whole field.
         """
         return cow_dfield_getnuminfnan(self._c)
 
