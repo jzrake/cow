@@ -3,9 +3,11 @@ cimport numpy as np
 
 cdef extern from "cow.h":
     enum:
-        COW_NOREOPEN_STDOUT = (2<<0)
-        COW_NOREOPEN_STDOUT = (2<<0)
-        COW_DISABLE_MPI     = (2<<1)
+        COW_NOREOPEN_STDOUT  =  (1<<0)
+        COW_DISABLE_MPI      =  (1<<1)
+        COW_HASNAN           =  (1<<2)
+        COW_HASINF           =  (1<<3)
+
         COW_ALL_DIMS             = -41
         COW_HIST_SPACING_LINEAR  = -42
         COW_HIST_SPACING_LOG     = -43
@@ -78,11 +80,11 @@ cdef extern from "cow.h":
     cow_domain *cow_dfield_getdomain(cow_dfield *f)
     int cow_dfield_getstride(cow_dfield *f, int dim)
     int cow_dfield_getnmembers(cow_dfield *f)
-    int cow_dfield_getnuminfnan(cow_dfield *f)
     int cow_dfield_getflag(cow_dfield *f, int index)
     size_t cow_dfield_getdatabytes(cow_dfield *f)
     void cow_dfield_setdatabuffer(cow_dfield *f, void *buffer)
     void cow_dfield_setflagbuffer(cow_dfield *f, int *buffer)
+    void cow_dfield_updateflaginfnan(cow_dfield *f)
     void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double **x,
                                     int *n0)
     int cow_dfield_setsamplecoords(cow_dfield *f, double *x, int n0, int n1)

@@ -203,6 +203,13 @@ cdef class DataField(object):
             elif nd == 3:
                 self._buf[ng:-ng, ng:-ng, ng:-ng, :] = val
 
+    property flags:
+        def __get__(self):
+            return self._flg
+        
+        def __set__(self, val):
+            self._flg[...] = val
+
     def sync_guard(self):
         cow_dfield_syncguard(self._c)
 
@@ -322,11 +329,12 @@ cdef class DataField(object):
         cow_dfield_reduce(self._c, <double*>res.data)
         return res
 
-    def verify(self):
+    def setflags_infnan(self):
         """
-        Returns the number of inf's/nan's in the whole field.
+        Fills the data field's flags property (numpy integer array) with
+        non-zero values wherever any of the data fields contain inf's or nan's.
         """
-        return cow_dfield_getnuminfnan(self._c)
+        cow_dfield_updateflaginfnan(self._c)
 
     def __getitem__(self, key):
         if type(key) is int:
