@@ -120,33 +120,21 @@ cdef class DataField(object):
             dims.append(cow_domain_getnumlocalzonesincguard(domain._c, i))
         dims.append(len(members))
 
-        cdef np.ndarray[np.double_t,ndim=2] buf1
-        cdef np.ndarray[np.double_t,ndim=3] buf2
-        cdef np.ndarray[np.double_t,ndim=4] buf3
-        cdef np.ndarray[np.int_t,ndim=1] flg1
-        cdef np.ndarray[np.int_t,ndim=2] flg2
-        cdef np.ndarray[np.int_t,ndim=3] flg3
         if nd == 1:
-            buf1 = np.zeros(dims)
-            flg1 = np.zeros(dims[0:1], dtype=np.int32)
-            self._buf = buf1
-            self._flg = flg1
-            cow_dfield_setdatabuffer(self._c, <double*>buf1.data)
-            cow_dfield_setflagbuffer(self._c, <int*>flg1.data)
+            self._buf = np.zeros(dims)
+            self._flg = np.zeros(dims[0:1], dtype=np.int32)
+            cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
+            cow_dfield_setflagbuffer(self._c, <int*>self._flg.data)
         elif nd == 2:
-            buf2 = np.zeros(dims)
-            flg2 = np.zeros(dims[0:2], dtype=np.int32)
-            self._buf = buf2
-            self._flg = flg2
-            cow_dfield_setdatabuffer(self._c, <double*>buf2.data)
-            cow_dfield_setflagbuffer(self._c, <int*>flg2.data)
+            self._buf = np.zeros(dims)
+            self._flg = np.zeros(dims[0:2], dtype=np.int32)
+            cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
+            cow_dfield_setflagbuffer(self._c, <int*>self._flg.data)
         elif nd == 3:
-            buf3 = np.zeros(dims)
-            flg3 = np.zeros(dims[0:3], dtype=np.int32)
-            self._buf = buf3
-            self._flg = flg3
-            cow_dfield_setdatabuffer(self._c, <double*>buf3.data)
-            cow_dfield_setflagbuffer(self._c, <int*>flg3.data)
+            self._buf = np.zeros(dims)
+            self._flg = np.zeros(dims[0:3], dtype=np.int32)
+            cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
+            cow_dfield_setflagbuffer(self._c, <int*>self._flg.data)
         cow_dfield_commit(self._c)
 
     def __dealloc__(self):
