@@ -120,22 +120,21 @@ cdef class DataField(object):
             dims.append(cow_domain_getnumlocalzonesincguard(domain._c, i))
         dims.append(len(members))
 
-        cdef np.ndarray[np.double_t,ndim=2] _buf1
-        cdef np.ndarray[np.double_t,ndim=3] _buf2
-        cdef np.ndarray[np.double_t,ndim=4] _buf3
-
         if nd == 1:
-            _buf1 = np.zeros(dims)
-            self._buf = _buf1
-            cow_dfield_setbuffer(self._c, <double*>_buf1.data)
+            self._buf = np.zeros(dims)
+            self._flg = np.zeros(dims[0:1], dtype=np.int32)
+            cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
+            cow_dfield_setflagbuffer(self._c, <int*>self._flg.data)
         elif nd == 2:
-            _buf2 = np.zeros(dims)
-            self._buf = _buf2
-            cow_dfield_setbuffer(self._c, <double*>_buf2.data)
+            self._buf = np.zeros(dims)
+            self._flg = np.zeros(dims[0:2], dtype=np.int32)
+            cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
+            cow_dfield_setflagbuffer(self._c, <int*>self._flg.data)
         elif nd == 3:
-            _buf3 = np.zeros(dims)
-            self._buf = _buf3
-            cow_dfield_setbuffer(self._c, <double*>_buf3.data)
+            self._buf = np.zeros(dims)
+            self._flg = np.zeros(dims[0:3], dtype=np.int32)
+            cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
+            cow_dfield_setflagbuffer(self._c, <int*>self._flg.data)
         cow_dfield_commit(self._c)
 
     def __dealloc__(self):
@@ -191,6 +190,13 @@ cdef class DataField(object):
                 self._buf[ng:-ng, ng:-ng, :] = val
             elif nd == 3:
                 self._buf[ng:-ng, ng:-ng, ng:-ng, :] = val
+
+    property flags:
+        def __get__(self):
+            return self._flg
+        
+        def __set__(self, val):
+            self._flg[...] = val
 
     def sync_guard(self):
         cow_dfield_syncguard(self._c)
@@ -292,11 +298,11 @@ cdef class DataField(object):
             member = self.members.index(member)
         else:
             assert member < len(self.members)
+        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
         cow_dfield_clearargs(self._c)
         cow_dfield_settransform(self._c, cow_trans_component)
         cow_dfield_setuserdata(self._c, self._c)
         cow_dfield_setiparam(self._c, member)
-        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
         cow_dfield_reduce(self._c, <double*>res.data)
         return res
     
@@ -304,12 +310,19 @@ cdef class DataField(object):
         """
         Returns the min, max, and sum of the data fields's vector magnitude.
         """
+        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
         cow_dfield_clearargs(self._c)
         cow_dfield_settransform(self._c, cow_trans_magnitude)
         cow_dfield_setuserdata(self._c, self._c)
-        cdef np.ndarray[np.double_t,ndim=1] res = np.zeros(3)
         cow_dfield_reduce(self._c, <double*>res.data)
         return res
+
+    def setflags_infnan(self):
+        """
+        Fills the data field's flags property (numpy integer array) with
+        non-zero values wherever any of the data fields contain inf's or nan's.
+        """
+        cow_dfield_updateflaginfnan(self._c)
 
     def __getitem__(self, key):
         if type(key) is int:

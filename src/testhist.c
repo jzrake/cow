@@ -11,7 +11,7 @@ static void histcb(double *result, double **args, int **s, void *u)
   result[0] = args[0][0];
 }
 
-cow_dfield *cow_dfield_new2(cow_domain *domain, const char *name)
+cow_dfield *cow_dfield_new2(cow_domain *domain, char *name)
 {
   cow_dfield *f = cow_dfield_new();
   cow_dfield_setdomain(f, domain);
@@ -46,7 +46,7 @@ int main(int argc, char **argv)
   cow_dfield_addmember(data, "d3");
   cow_dfield_commit(data);
 
-  double *A = (double*) cow_dfield_getbuffer(data);
+  double *A = (double*) cow_dfield_getdatabuffer(data);
   for (int i=0; i<cow_domain_getnumlocalzonesincguard(domain, COW_ALL_DIMS);
        ++i) {
     A[3*i + 0] = 0.1;

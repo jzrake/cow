@@ -11,6 +11,30 @@
 // private helper functions
 //
 // -----------------------------------------------------------------------------
+
+#ifndef isnan
+# define isnan(x)                                       \
+  (sizeof (x) == sizeof (long double) ? isnan_ld (x)    \
+   : sizeof (x) == sizeof (double) ? isnan_d (x)        \
+   : isnan_f (x))
+static inline int isnan_f  (float       x) { return x != x; }
+static inline int isnan_d  (double      x) { return x != x; }
+static inline int isnan_ld (long double x) { return x != x; }
+#endif
+
+#ifndef isinf
+# define isinf(x)                                       \
+  (sizeof (x) == sizeof (long double) ? isinf_ld (x)    \
+   : sizeof (x) == sizeof (double) ? isinf_d (x)        \
+   : isinf_f (x))
+static inline int isinf_f  (float       x)
+{ return !isnan (x) && isnan (x - x); }
+static inline int isinf_d  (double      x)
+{ return !isnan (x) && isnan (x - x); }
+static inline int isinf_ld (long double x)
+{ return !isnan (x) && isnan (x - x); }
+#endif
+
 #if (COW_MPI)
 static void _domain_maketags1d(cow_domain *d);
 static void _domain_maketags2d(cow_domain *d);
@@ -23,8 +47,8 @@ static void _dfield_maketype3d(cow_dfield *f);
 static void _dfield_alloctype(cow_dfield *f);
 static void _dfield_freetype(cow_dfield *f);
 #endif
-static void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
-                                   void *out, char op);
+static void _dfield_extractreplace(cow_dfield *f, int *I0, int *I1, void *out,
+                                   char op);
 
 void cow_init(int argc, char **argv, int modes)
 {
@@ -181,11 +205,11 @@ void cow_domain_commit(cow_domain *d)
       // proc_sizes[i] does not divide the G_ntot[i]. For each dimension, we add
       // a zone to the first R subgrids , where R is given below:
       // -----------------------------------------------------------------------
-      const int R = d->G_ntot[i] % d->proc_sizes[i];
-      const int normal_size = d->G_ntot[i] / d->proc_sizes[i];
-      const int augmnt_size = normal_size + 1;
-      const int thisdm_size = (d->proc_index[i]<R) ? augmnt_size : normal_size;
-      const double dx = (d->glb_upper[i] - d->glb_lower[i]) / d->G_ntot[i];
+      int R = d->G_ntot[i] % d->proc_sizes[i];
+      int normal_size = d->G_ntot[i] / d->proc_sizes[i];
+      int augmnt_size = normal_size + 1;
+      int thisdm_size = (d->proc_index[i]<R) ? augmnt_size : normal_size;
+      double dx = (d->glb_upper[i] - d->glb_lower[i]) / d->G_ntot[i];
 
       d->dx[i] = dx;
       if (R != 0) d->balanced = 0;
@@ -228,30 +252,33 @@ void cow_domain_commit(cow_domain *d)
 #endif
   d->committed = 1;
 }
-int cow_domain_getnumlocalzonesincguard(cow_domain *d, int dim)
+long long cow_domain_getnumlocalzonesincguard(cow_domain *d, int dim)
 {
   switch (dim) {
-  case COW_ALL_DIMS: return d->L_ntot[0] * d->L_ntot[1] * d->L_ntot[2];
+  case COW_ALL_DIMS: return ((long long)d->L_ntot[0] *
+			     (long long)d->L_ntot[1] * (long long)d->L_ntot[2]);
   case 0: return d->L_ntot[0];
   case 1: return d->L_ntot[1];
   case 2: return d->L_ntot[2];
   default: return 0;
   }
 }
-int cow_domain_getnumlocalzonesinterior(cow_domain *d, int dim)
+long long cow_domain_getnumlocalzonesinterior(cow_domain *d, int dim)
 {
   switch (dim) {
-  case COW_ALL_DIMS: return d->L_nint[0] * d->L_nint[1] * d->L_nint[2];
+  case COW_ALL_DIMS: return ((long long)d->L_nint[0] *
+			     (long long)d->L_nint[1] * (long long)d->L_nint[2]);
   case 0: return d->L_nint[0];
   case 1: return d->L_nint[1];
   case 2: return d->L_nint[2];
   default: return 0;
   }
 }
-int cow_domain_getnumglobalzones(cow_domain *d, int dim)
+long long cow_domain_getnumglobalzones(cow_domain *d, int dim)
 {
   switch (dim) {
-  case COW_ALL_DIMS: return d->G_ntot[0] * d->G_ntot[1] * d->G_ntot[2];
+  case COW_ALL_DIMS: return ((long long)d->G_ntot[0] *
+			     (long long)d->G_ntot[1] * (long long)d->G_ntot[2]);
   case 0: return d->G_ntot[0];
   case 1: return d->G_ntot[1];
   case 2: return d->G_ntot[2];
@@ -361,6 +388,7 @@ cow_dfield *cow_dfield_new(void)
     .n_members = 0,
     .member_iter = 0,
     .data = NULL,
+    .flag = NULL,
     .stride = { 0, 0, 0 },
     .committed = 0,
     .ownsdata = 0,
@@ -390,6 +418,9 @@ void cow_dfield_del(cow_dfield *f)
   if (f->ownsdata) {
     free(f->data);
   }
+  if (f->ownsflag) {
+    free(f->flag);
+  }
   free(f->transargs);
   free(f->samplecoords);
   free(f->sampleresult);
@@ -414,7 +445,7 @@ cow_dfield *cow_dfield_dup(cow_dfield *f)
   g->transform = f->transform;
   return g;
 }
-void cow_dfield_setname(cow_dfield *f, const char *name)
+void cow_dfield_setname(cow_dfield *f, char *name)
 {
   f->name = (char*) realloc(f->name, strlen(name)+1);
   strcpy(f->name, name);
@@ -428,7 +459,7 @@ int cow_dfield_getnmembers(cow_dfield *f)
 {
   return f->n_members;
 }
-const char *cow_dfield_getname(cow_dfield *f)
+char *cow_dfield_getname(cow_dfield *f)
 {
   return f->name;
 }
@@ -442,7 +473,7 @@ size_t cow_dfield_getdatabytes(cow_dfield *f)
   return cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS) *
     f->n_members * sizeof(double);
 }
-void cow_dfield_setbuffer(cow_dfield *f, void *buffer)
+void cow_dfield_setdatabuffer(cow_dfield *f, void *buffer)
 // -----------------------------------------------------------------------------
 //
 // -> If `f` already owns its data:
@@ -480,15 +511,63 @@ void cow_dfield_setbuffer(cow_dfield *f, void *buffer)
     }
   }
 }
+
+void cow_dfield_setflagbuffer(cow_dfield *f, int *buffer)
+// -----------------------------------------------------------------------------
+// Same logic as in setdatabuffer
+// -----------------------------------------------------------------------------
+{
+  if (f->ownsflag) {
+    if (buffer == NULL || (buffer != NULL && buffer == f->flag)) {
+    }
+    else {
+      free(f->flag);
+      f->flag = buffer;
+      f->ownsflag = 0;
+    }
+  }
+  else {
+    if (buffer == NULL) {
+      int nz = cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS);
+      f->flag = malloc(nz * sizeof(int));
+      f->ownsflag = 1;
+    }
+    else {
+      f->flag = buffer;
+    }
+  }
+}
+
 int cow_dfield_getownsdata(cow_dfield *f)
 {
   return f->ownsdata;
 }
-void *cow_dfield_getbuffer(cow_dfield *f)
+void *cow_dfield_getdatabuffer(cow_dfield *f)
 {
   return f->data;
 }
-void cow_dfield_addmember(cow_dfield *f, const char *name)
+
+int cow_dfield_getownsflag(cow_dfield *f)
+{
+  return f->ownsflag;
+}
+int *cow_dfield_getflagbuffer(cow_dfield *f)
+{
+  return f->flag;
+}
+void cow_dfield_updateflaginfnan(cow_dfield *f)
+{
+  int nz = cow_domain_getnumlocalzonesincguard(f->domain, COW_ALL_DIMS);
+  for (int n=0; n<nz; ++n) {
+    double *x = (double*)f->data + n * f->n_members;
+    for (int m=0; m<f->n_members; ++m) {
+      f->flag[n] |= isnan(x[m]) ? COW_HASNAN : 0;
+      f->flag[n] |= isinf(x[m]) ? COW_HASINF : 0;
+    }
+  }
+}
+
+void cow_dfield_addmember(cow_dfield *f, char *name)
 {
   if (f->committed) return;
   f->n_members++;
@@ -496,12 +575,12 @@ void cow_dfield_addmember(cow_dfield *f, const char *name)
   f->members[f->n_members-1] = (char*) malloc(strlen(name)+1);
   strcpy(f->members[f->n_members-1], name);
 }
-const char *cow_dfield_iteratemembers(cow_dfield *f)
+char *cow_dfield_iteratemembers(cow_dfield *f)
 {
   f->member_iter = 0;
   return cow_dfield_nextmember(f);
 }
-const char *cow_dfield_nextmember(cow_dfield *f)
+char *cow_dfield_nextmember(cow_dfield *f)
 {
   return f->member_iter++ < f->n_members ? f->members[f->member_iter-1] : NULL;
 }
@@ -519,16 +598,17 @@ void cow_dfield_commit(cow_dfield *f)
 #endif
   // ---------------------------------------------------------------------------
   // The way cow_dfield is initialized, f does not own its buffer and its value
-  // is NULL. This corresponds to case (C) in setbuffer: `f` takes ownership of
-  // and allocates its buffer. If before being committed, client code has called
-  // set_buffer with something other than NULL, then f->ownsdata is still false,
-  // but f->data is not NULL. Then the call below triggers case (D) which will
-  // have no effect. If client code has called set_buffer with NULL prior to
-  // this call, then case (C) will already have been realized, `f` will already
-  // own its data, and all subsequent redundant calls including the one below
-  // trigger case (A) and have no effect.
+  // is NULL. This corresponds to case (C) in setdatabuffer: `f` takes ownership
+  // of and allocates its buffer. If before being committed, client code has
+  // called set_buffer with something other than NULL, then f->ownsdata is still
+  // false, but f->data is not NULL. Then the call below triggers case (D) which
+  // will have no effect. If client code has called set_buffer with NULL prior
+  // to this call, then case (C) will already have been realized, `f` will
+  // already own its data, and all subsequent redundant calls including the one
+  // below trigger case (A) and have no effect.
   // ---------------------------------------------------------------------------
-  cow_dfield_setbuffer(f, f->data);
+  cow_dfield_setdatabuffer(f, f->data);
+  cow_dfield_setflagbuffer(f, f->flag);
   int *N = f->domain->L_ntot;
   switch (f->domain->n_dims) {
   case 1:
@@ -624,16 +704,15 @@ void cow_dfield_syncguard(cow_dfield *f)
   }
 }
 
-void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out)
+void cow_dfield_extract(cow_dfield *f, int *I0, int *I1, void *out)
 {
   _dfield_extractreplace(f, I0, I1, out, 'e');
 }
-void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out)
+void cow_dfield_replace(cow_dfield *f, int *I0, int *I1, void *out)
 {
   _dfield_extractreplace(f, I0, I1, out, 'r');
 }
-void _dfield_extractreplace(cow_dfield *f, const int *I0, const int *I1,
-                            void *out, char op)
+void _dfield_extractreplace(cow_dfield *f, int *I0, int *I1, void *out, char op)
 {
   int mi = I1[0] - I0[0];
   int mj = I1[1] - I0[1];
@@ -840,6 +919,17 @@ void cow_dfield_transformexecute(cow_dfield *f)
   free(S);
   free(x);
   cow_dfield_syncguard(result);
+}
+
+void cow_dfield_setflag(cow_dfield *f, int index, int flag)
+{
+  if (!f->committed) return;
+  f->flag[index] = flag;
+}
+int cow_dfield_getflag(cow_dfield *f, int index)
+{
+  if (!f->committed) return 0;
+  return f->flag[index];
 }
 
 #if (COW_MPI)

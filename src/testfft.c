@@ -9,7 +9,7 @@
 #define GETENVINT(a,dflt) (getenv(a) ? atoi(getenv(a)) : dflt)
 #define GETENVDBL(a,dflt) (getenv(a) ? atof(getenv(a)) : dflt)
 
-void cow_fft_pspecvecfield2(cow_dfield *vel, const char *fout, const char *gname)
+void cow_fft_pspecvecfield2(cow_dfield *vel, char *fout, char *gname)
 {
   cow_histogram *hist = cow_histogram_new();
   cow_histogram_setnbins(hist, 0, 200);
@@ -20,7 +20,7 @@ void cow_fft_pspecvecfield2(cow_dfield *vel, const char *fout, const char *gname
   cow_histogram_del(hist);
 }
 
-cow_dfield *cow_dfield_new2(cow_domain *domain, const char *name)
+cow_dfield *cow_dfield_new2(cow_domain *domain, char *name)
 {
   cow_dfield *f = cow_dfield_new();
   cow_dfield_setdomain(f, domain);
@@ -32,6 +32,7 @@ int main(int argc, char **argv)
 {
   int modes = 0;
   int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
+  int chunk = GETENVINT("COW_HDF5_CHUNK", 1);
   modes |= GETENVINT("COW_NOREOPEN_STDOUT", 0) ? COW_NOREOPEN_STDOUT : 0;
   modes |= GETENVINT("COW_DISABLE_MPI", 0) ? COW_DISABLE_MPI : 0;
 
@@ -58,7 +59,7 @@ int main(int argc, char **argv)
   cow_domain_setsize(domain, 2, 16);
   cow_domain_commit(domain);
 
-  cow_domain_setchunk(domain, 1);
+  cow_domain_setchunk(domain, chunk);
   cow_domain_setcollective(domain, collective);
   cow_domain_setalign(domain, 4*KILOBYTES, 4*MEGABYTES);
 

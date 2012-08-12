@@ -94,14 +94,14 @@ static void kinEtrans(double *result, double **args, int **s, void *u)
   *result = 0.5 * rho[0] * (v[0]*v[0] + v[1]*v[1] + v[2]*v[2]);
 }
 
-cow_dfield *cow_dfield_new2(cow_domain *domain, const char *name)
+cow_dfield *cow_dfield_new2(cow_domain *domain, char *name)
 {
   cow_dfield *f = cow_dfield_new();
   cow_dfield_setdomain(f, domain);
   cow_dfield_setname(f, name);
   return f;
 }
-cow_dfield *cow_vectorfield(cow_domain *domain, const char *name)
+cow_dfield *cow_vectorfield(cow_domain *domain, char *name)
 {
   cow_dfield *f = cow_dfield_new2(domain, name);
   cow_dfield_addmember(f, "0");
@@ -110,7 +110,7 @@ cow_dfield *cow_vectorfield(cow_domain *domain, const char *name)
   cow_dfield_commit(f);
   return f;
 }
-cow_dfield *cow_scalarfield(cow_domain *domain, const char *name)
+cow_dfield *cow_scalarfield(cow_domain *domain, char *name)
 {
   cow_dfield *f = cow_dfield_new2(domain, name);
   cow_dfield_addmember(f, "0");
@@ -138,7 +138,7 @@ void cow_dfield_reduce2(cow_dfield *f, cow_transform op, double reduc[3])
 }
 
 
-void make_hist(cow_dfield *f, cow_transform op, const char *fout, const char *m)
+void make_hist(cow_dfield *f, cow_transform op, char *fout, char *m)
 {
   char nickname[1024];
   snprintf(nickname, 1024, "%s-hist", m ? m : cow_dfield_getname(f));
@@ -166,6 +166,7 @@ int main(int argc, char **argv)
 
   int modes = 0;
   int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
+  int chunk = GETENVINT("COW_HDF5_CHUNK", 1);
   modes |= GETENVINT("COW_NOREOPEN_STDOUT", 0) ? COW_NOREOPEN_STDOUT : 0;
   modes |= GETENVINT("COW_DISABLE_MPI", 0) ? COW_DISABLE_MPI : 0;
 
@@ -189,7 +190,8 @@ int main(int argc, char **argv)
   cow_domain_readsize(domain, finp, "prim/vx");
   cow_domain_setguard(domain, 2);
   cow_domain_commit(domain);
-  cow_domain_setchunk(domain, 1);
+
+  cow_domain_setchunk(domain, chunk);
   cow_domain_setcollective(domain, collective);
   cow_domain_setalign(domain, 4*KILOBYTES, 4*MEGABYTES);
 

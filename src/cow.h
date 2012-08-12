@@ -14,8 +14,11 @@
 #endif // COW_PRIVATE_DEFS
 
 
-#define COW_NOREOPEN_STDOUT   (2<<0)
-#define COW_DISABLE_MPI       (2<<1)
+#define COW_NOREOPEN_STDOUT   (1<<0)
+#define COW_DISABLE_MPI       (1<<1)
+#define COW_HASNAN            (1<<2)
+#define COW_HASINF            (1<<3)
+
 #define COW_ALL_DIMS             -41
 #define COW_HIST_SPACING_LINEAR  -42
 #define COW_HIST_SPACING_LOG     -43
@@ -56,12 +59,12 @@ void cow_domain_setprocsizes(cow_domain *d, int dim, int size);
 void cow_domain_setcollective(cow_domain *d, int mode);
 void cow_domain_setchunk(cow_domain *d, int mode);
 void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize);
-void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname);
+void cow_domain_readsize(cow_domain *d, char *fname, char *dname);
 int cow_domain_getndim(cow_domain *d);
 int cow_domain_getguard(cow_domain *d);
-int cow_domain_getnumlocalzonesincguard(cow_domain *d, int dim);
-int cow_domain_getnumlocalzonesinterior(cow_domain *d, int dim);
-int cow_domain_getnumglobalzones(cow_domain *d, int dim);
+long long cow_domain_getnumlocalzonesincguard(cow_domain *d, int dim);
+long long cow_domain_getnumlocalzonesinterior(cow_domain *d, int dim);
+long long cow_domain_getnumglobalzones(cow_domain *d, int dim);
 int cow_domain_getglobalstartindex(cow_domain *d, int dim);
 int cow_domain_getgridspacing(cow_domain *d, int dim);
 int cow_domain_getcartrank(cow_domain *d);
@@ -76,10 +79,10 @@ cow_dfield *cow_dfield_dup(cow_dfield *f);
 void cow_dfield_commit(cow_dfield *f);
 void cow_dfield_del(cow_dfield *f);
 void cow_dfield_setdomain(cow_dfield *f, cow_domain *d);
-void cow_dfield_addmember(cow_dfield *f, const char *name);
-void cow_dfield_setname(cow_dfield *f, const char *name);
-void cow_dfield_extract(cow_dfield *f, const int *I0, const int *I1, void *out);
-void cow_dfield_replace(cow_dfield *f, const int *I0, const int *I1, void *out);
+void cow_dfield_addmember(cow_dfield *f, char *name);
+void cow_dfield_setname(cow_dfield *f, char *name);
+void cow_dfield_extract(cow_dfield *f, int *I0, int *I1, void *out);
+void cow_dfield_replace(cow_dfield *f, int *I0, int *I1, void *out);
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata);
 void cow_dfield_settransform(cow_dfield *f, cow_transform op);
 void cow_dfield_clearargs(cow_dfield *f);
@@ -87,15 +90,19 @@ void cow_dfield_pusharg(cow_dfield *f, cow_dfield *arg);
 void cow_dfield_setuserdata(cow_dfield *f, void *userdata);
 void cow_dfield_setiparam(cow_dfield *f, int p);
 void cow_dfield_setfparam(cow_dfield *f, double p);
+void cow_dfield_setflag(cow_dfield *f, int index, int flag);
 void cow_dfield_transformexecute(cow_dfield *f);
-const char *cow_dfield_iteratemembers(cow_dfield *f);
-const char *cow_dfield_nextmember(cow_dfield *f);
-const char *cow_dfield_getname(cow_dfield *f);
+char *cow_dfield_iteratemembers(cow_dfield *f);
+char *cow_dfield_nextmember(cow_dfield *f);
+char *cow_dfield_getname(cow_dfield *f);
 cow_domain *cow_dfield_getdomain(cow_dfield *f);
 int cow_dfield_getstride(cow_dfield *f, int dim);
 int cow_dfield_getnmembers(cow_dfield *f);
+int cow_dfield_getflag(cow_dfield *f, int index);
 size_t cow_dfield_getdatabytes(cow_dfield *f);
-void cow_dfield_setbuffer(cow_dfield *f, void *buffer);
+void cow_dfield_setdatabuffer(cow_dfield *f, void *buffer);
+void cow_dfield_setflagbuffer(cow_dfield *f, int *buffer);
+void cow_dfield_updateflaginfnan(cow_dfield *f);
 void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double **x,
 				int *n0);
 int cow_dfield_setsamplecoords(cow_dfield *f, double *x, int n0, int n1);
@@ -104,11 +111,13 @@ void cow_dfield_getsampleresult(cow_dfield *f, double **x, int *n0, int *n1);
 void cow_dfield_setsamplemode(cow_dfield *f, int mode);
 void cow_dfield_sampleexecute(cow_dfield *f);
 int cow_dfield_getownsdata(cow_dfield *f);
-void *cow_dfield_getbuffer(cow_dfield *f);
+void *cow_dfield_getdatabuffer(cow_dfield *f);
+int cow_dfield_getownsflag(cow_dfield *f);
+int *cow_dfield_getflagbuffer(cow_dfield *f);
 void cow_dfield_syncguard(cow_dfield *f);
 void cow_dfield_reduce(cow_dfield *f, double x[3]);
-void cow_dfield_write(cow_dfield *f, const char *fname);
-void cow_dfield_read(cow_dfield *f, const char *fname);
+void cow_dfield_write(cow_dfield *f, char *fname);
+void cow_dfield_read(cow_dfield *f, char *fname);
 
 cow_histogram *cow_histogram_new(void);
 void cow_histogram_commit(cow_histogram *h);
@@ -118,13 +127,13 @@ void cow_histogram_setspacing(cow_histogram *h, int spacing);
 void cow_histogram_setnbins(cow_histogram *h, int dim, int nbinsx);
 void cow_histogram_setlower(cow_histogram *h, int dim, double v0);
 void cow_histogram_setupper(cow_histogram *h, int dim, double v1);
-void cow_histogram_setfullname(cow_histogram *h, const char *fullname);
-void cow_histogram_setnickname(cow_histogram *h, const char *nickname);
+void cow_histogram_setfullname(cow_histogram *h, char *fullname);
+void cow_histogram_setnickname(cow_histogram *h, char *nickname);
 void cow_histogram_setdomaincomm(cow_histogram *h, cow_domain *d);
 void cow_histogram_addsample1(cow_histogram *h, double x, double w);
 void cow_histogram_addsample2(cow_histogram *h, double x, double y, double w);
-void cow_histogram_dumpascii(cow_histogram *h, const char *fn);
-void cow_histogram_dumphdf5(cow_histogram *h, const char *fn, const char *dn);
+void cow_histogram_dumpascii(cow_histogram *h, char *fn);
+void cow_histogram_dumphdf5(cow_histogram *h, char *fn, char *dn);
 void cow_histogram_seal(cow_histogram *h);
 int cow_histogram_getsealed(cow_histogram *h);
 long cow_histogram_gettotalcounts(cow_histogram *h);
@@ -134,13 +143,12 @@ void cow_histogram_getbinlocy(cow_histogram *h, double **x, int *n0);
 void cow_histogram_getbinval1(cow_histogram *h, double **x, int *n0);
 void cow_histogram_getbinval2(cow_histogram *h, double **x, int *n0, int *n1);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
-const char *cow_histogram_getname(cow_histogram *h);
+char *cow_histogram_getname(cow_histogram *h);
 
 void cow_fft_pspecscafield(cow_dfield *f, cow_histogram *h);
 void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *h);
 void cow_fft_helmholtzdecomp(cow_dfield *f, int mode);
 
-#ifndef SWIG // If wrapping with swig, let it handle these prototypes itself
 void cow_trans_divcorner(double *result, double **args, int **s, void *u);
 void cow_trans_div5(double *result, double **args, int **s, void *u);
 void cow_trans_rot5(double *result, double **args, int **s, void *u);
@@ -148,7 +156,7 @@ void cow_trans_component(double *result, double **args, int **s, void *u);
 void cow_trans_magnitude(double *result, double **args, int **s, void *u);
 void cow_trans_cross(double *result, double **args, int **s, void *u);
 void cow_trans_dot3(double *result, double **args, int **s, void *u);
-#endif // SWIG
+
 
 #ifdef COW_PRIVATE_DEFS
 
@@ -203,9 +211,11 @@ struct cow_dfield
   int member_iter; // maintains an index into the last dimension
   int n_members; // size of last dimension
   void *data; // data buffer
+  int *flag; // container for mapping integer flags to grid zones
   int stride[3]; // strides describing memory layout: C ordering
   int committed; // true after cow_dfield_commit called, locks out most changes
-  int ownsdata; // client code can own the data: see setbuffer function
+  int ownsdata; // client code can own the data: see setdatabuffer function
+  int ownsflag; // client code can own the flag: see setflagbuffer function
   cow_domain *domain; // pointer to an associated domain
   cow_transform transform; // used only by internal code
   cow_dfield **transargs; // list of arguments for transform, used internally

@@ -22,7 +22,7 @@ void pickmember1(double *result, double **args, int **s, void *u)
   *result = args[0][0];
 }
 
-cow_dfield *cow_dfield_new2(cow_domain *domain, const char *name)
+cow_dfield *cow_dfield_new2(cow_domain *domain, char *name)
 {
   cow_dfield *f = cow_dfield_new();
   cow_dfield_setdomain(f, domain);
@@ -33,7 +33,9 @@ cow_dfield *cow_dfield_new2(cow_domain *domain, const char *name)
 int main(int argc, char **argv)
 {
   int modes = 0;
+
   int collective = GETENVINT("COW_HDF5_COLLECTIVE", 0);
+  int chunk = GETENVINT("COW_HDF5_CHUNK", 1);
   modes |= GETENVINT("COW_NOREOPEN_STDOUT", 0) ? COW_NOREOPEN_STDOUT : 0;
   modes |= GETENVINT("COW_DISABLE_MPI", 0) ? COW_DISABLE_MPI : 0;
 
@@ -48,10 +50,9 @@ int main(int argc, char **argv)
   cow_domain_setsize(domain, 0, 10);
   cow_domain_commit(domain);
 
-  cow_domain_setchunk(domain, 1);
+  cow_domain_setchunk(domain, chunk);
   cow_domain_setcollective(domain, collective);
   cow_domain_setalign(domain, 4*KILOBYTES, 4*MEGABYTES);
-  cow_domain_setcollective(domain, collective);
 
   cow_dfield_addmember(prim, "vx");
   cow_dfield_addmember(prim, "vy");
@@ -64,12 +65,12 @@ int main(int argc, char **argv)
   cow_dfield_commit(magf);
 
   printf("%s\n", cow_dfield_getname(prim));
-  for (const char *m = cow_dfield_iteratemembers(magf);
+  for (char *m = cow_dfield_iteratemembers(magf);
        m != NULL; m = cow_dfield_nextmember(magf)) {
     printf("\t%s\n", m);
   }
   printf("%s\n", cow_dfield_getname(magf));
-  for (const char *m = cow_dfield_iteratemembers(magf);
+  for (char *m = cow_dfield_iteratemembers(magf);
        m != NULL; m = cow_dfield_nextmember(magf)) {
     printf("\t%s\n", m);
   }
@@ -77,8 +78,8 @@ int main(int argc, char **argv)
   int si = cow_dfield_getstride(prim, 0);
   int ng = cow_domain_getguard(domain);
 
-  double *P = (double*) cow_dfield_getbuffer(prim);
-  double *B = (double*) cow_dfield_getbuffer(magf);
+  double *P = (double*) cow_dfield_getdatabuffer(prim);
+  double *B = (double*) cow_dfield_getdatabuffer(magf);
   for (int i=ng; i<cow_domain_getnumlocalzonesinterior(domain, 0)+ng; ++i) {
     P[si*i + 0] = 1.0;
     P[si*i + 1] = 2.0;

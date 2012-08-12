@@ -32,9 +32,9 @@
 #define KILOBYTES (1<<10)
 #define MODULE "hdf5"
 
-static void _io_write(cow_dfield *f, const char *fname);
-static void _io_read(cow_dfield *f, const char *fname);
-static int _io_check_file_exists(const char *fname);
+static void _io_write(cow_dfield *f, char *fname);
+static void _io_read(cow_dfield *f, char *fname);
+static int _io_check_file_exists(char *fname);
 
 void _io_domain_commit(cow_domain *d)
 {
@@ -115,7 +115,7 @@ void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize)
   H5Pset_alignment(d->fapl, alignthreshold, diskblocksize);
 #endif
 }
-void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname)
+void cow_domain_readsize(cow_domain *d, char *fname, char *dname)
 {
 #if (COW_HDF5)
   if (_io_check_file_exists(fname)) return;
@@ -134,7 +134,7 @@ void cow_domain_readsize(cow_domain *d, const char *fname, const char *dname)
 	 MODULE, dims[0], dims[1], dims[2], fname, dname);
 #endif
 }
-void cow_dfield_write(cow_dfield *f, const char *fname)
+void cow_dfield_write(cow_dfield *f, char *fname)
 {
 #if (COW_HDF5)
 #if (COW_MPI)
@@ -162,22 +162,22 @@ void cow_dfield_write(cow_dfield *f, const char *fname)
 #if (COW_MPI)
   }
 #endif
-  const clock_t start = clock();
+  clock_t start = clock();
   _io_write(f, fname);
-  const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
+  double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
   printf("[%s] write to %s/%s took %f minutes\n", MODULE, fname, f->name,
 	 sec/60.0);
   fflush(stdout);
 #endif
 }
-void cow_dfield_read(cow_dfield *f, const char *fname)
+void cow_dfield_read(cow_dfield *f, char *fname)
 {
 #if (COW_HDF5)
   if (_io_check_file_exists(fname)) return;
-  const clock_t start = clock();
+  clock_t start = clock();
   _io_read(f, fname);
   cow_dfield_syncguard(f);
-  const double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
+  double sec = (double)(clock() - start) / CLOCKS_PER_SEC;
   printf("[%s] read from %s/%s took %f minutes\n", MODULE, fname, f->name,
 	 sec/60.0);
   fflush(stdout);
@@ -185,7 +185,7 @@ void cow_dfield_read(cow_dfield *f, const char *fname)
 }
 
 
-void _io_write(cow_dfield *f, const char *fname)
+void _io_write(cow_dfield *f, char *fname)
 // -----------------------------------------------------------------------------
 // This function uses a collective MPI-IO procedure to write the contents of
 // 'data' to the HDF5 file named 'fname', which is assumed to have been created
@@ -242,15 +242,9 @@ void _io_write(cow_dfield *f, const char *fname)
       hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
       hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
       hid_t fspc = H5Screate_simple(n_dims, G_ntot, NULL);
-      hid_t dset;
       for (int n=0; n<n_memb; ++n) {
-	if (H5Lexists(memb, pnames[n], H5P_DEFAULT)) {
-	  dset = H5Dopen(memb, pnames[n], H5P_DEFAULT);
-	}
-	else {
-	  dset = H5Dcreate(memb, pnames[n], H5T_NATIVE_DOUBLE, fspc,
-			   H5P_DEFAULT, d->dcpl, H5P_DEFAULT);
-	}
+	int dset = H5Dcreate(memb, pnames[n], H5T_NATIVE_DOUBLE, fspc,
+			     H5P_DEFAULT, d->dcpl, H5P_DEFAULT);
 	l_strt[ndp1 - 1] = n;
 	H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
 	H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
@@ -271,7 +265,7 @@ void _io_write(cow_dfield *f, const char *fname)
 #endif
 }
 
-void _io_read(cow_dfield *f, const char *fname)
+void _io_read(cow_dfield *f, char *fname)
 {
 #if (COW_HDF5)
   cow_domain *d = f->domain;
@@ -333,7 +327,7 @@ void _io_read(cow_dfield *f, const char *fname)
 #endif // !COW_HDF5_MPI && COW_MPI
 #endif
 }
-int _io_check_file_exists(const char *fname)
+int _io_check_file_exists(char *fname)
 {
   FILE *testf = fopen(fname, "r");
   if (testf == NULL) {
