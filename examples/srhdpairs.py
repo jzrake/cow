@@ -21,7 +21,7 @@ def cversion(fname, opts):
         plt.plot(histpro.binloc, histpro.binval, label=histpro.name)
         plt.plot(histlab.binloc, histlab.binval, label=histlab.name)
         plt.legend(loc='best')
-        plt.ylim(1.0, 2.8)
+        #plt.ylim(1.0, 2.8)
         plt.show()
 
 
