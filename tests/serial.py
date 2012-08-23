@@ -64,7 +64,7 @@ def testhist():
     assert abs(hist.binval.sum() - 1000) < 1e-16
     hist.name = "myrealhist"
     hist.dump("hist.dat")
-    hist.dump("test.h5", gname="G1/G2")
+    hist.dump("test.h5", group="G1/G2")
 
 def testmaghist():
     domain = cowpy.DistributedDomain([12,12,16], guard=3)

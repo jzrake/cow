@@ -518,15 +518,13 @@ cdef class Histogram1d(object):
         """
         cow_histogram_seal(self._c)
 
-    def dump(self, fname, gname="", format="guess"):
+    def dump(self, fname, group="", format="guess"):
         """
         Writes the histogram to the HDF5 file `fname` under the group
-        `gname`/self._name if `format` is 'hdf5', and an ascii table if
+        `group`/self._name if `format` is 'hdf5', and an ascii table if
         'ascii'. By default `format` is guessed from the file extension.
         """
         assert self.sealed
-        fname = str(fname)
-        gname = str(gname)
         if format == "guess":
             if fname.endswith('.h5') or fname.endswith('.hdf5'):
                 format = "hdf5" 
@@ -536,7 +534,7 @@ cdef class Histogram1d(object):
                 raise ValueError("file format could not be inferred from %s" %
                                  fname)
         if format == "hdf5":
-            cow_histogram_dumphdf5(self._c, fname, gname)
+            cow_histogram_dumphdf5(self._c, fname, group)
         elif format == "ascii":
             cow_histogram_dumpascii(self._c, fname)
         else:
