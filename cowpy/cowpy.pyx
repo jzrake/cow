@@ -7,6 +7,7 @@ import sys
 import atexit
 import warnings
 import numpy as np
+import __main__
 try:
     import h5py
 except ImportError:
@@ -19,6 +20,11 @@ def _getie(s, dflt=0):
 def exitfunc():
     cow_finalize()
 
+def is_interactive():
+    if not hasattr(__main__, '__file__'):
+        return True
+    else:
+        return __main__.__file__.endswith('fakemodule.py')
 
 cdef _init_cow():
     modes = 0
@@ -26,6 +32,7 @@ cdef _init_cow():
     _runtime_cfg['hdf5_chunk'] = _getie("COW_HDF5_CHUNK", dflt=1)
     modes |= (COW_NOREOPEN_STDOUT if _getie("COW_NOREOPEN_STDOUT") else 0)
     modes |= (COW_DISABLE_MPI if _getie("COW_DISABLE_MPI") else 0)
+    modes |= (COW_DISABLE_MPI if is_interactive() else 0)
     cdef int argc = 0
     cdef char *argv[1]
     cow_init(argc, argv, modes)
