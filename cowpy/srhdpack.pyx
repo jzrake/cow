@@ -16,24 +16,37 @@ cdef extern from "srhdpack.h":
                                     int velmode,
                                     int sepmode,
                                     int projmode,
-                                    int exponent,
                                     int nbatch,
                                     int nperbatch,
-                                    int seed)
+                                    int seed,
+                                    double exponent)
 
-def relative_lorentz_pairs(DataField vel, nsamples, bins=36, nperbatch=10000, seed=True):
+def relative_lorentz_pairs(DataField vel, nsamples, bins=36, nperbatch=10000,
+                           seed=True):
     histpro = Histogram1d(0.0, 1.0, bins=bins, spacing="linear", commit=False)
     histlab = Histogram1d(0.0, 1.0, bins=bins, spacing="linear", commit=False)
     srhdpack_shelevequescaling(vel._c, histpro._c,
                                SRHDPACK_VELOCITY_GAMMA,
                                SRHDPACK_SEPARATION_PROPER,
                                SRHDPACK_PROJECTION_NONE,
-                               1,
-                               int(nsamples/nperbatch), nperbatch, seed)
+                               int(nsamples/nperbatch), nperbatch, seed, 1.0)
     srhdpack_shelevequescaling(vel._c, histlab._c,
                                SRHDPACK_VELOCITY_GAMMA,
                                SRHDPACK_SEPARATION_LAB,
                                SRHDPACK_PROJECTION_NONE,
-                               1,
-                               int(nsamples/nperbatch), nperbatch, seed)
+                               int(nsamples/nperbatch), nperbatch, seed, 1.0)
     return histpro, histlab
+
+
+def sheleveque_scaling(DataField vel, nsamples, maxp=10, bins=36,
+                       nperbatch=10000, seed=True):
+    hists = { }
+    for p in range(1,maxp+1):
+        hist = Histogram1d(0.0, 1.0, bins=bins, spacing="linear", commit=False)
+        srhdpack_shelevequescaling(vel._c, hist._c,
+                                   SRHDPACK_VELOCITY_GAMMA,
+                                   SRHDPACK_SEPARATION_PROPER,
+                                   SRHDPACK_PROJECTION_NONE,
+                                   int(nsamples/nperbatch), nperbatch, seed, 0.5*p)
+        hists[p] = hist
+    return hists
