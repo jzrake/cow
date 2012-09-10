@@ -21,10 +21,10 @@ cdef extern from "srhdpack.h":
                                     int seed,
                                     double exponent)
 
-def relative_lorentz_pairs(DataField vel, nsamples, bins=36, nperbatch=10000,
-                           seed=True):
-    histpro = Histogram1d(0.0, 1.0, bins=bins, spacing="linear", commit=False)
-    histlab = Histogram1d(0.0, 1.0, bins=bins, spacing="linear", commit=False)
+def relative_lorentz_pairs(DataField vel, nsamples, bins=36, x0=1e-3, x1=1.0,
+                           nperbatch=10000, seed=True, spacing="linear"):
+    histpro = Histogram1d(x0, x1, bins=bins, spacing=spacing, commit=False)
+    histlab = Histogram1d(x0, x1, bins=bins, spacing=spacing, commit=False)
     srhdpack_shelevequescaling(vel._c, histpro._c,
                                SRHDPACK_VELOCITY_GAMMA,
                                SRHDPACK_SEPARATION_PROPER,
@@ -38,11 +38,11 @@ def relative_lorentz_pairs(DataField vel, nsamples, bins=36, nperbatch=10000,
     return histpro, histlab
 
 
-def sheleveque_scaling(DataField vel, nsamples, maxp=10, bins=36,
-                       nperbatch=10000, seed=True):
+def sheleveque_scaling(DataField vel, nsamples, maxp=10, bins=36, x0=1e-3, x1=1.0,
+                       nperbatch=10000, seed=True, spacing="linear"):
     hists = { }
     for p in range(1,maxp+1):
-        hist = Histogram1d(0.0, 1.0, bins=bins, spacing="linear", commit=False)
+        hist = Histogram1d(x0, x1, bins=bins, spacing=spacing, commit=False)
         srhdpack_shelevequescaling(vel._c, hist._c,
                                    SRHDPACK_VELOCITY_GAMMA,
                                    SRHDPACK_SEPARATION_PROPER,
