@@ -44,9 +44,9 @@ def sheleveque_scaling(DataField vel, nsamples, maxp=10, bins=36, x0=1e-3, x1=1.
     for p in range(1,maxp+1):
         hist = Histogram1d(x0, x1, bins=bins, spacing=spacing, commit=False)
         srhdpack_shelevequescaling(vel._c, hist._c,
-                                   SRHDPACK_VELOCITY_GAMMA,
+                                   SRHDPACK_VELOCITY_GAMMABETA,
                                    SRHDPACK_SEPARATION_PROPER,
-                                   SRHDPACK_PROJECTION_NONE,
+                                   SRHDPACK_PROJECTION_LONGITUDINAL,
                                    int(nsamples/nperbatch), nperbatch, seed, 0.5*p)
         hists[p] = hist
     return hists
