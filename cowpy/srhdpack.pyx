@@ -163,15 +163,15 @@ def structure_functions(DataField vel, struc_fns, samples=100, reuse=1,
     # 
     # Each proc will take its own share of the samples and pairs
     # 
-    cdef int num_samps = samples / vel.domain.cart_size
-    cdef int num_pairs = num_samps / 2 * reuse
-    cdef int num_modes = len(struc_fns)
+    cdef long num_samps = samples / vel.domain.cart_size
+    cdef long num_pairs = num_samps / 2 * reuse
+    cdef long num_modes = len(struc_fns)
 
     #
     # Approximate the memory usage on each process
     #
-    cdef int bytes = (num_samps*3 + num_pairs*num_modes*2) * sizeof(double)
-    cdef int batches = bytes / (maxmem * 1024 * 1024) + 1
+    cdef long bytes = (num_samps*3 + num_pairs*num_modes*2) * sizeof(double)
+    cdef long batches = bytes / (maxmem * 1024 * 1024) + 1
     num_samps /= batches
     num_pairs /= batches
 
@@ -184,7 +184,7 @@ def structure_functions(DataField vel, struc_fns, samples=100, reuse=1,
     np.random.seed(vel.domain.cart_rank)
 
     cdef PairwiseStructureFunction S
-    cdef int m
+    cdef long m
     cdef srhdpack_samplemode *modes = <srhdpack_samplemode*> malloc(
         num_modes * sizeof(srhdpack_samplemode))
 
