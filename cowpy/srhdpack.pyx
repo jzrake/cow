@@ -92,13 +92,18 @@ cdef class PairwiseStructureFunction(object):
     cdef srhdpack_samplemode _c
 
     def __init__(self, **kwargs):
-        self.x0 = 1e-3
-        self.x1 = 1.0
+        self._c.exponent = 1.0
         self._c.velmode = SRHDPACK_VELOCITY_GAMMABETA
         self._c.sepmode = SRHDPACK_SEPARATION_PROPER
         self._c.projmode = SRHDPACK_PROJECTION_LONGITUDINAL
         for k, v in kwargs.iteritems():
             setattr(self, k, v)
+
+    property exponent:
+        def __get__(self):
+            return self._c.exponent
+        def __set__(self, exponent):
+            self._c.exponent = exponent
 
     property velocity:
         def __get__(self):
@@ -117,12 +122,6 @@ cdef class PairwiseStructureFunction(object):
             return _projection_i[self._c.projmode]
         def __set__(self, mode):
             self._c.projmode = _projection[mode]
-
-    property exponent:
-        def __get__(self):
-            return self._c.exponent
-        def __set__(self, exponent):
-            self._c.exponent = exponent
 
 
 def structure_functions(DataField vel, struc_fns, samples=100, reuse=1,
