@@ -176,9 +176,9 @@ def structure_functions(DataField vel, struc_fns, samples=100, reuse=1,
 
     print "processing request for %d total pairs from %d total samples" % (
         samples * reuse / 2, samples)
-    print "total memory requirement is %d MB, maxmem is %d MB, running %d"\
-        " batches each with %d samples" % (bytes / (1024 * 1024), maxmem,
-                                           batches, num_samps)
+    print "total memory requirement per process is %d MB and maxmem is %d MB, "\
+        "running %d batches each with %d samples" % (bytes / (1024 * 1024),
+                                                     maxmem, batches, num_samps)
     print "seeding Numpy's random number generator with cartesian rank"
     np.random.seed(vel.domain.cart_rank)
 
