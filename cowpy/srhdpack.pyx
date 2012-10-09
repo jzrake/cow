@@ -7,11 +7,13 @@ cdef extern from "srhdpack.h":
     int SRHDPACK_VELOCITY_GAMMA          = -42
     int SRHDPACK_VELOCITY_BETA           = -43
     int SRHDPACK_VELOCITY_GAMMABETA      = -44
-    int SRHDPACK_SEPARATION_LAB          = -45
-    int SRHDPACK_SEPARATION_PROPER       = -46
-    int SRHDPACK_PROJECTION_NONE         = -47
-    int SRHDPACK_PROJECTION_TRANSVERSE   = -49
-    int SRHDPACK_PROJECTION_LONGITUDINAL = -48
+    int SRHDPACK_VELOCITY_DUMUDXMU       = -45
+    int SRHDPACK_VELOCITY_DUMUDUMU       = -46
+    int SRHDPACK_SEPARATION_LAB          = -47
+    int SRHDPACK_SEPARATION_PROPER       = -48
+    int SRHDPACK_PROJECTION_NONE         = -49
+    int SRHDPACK_PROJECTION_TRANSVERSE   = -50
+    int SRHDPACK_PROJECTION_LONGITUDINAL = -51
 
     struct srhdpack_samplemode:
         double exponent # exponent value: p
@@ -76,7 +78,9 @@ def inverse_dict(d):
 
 _velocity   = {"gamma"        : SRHDPACK_VELOCITY_GAMMA,
                "beta"         : SRHDPACK_VELOCITY_BETA,
-               "gammabeta"    : SRHDPACK_VELOCITY_GAMMABETA}
+               "gammabeta"    : SRHDPACK_VELOCITY_GAMMABETA,
+               "dumudxmu"     : SRHDPACK_VELOCITY_DUMUDXMU,
+               "dumudumu"     : SRHDPACK_VELOCITY_DUMUDUMU}
 _separation = {"lab"          : SRHDPACK_SEPARATION_LAB,
                "proper"       : SRHDPACK_SEPARATION_PROPER}
 _projection = {"none"         : SRHDPACK_PROJECTION_NONE,
