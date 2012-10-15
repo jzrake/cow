@@ -69,16 +69,13 @@ cdef class DistributedDomain(object):
     @property
     def cart_rank(self):
         return cow_domain_getcartrank(self._c)
-
     @property
     def cart_size(self):
         return cow_domain_getcartsize(self._c)
-
     @property
     def global_start(self):
         return tuple([cow_domain_getglobalstartindex(self._c, n)
                       for n in range(self.ndim)])
-
     @property
     def global_shape(self):
         return tuple([cow_domain_getnumglobalzones(self._c, n)
@@ -86,7 +83,6 @@ cdef class DistributedDomain(object):
     @property
     def ndim(self):
         return cow_domain_getndim(self._c)
-
     @property
     def guard(self):
         return cow_domain_getguard(self._c)
@@ -150,7 +146,7 @@ cdef class DataField(object):
     @property
     def domain(self):
         return self._domain
-
+        
     property name:
         def __get__(self):
             return cow_dfield_getname(self._c)
@@ -312,7 +308,7 @@ cdef class DataField(object):
         cow_dfield_setiparam(self._c, member)
         cow_dfield_reduce(self._c, <double*>res.data)
         return res
-    
+
     def reduce_magnitude(self):
         """
         Returns the min, max, and sum of the data fields's vector magnitude.
@@ -330,6 +326,12 @@ cdef class DataField(object):
         non-zero values wherever any of the data fields contain inf's or nan's.
         """
         cow_dfield_updateflaginfnan(self._c)
+
+    def fft(self):
+        cdef DataField re = DataField(self.domain, self.members, name=self.name + '_re')
+        cdef DataField im = DataField(self.domain, self.members, name=self.name + '_im')
+        cow_fft_forward(self._c, re._c, im._c)
+        return re, im
 
     def __getitem__(self, key):
         if type(key) is int:

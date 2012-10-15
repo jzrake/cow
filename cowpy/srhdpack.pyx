@@ -139,7 +139,7 @@ def structure_functions(DataField vel, struc_fns, samples=100, reuse=1,
 
 
     Parameters
-    -----------
+    ----------
 
     samples ... Number of total field locations to be sampled across all procs.
 

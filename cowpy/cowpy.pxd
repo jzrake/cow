@@ -127,6 +127,8 @@ cdef extern from "cow.h":
     double cow_histogram_getbinval(cow_histogram *h, int i, int j)
     char *cow_histogram_getname(cow_histogram *h)
 
+    void cow_fft_forward(cow_dfield *f, cow_dfield *fkre, cow_dfield *fkim)
+    void cow_fft_reverse(cow_dfield *f, cow_dfield *fkre, cow_dfield *fkim)
     void cow_fft_pspecscafield(cow_dfield *f, cow_histogram *h)
     void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *h)
     void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
