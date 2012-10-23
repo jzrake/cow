@@ -35,3 +35,9 @@
 /tests/testfft
 /tests/testhist
 /tests/testsamp
+/tests/srhdpack.py
+/tests/srhdpack.pyc
+/tests/testio
+/tests/testsrhd
+/src/testio.o
+/src/testsrhd.o
