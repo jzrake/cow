@@ -107,7 +107,7 @@ cdef class DataField(object):
         self._c = cow_dfield_new()
 
     def __init__(self, DistributedDomain domain, members=[], name="datafield",
-                 *args, **kwargs):
+                 buffer=None, *args, **kwargs):
         if domain is None or len(members) == 0:
             raise ValueError("bad argument list")
 
@@ -123,15 +123,17 @@ cdef class DataField(object):
             dims.append(cow_domain_getnumlocalzonesincguard(domain._c, i))
         dims.append(len(members))
 
-        if nd == 1:
+        if buffer is not None:
+            if tuple(dims) != buffer.shape:
+                raise RuntimeError("provided buffer has the wrong dimensions")
+            elif buffer.dtype != np.float64:
+                raise RuntimeError("provided buffer has the wrong data type")
+            elif not buffer.flags['C_CONTIGUOUS']:
+                raise RuntimeError("provided buffer is not C contiguous")
+            self._buf = buffer
+        else:
             self._buf = np.zeros(dims)
-            cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
-        elif nd == 2:
-            self._buf = np.zeros(dims)
-            cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
-        elif nd == 3:
-            self._buf = np.zeros(dims)
-            cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
+        cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
         cow_dfield_commit(self._c)
 
     def __dealloc__(self):

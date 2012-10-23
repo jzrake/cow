@@ -141,6 +141,11 @@ def testbadsetup():
         print e
     assert isinstance(e, ValueError)
 
+def testuserbuffer():
+    buffer = np.zeros([10,10,10,1], order='C')
+    domain = cowpy.DistributedDomain([6,6,6], guard=2)
+    dfield = cowpy.DataField(domain, members=['f'], buffer=buffer)
+
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         print "running test", sys.argv[1]
@@ -157,3 +162,4 @@ if __name__ == "__main__":
         testhelm()
         testfromfile()
         testbadsetup()
+        testuserbuffer()
