@@ -72,7 +72,6 @@ cdef extern from "cow.h":
     void cow_dfield_setuserdata(cow_dfield *f, void *userdata)
     void cow_dfield_setiparam(cow_dfield *f, int p)
     void cow_dfield_setfparam(cow_dfield *f, double p)
-    void cow_dfield_setflag(cow_dfield *f, int index, int flag)
     void cow_dfield_transformexecute(cow_dfield *f)
     char *cow_dfield_iteratemembers(cow_dfield *f)
     char *cow_dfield_nextmember(cow_dfield *f)
@@ -80,11 +79,8 @@ cdef extern from "cow.h":
     cow_domain *cow_dfield_getdomain(cow_dfield *f)
     int cow_dfield_getstride(cow_dfield *f, int dim)
     int cow_dfield_getnmembers(cow_dfield *f)
-    int cow_dfield_getflag(cow_dfield *f, int index)
     size_t cow_dfield_getdatabytes(cow_dfield *f)
     void cow_dfield_setdatabuffer(cow_dfield *f, void *buffer)
-    void cow_dfield_setflagbuffer(cow_dfield *f, int *buffer)
-    void cow_dfield_updateflaginfnan(cow_dfield *f)
     void cow_dfield_sampleglobalind(cow_dfield *f, int i, int j, int k, double **x,
                                     int *n0)
     int cow_dfield_setsamplecoords(cow_dfield *f, double *x, int n0, int n1)
@@ -94,8 +90,6 @@ cdef extern from "cow.h":
     void cow_dfield_sampleexecute(cow_dfield *f)
     int cow_dfield_getownsdata(cow_dfield *f)
     void *cow_dfield_getdatabuffer(cow_dfield *f)
-    int cow_dfield_getownsflag(cow_dfield *f)
-    int *cow_dfield_getflagbuffer(cow_dfield *f)
     void cow_dfield_syncguard(cow_dfield *f)
     void cow_dfield_reduce(cow_dfield *f, double x[3])
     void cow_dfield_write(cow_dfield *f, char *fname)
@@ -148,7 +142,6 @@ cdef class DistributedDomain(object):
 cdef class DataField(object):
     cdef cow_dfield *_c
     cdef np.ndarray _buf
-    cdef np.ndarray _flg
     cdef DistributedDomain _domain
     cdef _apply_transform(self, args, cow_transform op, void *userdata=*)
 

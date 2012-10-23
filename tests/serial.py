@@ -141,19 +141,6 @@ def testbadsetup():
         print e
     assert isinstance(e, ValueError)
 
-def testverify():
-    domain = cowpy.DistributedDomain([4,4], guard=1)
-    dfield = cowpy.DataField(domain, ["vx", "vy", "vz"], name="vel")
-    dfield["vx"] = 2.1
-    dfield["vy"] = 2.2
-    dfield["vz"] = 2.3
-    dfield["vx"][3,3] = np.nan
-    dfield["vx"][3,4] = np.inf
-    dfield.flags = 0
-    dfield.setflags_infnan()
-    assert(dfield.flags[3,3] == 4)
-    assert(dfield.flags[3,4] == 8)
-
 if __name__ == "__main__":
     if len(sys.argv) > 1:
         print "running test", sys.argv[1]
@@ -170,4 +157,3 @@ if __name__ == "__main__":
         testhelm()
         testfromfile()
         testbadsetup()
-        testverify()

@@ -125,19 +125,13 @@ cdef class DataField(object):
 
         if nd == 1:
             self._buf = np.zeros(dims)
-            self._flg = np.zeros(dims[0:1], dtype=np.int32)
             cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
-            cow_dfield_setflagbuffer(self._c, <int*>self._flg.data)
         elif nd == 2:
             self._buf = np.zeros(dims)
-            self._flg = np.zeros(dims[0:2], dtype=np.int32)
             cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
-            cow_dfield_setflagbuffer(self._c, <int*>self._flg.data)
         elif nd == 3:
             self._buf = np.zeros(dims)
-            self._flg = np.zeros(dims[0:3], dtype=np.int32)
             cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
-            cow_dfield_setflagbuffer(self._c, <int*>self._flg.data)
         cow_dfield_commit(self._c)
 
     def __dealloc__(self):
@@ -193,13 +187,6 @@ cdef class DataField(object):
                 self._buf[ng:-ng, ng:-ng, :] = val
             elif nd == 3:
                 self._buf[ng:-ng, ng:-ng, ng:-ng, :] = val
-
-    property flags:
-        def __get__(self):
-            return self._flg
-        
-        def __set__(self, val):
-            self._flg[...] = val
 
     def sync_guard(self):
         cow_dfield_syncguard(self._c)
@@ -319,13 +306,6 @@ cdef class DataField(object):
         cow_dfield_setuserdata(self._c, self._c)
         cow_dfield_reduce(self._c, <double*>res.data)
         return res
-
-    def setflags_infnan(self):
-        """
-        Fills the data field's flags property (numpy integer array) with
-        non-zero values wherever any of the data fields contain inf's or nan's.
-        """
-        cow_dfield_updateflaginfnan(self._c)
 
     def fft(self):
         cdef DataField re = DataField(self.domain, self.members, name=self.name + '_re')
