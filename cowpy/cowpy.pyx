@@ -47,7 +47,7 @@ cdef class DistributedDomain(object):
         self._c = cow_domain_new()
 
     def __init__(self, G_ntot, guard=0, *args, **kwargs):
-        print "building domain", G_ntot
+        print "[cow] building domain", G_ntot
         nd = len(G_ntot)
         if nd > 3:
             raise ValueError("domain dims must be no larger 3")
@@ -99,6 +99,23 @@ cdef class DistributedDomain(object):
             if self.cart_rank == i:
                 func(*args)
             self.barrier()
+
+    def reduce(self, val, type=float, op='sum'):
+        if op == 'sum':
+            if type is int:
+                return cow_domain_intsum(self._c, int(val))
+            elif type is float:
+                return cow_domain_dblsum(self._c, float(val))
+        elif op in ['prod', 'product']:
+            if type is int:
+                return cow_domain_intprod(self._c, int(val))
+        elif op in ['min', 'minimum']:
+            if type is float:
+                return cow_domain_dblmin(self._c, float(val))
+        elif op in ['max', 'maximum']:
+            if type is float:
+                return cow_domain_dblmax(self._c, float(val))
+        raise ValueError("unavailable reduction type and operation")
 
 
 cdef class DataField(object):
