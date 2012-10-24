@@ -47,8 +47,6 @@ cdef class DistributedDomain(object):
         self._c = cow_domain_new()
 
     def __init__(self, G_ntot, guard=0, *args, **kwargs):
-        cdef int KILOBYTES = 1 << 10
-        cdef int MEGABYTES = 1 << 20
         print "building domain", G_ntot
         nd = len(G_ntot)
         if nd > 3:
@@ -58,10 +56,6 @@ cdef class DistributedDomain(object):
         cow_domain_setndim(self._c, nd)
         cow_domain_setguard(self._c, guard)
         cow_domain_commit(self._c)
-        # set up the IO scheme after commit
-        cow_domain_setchunk(self._c, _runtime_cfg['hdf5_chunk'])
-        cow_domain_setcollective(self._c, _runtime_cfg['hdf5_collective'])
-        cow_domain_setalign(self._c, 4*KILOBYTES, 4*MEGABYTES)
 
     def __dealloc__(self):
         cow_domain_del(self._c)
@@ -81,6 +75,10 @@ cdef class DistributedDomain(object):
         return tuple([cow_domain_getnumglobalzones(self._c, n)
                       for n in range(self.ndim)])
     @property
+    def local_shape(self):
+        return tuple([cow_domain_getnumlocalzonesinterior(self._c, n)
+                      for n in range(self.ndim)])
+    @property
     def ndim(self):
         return cow_domain_getndim(self._c)
     @property
@@ -88,7 +86,8 @@ cdef class DistributedDomain(object):
         return cow_domain_getguard(self._c)
 
     def coordinate(self, ind):
-        assert len(ind) == self.ndim
+        if len(ind) == self.ndim:
+            raise ValueError("wrong size index")
         return tuple([cow_domain_positionatindex(self._c, n, i)
                       for n, i in enumerate(ind)])
 
@@ -118,31 +117,31 @@ cdef class DataField(object):
         for m in members:
             cow_dfield_addmember(self._c, m)
         nd = domain.ndim
-        dims = [ ]
+        self._dims = [ ]
         for i in range(nd):
-            dims.append(cow_domain_getnumlocalzonesincguard(domain._c, i))
-        dims.append(len(members))
-
-        if buffer is not None:
-            if tuple(dims) != buffer.shape:
-                raise RuntimeError("provided buffer has the wrong dimensions")
-            elif buffer.dtype != np.float64:
-                raise RuntimeError("provided buffer has the wrong data type")
-            elif not buffer.flags['C_CONTIGUOUS']:
-                raise RuntimeError("provided buffer is not C contiguous")
-            self._buf = buffer
-        else:
-            self._buf = np.zeros(dims)
-        cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
+            self._dims.append(cow_domain_getnumlocalzonesincguard(domain._c, i))
+        self._dims.append(len(members))
+        self.set_buffer(buffer if buffer is not None else np.zeros(self._dims))
         cow_dfield_commit(self._c)
 
     def __dealloc__(self):
         cow_dfield_del(self._c)
 
+    def set_buffer(self, buffer):
+        dims = tuple(self._dims)
+        if tuple(dims) != buffer.shape:
+            raise RuntimeError("provided buffer has the wrong dimensions")
+        elif buffer.dtype != np.float64:
+            raise RuntimeError("provided buffer has the wrong data type")
+        elif not buffer.flags['C_CONTIGUOUS']:
+            raise RuntimeError("provided buffer is not C contiguous")
+        self._buf = buffer
+        cow_dfield_setdatabuffer(self._c, <double*>self._buf.data)
+
     @property
     def domain(self):
         return self._domain
-        
+
     property name:
         def __get__(self):
             return cow_dfield_getname(self._c)
@@ -194,6 +193,11 @@ cdef class DataField(object):
         cow_dfield_syncguard(self._c)
 
     def dump(self, fname):
+        cdef int KILOBYTES = 1 << 10
+        cdef int MEGABYTES = 1 << 20
+        cow_domain_setchunk(self._domain._c, _runtime_cfg['hdf5_chunk'])
+        cow_domain_setcollective(self._domain._c, _runtime_cfg['hdf5_collective'])
+        cow_domain_setalign(self._domain._c, 4*KILOBYTES, 4*MEGABYTES)
         cow_dfield_write(self._c, fname)
 
     def read(self, fname):

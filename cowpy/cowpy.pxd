@@ -144,6 +144,7 @@ cdef class DataField(object):
     cdef np.ndarray _buf
     cdef DistributedDomain _domain
     cdef _apply_transform(self, args, cow_transform op, void *userdata=*)
+    cdef list _dims
 
 cdef class Histogram1d(object):
     cdef cow_histogram *_c
