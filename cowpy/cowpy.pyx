@@ -331,6 +331,8 @@ cdef class DataField(object):
         return res
 
     def fft(self):
+        if self.domain.ndim < 3:
+            raise NotImplementedError("FFT's are only implemented in 3d")
         cdef DataField re = DataField(self.domain, self.members, name=self.name + '_re')
         cdef DataField im = DataField(self.domain, self.members, name=self.name + '_im')
         cow_fft_forward(self._c, re._c, im._c)
@@ -564,6 +566,22 @@ def cross_product(v, w):
     res = VectorField3d(v.domain)
     res.name = v.name + "-cross-" + w.name
     return res._apply_transform([v, w], cow_trans_cross)
+
+
+def ifft(DataField re, DataField im, name="inverse_fft"):
+    """
+    Perform the inverse FFT from the Hermitian DataFields `re` and `im` and
+    return real-valued data field.
+    """
+    if re.domain.ndim < 3:
+        raise NotImplementedError("FFT's are only implemented in 3d")
+    if re.domain is not im.domain:
+        raise ValueError("both input data fields must share the same domain")
+    if re.members != im.members:
+        raise ValueError("both input data fields must share the same members")
+    cdef DataField res = DataField(re.domain, re.members)
+    cow_fft_reverse(res._c, re._c, im._c)
+    return res
 
 
 def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
