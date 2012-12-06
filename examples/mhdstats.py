@@ -21,6 +21,7 @@ def maghist(field):
     hist.name = field.name + "-hist"
     return hist
 
+
 def runstats(fname, opts):
     V = cowpy.fromfile(fname, "prim", members=["vx","vy","vz"], vec3d=True,
                        guard=2, downsample=opts.downsample)
@@ -45,6 +46,7 @@ def runstats(fname, opts):
             hist = maghist(f[thing])
             hist.name = thing + "-hist"
             hist.dump(opts.output)
+
 
 if __name__ == "__main__":
     parser = optparse.OptionParser()

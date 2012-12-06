@@ -538,7 +538,8 @@ cdef class Histogram1d(object):
         `group`/self._name if `format` is 'hdf5', and an ascii table if
         'ascii'. By default `format` is guessed from the file extension.
         """
-        assert self.sealed
+        if not self.sealed:
+            raise RuntimeError("histogram cannot be dumped until it's sealed")
         if format == "guess":
             if fname.endswith('.h5') or fname.endswith('.hdf5'):
                 format = "hdf5" 
@@ -616,7 +617,8 @@ def fromfile(fname, group, guard=0, members=None, vec3d=False, downsample=0):
     else:
         domain = DistributedDomain(shape, guard=guard)
     if vec3d:
-        assert len(mem) == 3
+        if len(mem) != 3:
+            raise ValueError("only fields with 3 members can have vec3d=True")
         dfield = VectorField3d(domain, mem, name=group)
     else:
         dfield = DataField(domain, mem, name=group)
