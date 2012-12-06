@@ -1,0 +1,55 @@
+*** cow_wrap.c	2012-12-06 10:54:04.000000000 -0500
+--- cow_wrap_fixed.c	2012-12-06 10:49:49.000000000 -0500
+***************
+*** 9,14 ****
+--- 9,16 ----
+   * ----------------------------------------------------------------------------- */
+  
+  #define SWIGLUA
++ #define luaL_reg luaL_Reg
++ #include "../include/cow.h"
+  
+  /* -----------------------------------------------------------------------------
+   *  This section contains generic SWIG labels for method/variable
+***************
+*** 1820,1827 ****
+  SWIGEXPORT int SWIG_init(lua_State* L)
+  {
+    int i;
+!   /* start with global table */
+!   lua_pushvalue(L,LUA_GLOBALSINDEX);
+    /* SWIG's internal initalisation */
+    SWIG_InitializeModule((void*)L);
+    SWIG_PropagateClientData();
+--- 1822,1830 ----
+  SWIGEXPORT int SWIG_init(lua_State* L)
+  {
+    int i;
+!   lua_getglobal(L, "package");
+!   lua_getfield(L, -1, "loaded");
+! 
+    /* SWIG's internal initalisation */
+    SWIG_InitializeModule((void*)L);
+    SWIG_PropagateClientData();
+***************
+*** 1855,1862 ****
+    /* invoke user-specific initialization */
+    SWIG_init_user(L);
+    /* end module */
+!   lua_pop(L,1);  /* tidy stack (remove module table)*/
+!   lua_pop(L,1);  /* tidy stack (remove global table)*/
+    return 1;
+  }
+  
+--- 1858,1868 ----
+    /* invoke user-specific initialization */
+    SWIG_init_user(L);
+    /* end module */
+! 
+!   lua_pop(L,1);  /* tidy stack (remove module table) */
+!   lua_pop(L,1);  /* tidy stack (remove loaded table) */
+!   lua_pop(L,1);  /* tidy stack (remove package table) */
+! 
+    return 1;
+  }
+  

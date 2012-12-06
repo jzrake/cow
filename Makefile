@@ -18,6 +18,9 @@ clib :
 cowpy : clib
 	@make -C cowpy
 
+lua : clib
+	@make -C lua
+
 install : clib
 	mkdir -p $(COWLIB_INSTALL)/include; cp include/* $(COWLIB_INSTALL)/include
 	mkdir -p $(COWLIB_INSTALL)/bin; cp bin/* $(COWLIB_INSTALL)/bin
@@ -26,4 +29,5 @@ install : clib
 clean :
 	@make -C src clean
 	@make -C cowpy clean
+	@make -C lua clean
 	@rm -rf lib bin include

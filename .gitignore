@@ -41,3 +41,4 @@
 /tests/testsrhd
 /src/testio.o
 /src/testsrhd.o
+/lua/lua-5.2.1
