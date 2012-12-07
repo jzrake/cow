@@ -75,6 +75,6 @@ local function test_highlevel()
 end
 
 test_lowlevel()
---test_highlevel()
+test_highlevel()
 
 cow.cow_finalize()

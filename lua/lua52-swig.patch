@@ -1,5 +1,5 @@
-*** cow_wrap.c	2012-12-06 10:54:04.000000000 -0500
---- cow_wrap_fixed.c	2012-12-06 10:49:49.000000000 -0500
+*** cow_wrap.c	2012-12-06 22:31:05.000000000 -0500
+--- cow_wrap_patched.c	2012-12-06 22:30:53.000000000 -0500
 ***************
 *** 9,14 ****
 --- 9,16 ----
@@ -12,7 +12,7 @@
   /* -----------------------------------------------------------------------------
    *  This section contains generic SWIG labels for method/variable
 ***************
-*** 1820,1827 ****
+*** 5002,5017 ****
   SWIGEXPORT int SWIG_init(lua_State* L)
   {
     int i;
@@ -21,7 +21,15 @@
     /* SWIG's internal initalisation */
     SWIG_InitializeModule((void*)L);
     SWIG_PropagateClientData();
---- 1822,1830 ----
+!   /* add a global fn */
+!   SWIG_Lua_add_function(L,"swig_type",SWIG_Lua_type);
+!   SWIG_Lua_add_function(L,"swig_equals",SWIG_Lua_equal);
+    /* begin the module (its a table with the same name as the module) */
+    SWIG_Lua_module_begin(L,SWIG_name);
+    /* add commands/functions */
+    for (i = 0; swig_commands[i].name; i++){
+      SWIG_Lua_module_add_function(L,swig_commands[i].name,swig_commands[i].func);
+--- 5004,5023 ----
   SWIGEXPORT int SWIG_init(lua_State* L)
   {
     int i;
@@ -31,8 +39,19 @@
     /* SWIG's internal initalisation */
     SWIG_InitializeModule((void*)L);
     SWIG_PropagateClientData();
+! 
+    /* begin the module (its a table with the same name as the module) */
+    SWIG_Lua_module_begin(L,SWIG_name);
++ 
++   /* add a function to module */
++   SWIG_Lua_add_function(L,"swig_type",SWIG_Lua_type);
++   SWIG_Lua_add_function(L,"swig_equals",SWIG_Lua_equal);
++ 
+    /* add commands/functions */
+    for (i = 0; swig_commands[i].name; i++){
+      SWIG_Lua_module_add_function(L,swig_commands[i].name,swig_commands[i].func);
 ***************
-*** 1855,1862 ****
+*** 5037,5044 ****
     /* invoke user-specific initialization */
     SWIG_init_user(L);
     /* end module */
@@ -41,7 +60,7 @@
     return 1;
   }
   
---- 1858,1868 ----
+--- 5043,5053 ----
     /* invoke user-specific initialization */
     SWIG_init_user(L);
     /* end module */
