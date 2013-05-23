@@ -1,0 +1,39 @@
+
+# C compiler, C++ compiler, and flags
+#
+CC     =  cc
+CXX    =  c++
+CFLAGS = -Wall -O3
+
+
+# On Linux, you may need something like
+# LIBS = -lm -ldl
+
+
+# OS name: used for Lua, can be one of:
+#
+# [aix ansi bsd freebsd generic linux macosx mingw posix solaris]
+#
+OS = generic
+
+
+# Location of HDF5 and FFTW-3.3 libraries (optional).
+#
+HDF_HOME = /usr/local/hdf5-1.8.10-par
+FFT_HOME = /usr/local/fftw-3.3
+
+
+# By default, use the local Lua source.
+# 
+LVER     ?= lua-5.2.1
+LUA_HOME ?= $(PWD)/$(LVER)
+
+
+# Whether or not to support external libraries MPI, FFTW, HDF5, and MPIO
+# (parallel HDF5) and local Lua modules.
+#
+USE_MPI  = 0 # Message Passing Interface (use mpicc / mpicxx as compiler)
+USE_MPIO = 0 # good for collective IO on clusters
+USE_HDF5 = 0 # needed to compile lua-hdf5 wrappers
+USE_FFTW = 0 # needed for some C.O.W. routines
+USE_LUA  = 0 # compile Lua wrappers (need LUA_HOME macro)

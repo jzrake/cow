@@ -1,3 +1,4 @@
-/*.o
-/*.a
-/cowfuncs.c
+*.o
+*.a
+cowfuncs.c
+Makefile.in

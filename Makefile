@@ -14,9 +14,17 @@ LUA_I ?= -I$(LUA_HOME)/include
 HDF_I ?= -I$(HDF_HOME)/include
 FFT_I ?= -I$(FFT_HOME)/include
 
+
+DEFAULT := $(COW_A)
+
+
 ifeq ($(strip $(USE_FFTW)), 1)
 INCLUDE += $(FFT_I)
 DEFINES += -DUSE_FFTW
+endif
+
+ifeq ($(strip $(USE_LUA)), 1)
+DEFAULT += lua-cow.o
 endif
 
 INC = $(HDF_I) $(FFT_I)
@@ -28,7 +36,7 @@ OPT = \
 
 OBJ = cow.o samp.o hist.o io.o fft.o fft_3d.o pack_3d.o remap_3d.o srhdpack.o
 
-default : $(COW_A) lua-cow.o
+default : $(DEFAULT)
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c $^ $(INC) $(OPT)
