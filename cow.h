@@ -59,7 +59,7 @@ void cow_domain_setprocsizes(cow_domain *d, int dim, int size);
 void cow_domain_setcollective(cow_domain *d, int mode);
 void cow_domain_setchunk(cow_domain *d, int mode);
 void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize);
-void cow_domain_readsize(cow_domain *d, char *fname, char *dname);
+int cow_domain_readsize(cow_domain *d, char *fname, char *dname);
 int cow_domain_getndim(cow_domain *d);
 int cow_domain_getsize(cow_domain *d, int dim);
 int cow_domain_getguard(cow_domain *d);

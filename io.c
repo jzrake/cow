@@ -117,12 +117,17 @@ void cow_domain_setalign(cow_domain *d, int alignthreshold, int diskblocksize)
   H5Pset_alignment(d->fapl, alignthreshold, diskblocksize);
 #endif
 }
-void cow_domain_readsize(cow_domain *d, char *fname, char *dname)
+int cow_domain_readsize(cow_domain *d, char *fname, char *dname)
 {
 #if (COW_HDF5)
-  if (_io_check_file_exists(fname)) return;
   hid_t file = H5Fopen(fname, H5F_ACC_RDONLY, d->fapl);
+  if (file < 0) {
+    return 1;
+  }
   hid_t dset = H5Dopen(file, dname, H5P_DEFAULT);
+  if (dset < 0) {
+    return 1;
+  }
   hid_t fspc = H5Dget_space(dset);
   hsize_t dims[3] = { 1, 1, 1 };
   int ndims = H5Sget_simple_extent_dims(fspc, dims, NULL);
@@ -134,6 +139,7 @@ void cow_domain_readsize(cow_domain *d, char *fname, char *dname)
   }
   printf("[%s] inferred global domain size of (%lld %lld %lld) from %s/%s\n",
 	 MODULE, dims[0], dims[1], dims[2], fname, dname);
+  return 0;
 #endif
 }
 int cow_dfield_write(cow_dfield *f, char *fname)
