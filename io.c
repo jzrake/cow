@@ -139,8 +139,8 @@ int cow_domain_readsize(cow_domain *d, char *fname, char *dname)
   }
   printf("[%s] inferred global domain size of (%lld %lld %lld) from %s/%s\n",
 	 MODULE, dims[0], dims[1], dims[2], fname, dname);
-  return 0;
 #endif
+  return 0;
 }
 int cow_dfield_write(cow_dfield *f, char *fname)
 {
@@ -190,8 +190,10 @@ int cow_dfield_read(cow_dfield *f, char *fname)
   printf("[%s] read from %s/%s took %f minutes\n", MODULE, fname, f->name,
 	 sec/60.0);
   fflush(stdout);
-#endif
   return err;
+#else
+  return 0;
+#endif
 }
 
 #if (COW_HDF5)

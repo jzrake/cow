@@ -1,5 +1,11 @@
 
+# if there is no Makefile.in then use the template
+# --------------------------------------------------
+ifeq ($(shell test -e Makefile.in && echo 1), 1)
 MAKEFILE_IN = Makefile.in
+else
+MAKEFILE_IN =  Makefile.in.template
+endif
 include $(MAKEFILE_IN)
 
 RM ?= rm -f
@@ -36,7 +42,7 @@ OPT = \
 
 OBJ = cow.o samp.o hist.o io.o fft.o fft_3d.o pack_3d.o remap_3d.o srhdpack.o
 
-default : $(DEFAULT)
+default : $(COW_A)
 
 %.o : %.c
 	$(CC) $(CFLAGS) -c $^ $(INC) $(OPT)

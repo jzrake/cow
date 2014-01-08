@@ -13,7 +13,7 @@
 #endif // COW_HDF5
 #endif // COW_PRIVATE_DEFS
 
-
+#define COW_DEFAULT           (0)
 #define COW_NOREOPEN_STDOUT   (1<<0)
 #define COW_DISABLE_MPI       (1<<1)
 #define COW_HASNAN            (1<<2)
