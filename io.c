@@ -184,8 +184,10 @@ int cow_dfield_read(cow_dfield *f, char *fname)
   printf("[%s] read from %s/%s took %f minutes\n", MODULE, fname, f->name,
 	 sec/60.0);
   fflush(stdout);
-#endif
   return err;
+#else
+  return 0;
+#endif
 }
 
 #if (COW_HDF5)
