@@ -2,7 +2,7 @@
 # Compiler configuration
 # ----------------------------------------------------------
 CC = cc
-CFLAGS = -Wall -O0 -g
+CFLAGS = -std=c99 -Wall -O3
 CLIBS = -lm
 
 
