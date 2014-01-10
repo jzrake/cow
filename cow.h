@@ -1,8 +1,7 @@
-
-
 #ifndef COW_HEADER_INCLUDED
 #define COW_HEADER_INCLUDED
 #include <stdlib.h>
+#include "cow-cfg.h"
 
 #ifdef COW_PRIVATE_DEFS
 #if (COW_MPI)
@@ -120,7 +119,6 @@ void cow_dfield_syncguard(cow_dfield *f);
 void cow_dfield_reduce(cow_dfield *f, double *x);
 int cow_dfield_write(cow_dfield *f, char *fname);
 int cow_dfield_read(cow_dfield *f, char *fname);
-
 
 cow_histogram *cow_histogram_new(void);
 void cow_histogram_commit(cow_histogram *h);

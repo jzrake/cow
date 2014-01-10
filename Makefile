@@ -8,54 +8,54 @@ MAKEFILE_IN =  Makefile.in.template
 endif
 include $(MAKEFILE_IN)
 
-RM ?= rm -f
-AR ?= ar
-ARSTATIC ?= $(AR) rcu
-RANLIB ?= ranlib
-CFLAGS ?= -Wall
-CFLAGS += -std=c99
 
-COW_A = libcow.a
-LUA_I ?= -I$(LUA_HOME)/include
-HDF_I ?= -I$(HDF_HOME)/include
-FFT_I ?= -I$(FFT_HOME)/include
+GIT_SHA := $(shell git rev-parse HEAD | cut -c 1-10)
+TMP_H := $(shell mktemp -u make.XXXXXX)
 
 
-DEFAULT := $(COW_A)
+# object code required for executables
+# --------------------------------------------------
+SRC = $(wildcard *.c)
+OBJ = $(SRC:.c=.o)
+DEP = $(SRC:.c=.dep)
+
+HDF5_I = -I$(HDF5_HOME)/include
+FFTW_I = -I$(FFTW_HOME)/include
+
+HDF5_L = -L$(HDF5_HOME)/lib -lhdf5
+FFTW_L = -L$(FFTW_HOME)/lib -lfftw3
 
 
-ifeq ($(strip $(USE_FFTW)), 1)
-INCLUDE += $(FFT_I)
-DEFINES += -DUSE_FFTW
-endif
+# build rules
+# --------------------------------------------------
+default : $(OBJ)
 
-ifeq ($(strip $(USE_LUA)), 1)
-DEFAULT += lua-cow.o
-endif
+%.o : %.c cow-cfg.h $(MAKEFILE_IN)
+	@$(CC) -MM $< > $(<:.c=.dep) $(HDF5_I) $(FFTW_I)
+	$(CC) $(CFLAGS) $< -c $(HDF5_I) $(FFTW_I)
 
-INC = $(HDF_I) $(FFT_I)
-OPT = \
-	-DCOW_MPI=$(USE_MPI) \
-	-DCOW_HDF5=$(USE_HDF5) \
-	-DCOW_HDF5_MPI=$(USE_MPIO) \
-	-DCOW_FFTW=$(USE_FFTW)
+cow-cfg.h : .FORCE
+	@echo "/* cow config header file */" > $(TMP_H)
+	@echo "#define COW_MPI $(HAVE_MPI)" >> $(TMP_H)
+	@echo "#define COW_HDF5 $(HAVE_HDF5)" >> $(TMP_H)
+	@echo "#define COW_FFTW $(HAVE_FFTW)" >> $(TMP_H)
+	@echo "#define COW_GIT_SHA \"$(GIT_SHA)\"" >> $(TMP_H)
+	@cmp -s $(TMP_H) $@ || (echo "[cow-cfg.h updated]"; cat $(TMP_H)>$@)
+	@$(RM) $(TMP_H)
 
-OBJ = cow.o samp.o hist.o io.o fft.o fft_3d.o pack_3d.o remap_3d.o srhdpack.o
-
-default : $(COW_A)
-
-%.o : %.c
-	$(CC) $(CFLAGS) -c $^ $(INC) $(OPT)
-
-$(COW_A) : $(OBJ)
-	$(ARSTATIC) $@ $?
-	$(RANLIB) $@
-
-cowfuncs.c : cow.h parse.py
-	python parse.py
-
-lua-cow.o : lua-cow.c cowfuncs.c
-	$(CC) $(CFLAGS) -c $< $(LUA_I)
+show :
+	@echo "MAKEFILE_IN: $(MAKEFILE_IN)"
+	@echo "CC: $(CC)"
+	@echo "CFLAGS: $(CFLAGS)"
+	@echo "EXE: $(EXE)"
+	@echo "OBJ: $(OBJ)"
+	@echo "SRC: $(SRC)"
+	@echo "DEP: $(DEP)"
 
 clean :
-	$(RM) $(COW_A) $(OBJ) cowfuncs.c lua-cow.o
+	$(RM) $(OBJ) $(DEP) $(EXE)
+
+.FORCE :
+.PHONY : show clean
+
+-include *.dep

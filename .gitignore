@@ -1,4 +1,5 @@
 *.o
 *.a
-cowfuncs.c
+*.dep
 Makefile.in
+/cow-cfg.h

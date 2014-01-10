@@ -435,7 +435,8 @@ void cow_fft_solvepoisson(cow_dfield *rho, cow_dfield *phi)
   free(rhok);
   free(phix);
   free(phik);
-
+#else
+  printf("[%s] error: you don't have FFTW\n", MODULE);
 #endif // COW_FFTW
 }
 
