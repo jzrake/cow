@@ -15,9 +15,11 @@ TMP_H := $(shell mktemp -u make.XXXXXX)
 
 # object code required for executables
 # --------------------------------------------------
-SRC = $(wildcard *.c)
+SRC = cow.c fft.c fft_3d.c hist.c \
+	  io.c pack_3d.c remap_3d.c samp.c
 OBJ = $(SRC:.c=.o)
 DEP = $(SRC:.c=.dep)
+LIB = libcow.a
 
 HDF5_I = -I$(HDF5_HOME)/include
 FFTW_I = -I$(FFTW_HOME)/include
@@ -25,10 +27,13 @@ FFTW_I = -I$(FFTW_HOME)/include
 HDF5_L = -L$(HDF5_HOME)/lib -lhdf5
 FFTW_L = -L$(FFTW_HOME)/lib -lfftw3
 
-
 # build rules
 # --------------------------------------------------
-default : $(OBJ)
+default : $(LIB)
+
+$(LIB) : $(OBJ)
+	$(AR) $@ $?
+	$(RANLIB) $@
 
 %.o : %.c cow-cfg.h $(MAKEFILE_IN)
 	@$(CC) -MM $< > $(<:.c=.dep) $(HDF5_I) $(FFTW_I)
@@ -53,7 +58,7 @@ show :
 	@echo "DEP: $(DEP)"
 
 clean :
-	$(RM) $(OBJ) $(DEP) $(EXE)
+	$(RM) $(LIB) $(OBJ) $(DEP) $(EXE)
 
 .FORCE :
 .PHONY : show clean
