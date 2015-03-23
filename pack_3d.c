@@ -12,7 +12,7 @@
    See the README file in the top-level directory of the distribution.
 */
 
-
+#include "cow-cfg.h"
 #if (COW_FFTW && COW_MPI)
 #include "pack_3d.h"
 

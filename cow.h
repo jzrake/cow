@@ -150,6 +150,7 @@ void cow_fft_reverse(cow_dfield *f, cow_dfield *fkre, cow_dfield *fkim);
 void cow_fft_pspecscafield(cow_dfield *f, cow_histogram *h);
 void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *h);
 void cow_fft_helmholtzdecomp(cow_dfield *f, int mode);
+void cow_fft_inversecurl(cow_dfield *B, cow_dfield *A);
 void cow_fft_solvepoisson(cow_dfield *rho, cow_dfield *phi);
 
 void cow_trans_rot5(double *result, double **args, int **s, void *u);

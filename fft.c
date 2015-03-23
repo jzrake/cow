@@ -222,6 +222,8 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
 // be over-written.
 //
 //  cow_histogram_setnbins(hist, 0, 256);
+//  cow_histogram_setlower(hist, 0, 1.0);
+//  cow_histogram_setupper(hist, 0, 0.5*sqrt(Nx*Nx + Ny*Ny + Nz*Nz));
 //  cow_histogram_setspacing(hist, COW_HIST_SPACING_LINEAR); // or LOG
 //  cow_histogram_setnickname(hist, "mypspec"); // optional
 //
@@ -238,9 +240,6 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
   int nx = cow_domain_getnumlocalzonesinterior(f->domain, 0);
   int ny = cow_domain_getnumlocalzonesinterior(f->domain, 1);
   int nz = cow_domain_getnumlocalzonesinterior(f->domain, 2);
-  int Nx = cow_domain_getnumglobalzones(f->domain, 0);
-  int Ny = cow_domain_getnumglobalzones(f->domain, 1);
-  int Nz = cow_domain_getnumglobalzones(f->domain, 2);
   int ng = cow_domain_getguard(f->domain);
   int ntot = nx * ny * nz;
   int I0[3] = { ng, ng, ng };
@@ -254,8 +253,6 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
   FFT_DATA *gz = _fwd(f->domain, input, 2, 3);
   free(input);
 
-  cow_histogram_setlower(hist, 0, 1.0);
-  cow_histogram_setupper(hist, 0, 0.5*sqrt(Nx*Nx + Ny*Ny + Nz*Nz));
   cow_histogram_setbinmode(hist, COW_HIST_BINMODE_DENSITY);
   cow_histogram_setdomaincomm(hist, f->domain);
   cow_histogram_commit(hist);
@@ -375,6 +372,84 @@ void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
 #endif // COW_FFTW
 }
 
+void cow_fft_inversecurl(cow_dfield *B, cow_dfield *A)
+{
+#if (COW_FFTW)
+  if (!A->committed || !B->committed) return;
+  if (A->n_members != 3 || B->n_members != 3) {
+    printf("[%s] error: need two 3-component fields for inversecurl", MODULE);
+    return;
+  }
+  clock_t start = clock();
+  int nx = cow_domain_getnumlocalzonesinterior(B->domain, 0);
+  int ny = cow_domain_getnumlocalzonesinterior(B->domain, 1);
+  int nz = cow_domain_getnumlocalzonesinterior(B->domain, 2);
+  int ng = cow_domain_getguard(B->domain);
+  int ntot = nx * ny * nz;
+  int I0[3] = { ng, ng, ng };
+  int I1[3] = { nx + ng, ny + ng, nz + ng };
+
+  double *input = (double*) malloc(3 * ntot * sizeof(double));
+  cow_dfield_extract(B, I0, I1, input);
+
+  FFT_DATA *gx = _fwd(B->domain, input, 0, 3); // start, stride
+  FFT_DATA *gy = _fwd(B->domain, input, 1, 3);
+  FFT_DATA *gz = _fwd(B->domain, input, 2, 3);
+  free(input);
+
+  FFT_DATA *Akx = (FFT_DATA*) malloc(ntot * sizeof(FFT_DATA));
+  FFT_DATA *Aky = (FFT_DATA*) malloc(ntot * sizeof(FFT_DATA));
+  FFT_DATA *Akz = (FFT_DATA*) malloc(ntot * sizeof(FFT_DATA));
+  for (int i=0; i<nx; ++i) {
+    for (int j=0; j<ny; ++j) {
+      for (int k=0; k<nz; ++k) {
+	int m = i*ny*nz + j*nz + k;
+	double kvec[3];
+	double Kijk = k_at(B->domain, i, j, k, kvec);
+	double k2 = Kijk * Kijk;
+
+	if (k2 < EFFECTIVELY_ZERO) {
+	  k2 = 1.0;
+	}
+
+	Akx[m][0] = -(kvec[1] * gz[m][1] - kvec[2] * gy[m][1]) / k2;
+	Akx[m][1] = +(kvec[1] * gz[m][0] - kvec[2] * gy[m][0]) / k2;
+
+	Aky[m][0] = -(kvec[2] * gx[m][1] - kvec[0] * gz[m][1]) / k2;
+	Aky[m][1] = +(kvec[2] * gx[m][0] - kvec[0] * gz[m][0]) / k2;
+
+	Akz[m][0] = -(kvec[0] * gy[m][1] - kvec[1] * gx[m][1]) / k2;
+	Akz[m][1] = +(kvec[0] * gy[m][0] - kvec[1] * gx[m][0]) / k2;
+      }
+    }
+  }
+  free(gx);
+  free(gy);
+  free(gz);
+  double *fx_p = _rev(A->domain, Akx);
+  double *fy_p = _rev(A->domain, Aky);
+  double *fz_p = _rev(A->domain, Akz);
+  free(Akx);
+  free(Aky);
+  free(Akz);
+
+  double *res = (double*) malloc(3 * ntot * sizeof(double));
+  for (int i=0; i<ntot; ++i) {
+    res[3*i + 0] = fx_p[i];
+    res[3*i + 1] = fy_p[i];
+    res[3*i + 2] = fz_p[i];
+  }
+  free(fx_p);
+  free(fy_p);
+  free(fz_p);
+
+  cow_dfield_replace(A, I0, I1, res);
+  cow_dfield_syncguard(A);
+  free(res);
+  printf("[%s] %s took %3.2f seconds\n",
+	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
+#endif // COW_FFTW
+}
 
 void cow_fft_solvepoisson(cow_dfield *rho, cow_dfield *phi)
 {
@@ -571,7 +646,9 @@ double k_at(cow_domain *d, int i, int j, int k, double *kvec)
      array K_{i,j,k} is made to remain anti-symmetric even when i, j, or k are
      equal to their respective Nyquist frequencies. */
 
-  if (i == Nx/2 || j == Ny/2 || k == Nz/2) {
+  if ((i == Nx/2 && Nx != 1) || 
+      (j == Ny/2 && Ny != 1) || 
+      (k == Nz/2 && Nz != 1)) {
     kvec[0] = 0.0;
     kvec[1] = 0.0;
     kvec[2] = 0.0;

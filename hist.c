@@ -340,13 +340,13 @@ void cow_histogram_dumpascii(cow_histogram *h, char *fn)
   }
   if (h->n_dims == 1) {
     for (int n=0; n<h->nbinsx; ++n) {
-      fprintf(file, "%f %f\n", h->binlocx[n], h->binvalv[n]);
+      fprintf(file, "%14.12e %14.12e\n", h->binlocx[n], h->binvalv[n]);
     }
   }
   else if (h->n_dims == 2) {
     for (int nx=0; nx<h->nbinsx; ++nx) {
       for (int ny=0; ny<h->nbinsy; ++ny) {
-	fprintf(file, "%f %f %f\n", h->binlocx[nx], h->binlocy[ny],
+	fprintf(file, "%14.12e %14.12e %14.12e\n", h->binlocx[nx], h->binlocy[ny],
 		h->binvalv[nx * h->nbinsy + ny]);
       }
     }
