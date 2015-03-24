@@ -14,6 +14,7 @@ int main(int argc, char **argv)
   }
 
 
+  //cow_init(argc, argv, COW_NOREOPEN_STDOUT);
   cow_init(argc, argv, 0);
 
   for (int n=1; n<argc; ++n) {

@@ -539,11 +539,12 @@ FFT_DATA *_fwd(cow_domain *d, double *fx, int start, int stride)
   FFT_DATA *Fx = NULL;
   if (cow_mpirunning()) {
 #if (COW_MPI)
+    long long ntot = cow_domain_getnumlocalzonesinterior(d, COW_ALL_DIMS);
     int nbuf;
     struct fft_plan_3d *plan = call_fft_plan_3d(d, &nbuf);
     Fx = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
     Fk = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
-    for (int n=0; n<nbuf; ++n) {
+    for (int n=0; n<ntot; ++n) {
       Fx[n][0] = fx[stride * n + start];
       Fx[n][1] = 0.0;
     }
