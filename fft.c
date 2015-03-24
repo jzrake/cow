@@ -578,13 +578,14 @@ double *_rev(cow_domain *d, FFT_DATA *Fk)
   double *fx = NULL;
   if (cow_mpirunning()) {
 #if (COW_MPI)
-  long long ntot = cow_domain_getnumlocalzonesinterior(d, COW_ALL_DIMS);
+  long long nout = cow_domain_getnumlocalzonesinterior(d, COW_ALL_DIMS);
+  long long ntot = cow_domain_getnumglobalzones(d, COW_ALL_DIMS);
   int nbuf;
   struct fft_plan_3d *plan = call_fft_plan_3d(d, &nbuf);
   fx = (double*) malloc(ntot * sizeof(double));
   Fx = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
   fft_3d(Fk, Fx, FFT_REV, plan);
-  for (int n=0; n<ntot; ++n) {
+  for (int n=0; n<nout; ++n) {
     fx[n] = Fx[n][0] / ntot;
   }
   free(Fx);
