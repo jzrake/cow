@@ -148,6 +148,8 @@ void cow_fft_pspecscafield(cow_dfield *f, cow_histogram *hist)
 // components. Client code supplies the fields like in the example below, all
 // other will be over-written.
 //
+//  cow_histogram_setlower(hist, 0, 1.0);
+//  cow_histogram_setupper(hist, 0, 0.5*sqrt(Nx*Nx + Ny*Ny + Nz*Nz));
 //  cow_histogram_setnbins(hist, 0, 256);
 //  cow_histogram_setspacing(hist, COW_HIST_SPACING_LINEAR); // or LOG
 //  cow_histogram_setnickname(hist, "mypspec"); // optional
@@ -165,9 +167,6 @@ void cow_fft_pspecscafield(cow_dfield *f, cow_histogram *hist)
   int nx = cow_domain_getnumlocalzonesinterior(f->domain, 0);
   int ny = cow_domain_getnumlocalzonesinterior(f->domain, 1);
   int nz = cow_domain_getnumlocalzonesinterior(f->domain, 2);
-  int Nx = cow_domain_getnumglobalzones(f->domain, 0);
-  int Ny = cow_domain_getnumglobalzones(f->domain, 1);
-  int Nz = cow_domain_getnumglobalzones(f->domain, 2);
   int ng = cow_domain_getguard(f->domain);
   int ntot = nx * ny * nz;
   int I0[3] = { ng, ng, ng };
@@ -179,8 +178,6 @@ void cow_fft_pspecscafield(cow_dfield *f, cow_histogram *hist)
   FFT_DATA *gx = _fwd(f->domain, input, 0, 1); // start, stride
   free(input);
 
-  cow_histogram_setlower(hist, 0, 1.0);
-  cow_histogram_setupper(hist, 0, 0.5*sqrt(Nx*Nx + Ny*Ny + Nz*Nz));
   cow_histogram_setbinmode(hist, COW_HIST_BINMODE_DENSITY);
   cow_histogram_setdomaincomm(hist, f->domain);
   cow_histogram_commit(hist);

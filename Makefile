@@ -20,6 +20,7 @@ SRC = cow.c fft.c fft_3d.c hist.c \
 OBJ = $(SRC:.c=.o)
 DEP = $(SRC:.c=.dep)
 LIB = libcow.a
+EXE = ffe-pspec2d
 
 HDF5_I = -I$(HDF5_HOME)/include
 FFTW_I = -I$(FFTW_HOME)/include
@@ -29,7 +30,10 @@ FFTW_L = -L$(FFTW_HOME)/lib -lfftw3
 
 # build rules
 # --------------------------------------------------
-default : $(LIB)
+default : $(EXE)
+
+$(EXE) : $(LIB) $(EXE).c
+	$(CC) $(CFLAGS) $(CLIBS) $^ $(HDF5_I) $(FFTW_I) $(HDF5_L) $(FFTW_L) -o $@
 
 $(LIB) : $(OBJ)
 	$(AR) $@ $?
