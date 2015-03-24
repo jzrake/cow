@@ -1,34 +1,42 @@
 #include <stdio.h>
 #include "cow.h"
 
+
+static void process_ffe_hdf5_file(char *filename);
+
+
 int main(int argc, char **argv)
 {
-  char *filename = NULL;
-
-
-
 
   if (argc == 1) {
     printf("usage: ffe-pspsec2d input.h5\n");
     return 0;
   }
-  else {
-    filename = argv[1];
-  }
 
 
   cow_init(argc, argv, 0);
 
+  for (int n=1; n<argc; ++n) {
+    process_ffe_hdf5_file(argv[n]);
+  }
+
+  cow_finalize();  
+
+  return 0;
+}
+
+
+
+
+
+
+void process_ffe_hdf5_file(char *filename)
+{
   cow_domain *domain = cow_domain_new();
   cow_dfield *magnetic = cow_dfield_new();
   cow_dfield *electric = cow_dfield_new();
   cow_dfield *vecpoten = cow_dfield_new();
   cow_dfield *helicity = cow_dfield_new();
-
-
-  //cow_domain_setndim(domain, 2);
-  //cow_domain_setsize(domain, 0, 4096);
-  //cow_domain_setsize(domain, 1, 4096);
 
   cow_domain_readsize(domain, filename, "cell_primitive/B1");
   cow_domain_commit(domain);
@@ -77,7 +85,6 @@ int main(int argc, char **argv)
   }
 
 
-  //cow_dfield_write(vecpoten, "A.h5");
 
   cow_histogram *Pb = cow_histogram_new();
   cow_histogram_setlower(Pb, 0, 1);
@@ -107,24 +114,24 @@ int main(int argc, char **argv)
 
 
 
-  //cow_fft_pspecvecfield(magnetic, Pb);
-  //cow_fft_pspecvecfield(electric, Pe);
+  cow_fft_pspecvecfield(magnetic, Pb);
+  cow_fft_pspecvecfield(electric, Pe);
   cow_fft_pspecscafield(helicity, Hm);
 
   cow_histogram_dumphdf5(Pb, filename, "spectra");
   cow_histogram_dumphdf5(Pe, filename, "spectra");
+  cow_histogram_dumphdf5(Hm, filename, "spectra");
 
-  cow_histogram_dumpascii(Pb, "magnetic.dat");
-  cow_histogram_dumpascii(Pe, "electric.dat");
-  cow_histogram_dumpascii(Hm, "helicity.dat");
+  /* cow_histogram_dumpascii(Pb, "magnetic.dat"); */
+  /* cow_histogram_dumpascii(Pe, "electric.dat"); */
+  /* cow_histogram_dumpascii(Hm, "helicity.dat"); */
 
   cow_histogram_del(Pb);
   cow_histogram_del(Pe);
+  cow_histogram_del(Hm);
   cow_dfield_del(magnetic);
   cow_dfield_del(electric);
+  cow_dfield_del(vecpoten);
+  cow_dfield_del(helicity);
   cow_domain_del(domain);
-
-  cow_finalize();  
-
-  return 0;
 }
