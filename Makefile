@@ -32,7 +32,7 @@ FFTW_L = -L$(FFTW_HOME)/lib -lfftw3
 # --------------------------------------------------
 default : $(EXE)
 
-$(EXE) : $(LIB) $(EXE).c
+$(EXE) : $(EXE).c $(LIB)
 	$(CC) $(CFLAGS) $(CLIBS) $^ $(HDF5_I) $(FFTW_I) $(HDF5_L) $(FFTW_L) -o $@
 
 $(LIB) : $(OBJ)
