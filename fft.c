@@ -582,7 +582,7 @@ double *_rev(cow_domain *d, FFT_DATA *Fk)
   long long ntot = cow_domain_getnumglobalzones(d, COW_ALL_DIMS);
   int nbuf;
   struct fft_plan_3d *plan = call_fft_plan_3d(d, &nbuf);
-  fx = (double*) malloc(ntot * sizeof(double));
+  fx = (double*) malloc(nout * sizeof(double));
   Fx = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
   fft_3d(Fk, Fx, FFT_REV, plan);
   for (int n=0; n<nout; ++n) {

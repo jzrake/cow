@@ -393,7 +393,7 @@ void cow_histogram_dumphdf5(cow_histogram *h, char *fn, char *gn)
     }
     if (H5Lexists_safe(fid, gname)) {
       printf("[%s] writing histogram as HDF5 to %s/%s (clobber existing)\n",
-	     MODULE, fn, gname);
+    	     MODULE, fn, gname);
       H5Gunlink(fid, gname);
     }
     else {

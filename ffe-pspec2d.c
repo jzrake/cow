@@ -15,7 +15,7 @@ int main(int argc, char **argv)
 
 
   //cow_init(argc, argv, COW_NOREOPEN_STDOUT);
-  cow_init(argc, argv, 0);
+  cow_init(0, NULL, 0);
 
   for (int n=1; n<argc; ++n) {
     process_ffe_hdf5_file(argv[n]);
