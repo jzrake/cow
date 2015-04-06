@@ -282,6 +282,108 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
 #endif // COW_FFTW
 }
 
+void cow_fft_helicityspec(cow_dfield *f, cow_histogram *hr, cow_histogram *hi)
+{
+#if (COW_FFTW)
+  if (!f->committed) return;
+  if (f->n_members != 3) {
+    printf("[%s] error: need a 3-component field for %s", MODULE, __FUNCTION__);
+    return;
+  }
+
+  clock_t start = clock();
+  int nx = cow_domain_getnumlocalzonesinterior(f->domain, 0);
+  int ny = cow_domain_getnumlocalzonesinterior(f->domain, 1);
+  int nz = cow_domain_getnumlocalzonesinterior(f->domain, 2);
+  int ng = cow_domain_getguard(f->domain);
+  int ntot = nx * ny * nz;
+  int I0[3] = { ng, ng, ng };
+  int I1[3] = { nx + ng, ny + ng, nz + ng };
+  double norm = cow_domain_getnumglobalzones(f->domain, COW_ALL_DIMS);
+  double *input = (double*) malloc(3 * ntot * sizeof(double));
+  cow_dfield_extract(f, I0, I1, input);
+
+  FFT_DATA *Bx = _fwd(f->domain, input, 0, 3); // start, stride
+  FFT_DATA *By = _fwd(f->domain, input, 1, 3);
+  FFT_DATA *Bz = _fwd(f->domain, input, 2, 3);
+  FFT_DATA Ax;
+  FFT_DATA Ay;
+  FFT_DATA Az;
+  free(input);
+
+  cow_histogram_setbinmode(hr, COW_HIST_BINMODE_DENSITY);
+  cow_histogram_setbinmode(hi, COW_HIST_BINMODE_DENSITY);
+  cow_histogram_setdomaincomm(hr, f->domain);
+  cow_histogram_setdomaincomm(hi, f->domain);
+  cow_histogram_commit(hr);
+  cow_histogram_commit(hi);
+
+  for (int i=0; i<nx; ++i) {
+    for (int j=0; j<ny; ++j) {
+      for (int k=0; k<nz; ++k) {
+
+	int m = i*ny*nz + j*nz + k;
+
+	// ---------------------------------------------------------------------
+	// Here we compute the inverse curl of B in order to get its vector
+	// potential A.
+	// ---------------------------------------------------------------------
+	{
+	  double kvec[3];
+	  double Kijk = k_at_wspc(f->domain, i, j, k, kvec);
+	  double k2 = Kijk * Kijk;
+
+	  if (k2 < EFFECTIVELY_ZERO) {
+	    k2 = 1.0;
+	  }
+
+	  Ax[0] = -(kvec[1] * Bz[m][1] - kvec[2] * By[m][1]) / k2;
+	  Ax[1] = +(kvec[1] * Bz[m][0] - kvec[2] * By[m][0]) / k2;
+
+	  Ay[0] = -(kvec[2] * Bx[m][1] - kvec[0] * Bz[m][1]) / k2;
+	  Ay[1] = +(kvec[2] * Bx[m][0] - kvec[0] * Bz[m][0]) / k2;
+
+	  Az[0] = -(kvec[0] * By[m][1] - kvec[1] * Bx[m][1]) / k2;
+	  Az[1] = +(kvec[0] * By[m][0] - kvec[1] * Bx[m][0]) / k2;
+	}
+
+
+	// ---------------------------------------------------------------------
+	// Here we are taking the complex norm (absolute value squared) of the
+	// vector-valued Fourier amplitude corresponding to the wave-vector, k.
+	//
+	//                        P(k) = |\vec{A}_k \cdot \conj{\vec{B}_k}|
+	//
+	// ---------------------------------------------------------------------
+	{
+	  double kvec[3];
+	  double Kijk = k_at(f->domain, i, j, k, kvec);
+	  double Hr =
+	    (Ax[0]*Bx[m][0] + Ax[1]*Bx[m][1]) +
+	    (Ay[0]*By[m][0] + Ay[1]*By[m][1]) +
+	    (Az[0]*Bz[m][0] + Az[1]*Bz[m][1]);
+	  double Hi =
+	    (Ax[1]*Bx[m][0] - Ax[0]*Bx[m][1]) +
+	    (Ay[1]*By[m][0] - Ay[0]*By[m][1]) +
+	    (Az[1]*Bz[m][0] - Az[0]*Bz[m][1]);
+
+	  cow_histogram_addsample1(hr, Kijk, Hr/norm);
+	  cow_histogram_addsample1(hi, Kijk, Hi/norm);
+	}
+      }
+    }
+  }
+  cow_histogram_seal(hi);
+  cow_histogram_seal(hr);
+  free(Bx);
+  free(By);
+  free(Bz);
+  printf("[%s] %s took %3.2f seconds\n",
+	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
+#endif // COW_FFTW
+}
+
+
 void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
 {
 #if (COW_FFTW)
@@ -374,7 +476,7 @@ void cow_fft_inversecurl(cow_dfield *B, cow_dfield *A)
 #if (COW_FFTW)
   if (!A->committed || !B->committed) return;
   if (A->n_members != 3 || B->n_members != 3) {
-    printf("[%s] error: need two 3-component fields for inversecurl", MODULE);
+    printf("[%s] error: need two 3-component fields for %s", MODULE, __FUNCTION__);
     return;
   }
   clock_t start = clock();
@@ -402,7 +504,7 @@ void cow_fft_inversecurl(cow_dfield *B, cow_dfield *A)
       for (int k=0; k<nz; ++k) {
 	int m = i*ny*nz + j*nz + k;
 	double kvec[3];
-	double Kijk = k_at(B->domain, i, j, k, kvec);
+	double Kijk = k_at_wspc(B->domain, i, j, k, kvec);
 	double k2 = Kijk * Kijk;
 
 	if (k2 < EFFECTIVELY_ZERO) {
@@ -539,12 +641,13 @@ FFT_DATA *_fwd(cow_domain *d, double *fx, int start, int stride)
   FFT_DATA *Fx = NULL;
   if (cow_mpirunning()) {
 #if (COW_MPI)
-    long long ntot = cow_domain_getnumlocalzonesinterior(d, COW_ALL_DIMS);
+    long long nloc = cow_domain_getnumlocalzonesinterior(d, COW_ALL_DIMS);
     int nbuf;
     struct fft_plan_3d *plan = call_fft_plan_3d(d, &nbuf);
     Fx = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
     Fk = (FFT_DATA*) malloc(nbuf * sizeof(FFT_DATA));
-    for (int n=0; n<ntot; ++n) {
+
+    for (int n=0; n<nloc; ++n) {
       Fx[n][0] = fx[stride * n + start];
       Fx[n][1] = 0.0;
     }

@@ -81,6 +81,7 @@ void process_ffe_hdf5_file(char *filename)
   double *B = (double*) cow_dfield_getdatabuffer(vecpoten);
   double *H = (double*) cow_dfield_getdatabuffer(helicity);
 
+
   for (int n=0; n<cow_domain_getnumlocalzonesincguard(domain, COW_ALL_DIMS); ++n) {
     H[n] = A[3*n+0] * B[3*n+0] + A[3*n+1] * B[3*n+1] + A[3*n+2] * B[3*n+2];
   }
@@ -105,31 +106,41 @@ void process_ffe_hdf5_file(char *filename)
   cow_histogram_setnickname(Pe, "electric");
 
 
-  cow_histogram *Hm = cow_histogram_new();
-  cow_histogram_setlower(Hm, 0, 1);
-  cow_histogram_setupper(Hm, 0, 8192);
-  cow_histogram_setnbins(Hm, 0, 4096);
-  cow_histogram_setspacing(Hm, COW_HIST_SPACING_LINEAR);
-  cow_histogram_setfullname(Hm, "helicity");
-  cow_histogram_setnickname(Hm, "helicity");
+  cow_histogram *Hr = cow_histogram_new();
+  cow_histogram_setlower(Hr, 0, 1);
+  cow_histogram_setupper(Hr, 0, 8192);
+  cow_histogram_setnbins(Hr, 0, 4096);
+  cow_histogram_setspacing(Hr, COW_HIST_SPACING_LINEAR);
+  cow_histogram_setfullname(Hr, "helicity-real");
+  cow_histogram_setnickname(Hr, "helicity-real");
+
+
+  cow_histogram *Hi = cow_histogram_new();
+  cow_histogram_setlower(Hi, 0, 1);
+  cow_histogram_setupper(Hi, 0, 8192);
+  cow_histogram_setnbins(Hi, 0, 4096);
+  cow_histogram_setspacing(Hi, COW_HIST_SPACING_LINEAR);
+  cow_histogram_setfullname(Hi, "helicity-imag");
+  cow_histogram_setnickname(Hi, "helicity-imag");
+
 
 
 
   cow_fft_pspecvecfield(magnetic, Pb);
   cow_fft_pspecvecfield(electric, Pe);
-  cow_fft_pspecscafield(helicity, Hm);
+  cow_fft_helicityspec(magnetic, Hr, Hi);
 
   cow_histogram_dumphdf5(Pb, filename, "spectra");
   cow_histogram_dumphdf5(Pe, filename, "spectra");
-  cow_histogram_dumphdf5(Hm, filename, "spectra");
+  cow_histogram_dumphdf5(Hi, filename, "spectra");
+  cow_histogram_dumphdf5(Hr, filename, "spectra");
 
-  /* cow_histogram_dumpascii(Pb, "magnetic.dat"); */
-  /* cow_histogram_dumpascii(Pe, "electric.dat"); */
-  /* cow_histogram_dumpascii(Hm, "helicity.dat"); */
+  cow_dfield_write(vecpoten, filename);
 
   cow_histogram_del(Pb);
   cow_histogram_del(Pe);
-  cow_histogram_del(Hm);
+  cow_histogram_del(Hr);
+  cow_histogram_del(Hi);
   cow_dfield_del(magnetic);
   cow_dfield_del(electric);
   cow_dfield_del(vecpoten);

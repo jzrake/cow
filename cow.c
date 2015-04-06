@@ -5,6 +5,7 @@
 #include <string.h>
 #define COW_PRIVATE_DEFS
 #include "cow.h"
+#include "remap_3d.h"
 
 // -----------------------------------------------------------------------------
 //
@@ -749,6 +750,29 @@ void cow_dfield_reduce(cow_dfield *f, double *x) // x[3]
   MPI_Allreduce(MPI_IN_PLACE, &x[0], 1, MPI_DOUBLE, MPI_MIN, d->mpi_cart);
   MPI_Allreduce(MPI_IN_PLACE, &x[1], 1, MPI_DOUBLE, MPI_MAX, d->mpi_cart);
   MPI_Allreduce(MPI_IN_PLACE, &x[2], 1, MPI_DOUBLE, MPI_SUM, d->mpi_cart);
+#endif
+}
+void cow_dfield_remap(cow_dfield *f, int *globalI0, int *size, void *source)
+{
+#if (COW_MPI)
+  cow_domain *d = f->domain;
+  if (cow_domain_getguard(d) != 0) {
+    printf("[cow] error: remaps cannot be used with non-zero guard zones");
+    return;
+  }
+  const int i0 = cow_domain_getglobalstartindex(d, 0);
+  const int i1 = cow_domain_getnumlocalzonesinterior(d, 0) + i0 - 1;
+  const int j0 = cow_domain_getglobalstartindex(d, 1);
+  const int j1 = cow_domain_getnumlocalzonesinterior(d, 1) + j0 - 1;
+  const int k0 = cow_domain_getglobalstartindex(d, 2);
+  const int k1 = cow_domain_getnumlocalzonesinterior(d, 2) + k0 - 1;
+  struct remap_plan_3d *plan =
+    remap_3d_create_plan(d->mpi_cart,
+			 k0,k1, j0,j1, i0,i1,
+			 k0,k1, j0,j1, i0,i1,
+			 f->n_members, 0, 1, 2);
+  remap_3d(source, f->data, NULL, plan);
+  remap_3d_destroy_plan(plan);
 #endif
 }
 void cow_dfield_loop(cow_dfield *f, cow_transform op, void *udata)
