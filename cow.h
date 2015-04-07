@@ -152,6 +152,7 @@ void cow_fft_pspecscafield(cow_dfield *f, cow_histogram *h);
 void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *h);
 void cow_fft_helicityspec(cow_dfield *f, cow_histogram *hr, cow_histogram *hi);
 void cow_fft_helmholtzdecomp(cow_dfield *f, int mode);
+void cow_fft_curl(cow_dfield *B, cow_dfield *J);
 void cow_fft_inversecurl(cow_dfield *B, cow_dfield *A);
 void cow_fft_solvepoisson(cow_dfield *rho, cow_dfield *phi);
 

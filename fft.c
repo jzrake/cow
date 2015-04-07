@@ -184,10 +184,6 @@ void cow_fft_pspecscafield(cow_dfield *f, cow_histogram *hist)
   for (int i=0; i<nx; ++i) {
     for (int j=0; j<ny; ++j) {
       for (int k=0; k<nz; ++k) {
-	int m = i*ny*nz + j*nz + k;
-	double kvec[3];
-        double khat[3];
-	khat_at(f->domain, i, j, k, khat);
 	// ---------------------------------------------------------------------
 	// Here we are taking the complex norm (absolute value squared) of the
 	// Fourier amplitude corresponding to the wave-vector, k.
@@ -195,6 +191,8 @@ void cow_fft_pspecscafield(cow_dfield *f, cow_histogram *hist)
 	//                        P(k) = |\vec{f}_\vec{k}|^2
 	//
 	// ---------------------------------------------------------------------
+	int m = i*ny*nz + j*nz + k;
+	double kvec[3];
 	double Kijk = k_at(f->domain, i, j, k, kvec);
 	double Pijk = cnorm(gx[m]);
 	cow_histogram_addsample1(hist, Kijk, Pijk/norm);
@@ -256,10 +254,6 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
   for (int i=0; i<nx; ++i) {
     for (int j=0; j<ny; ++j) {
       for (int k=0; k<nz; ++k) {
-	int m = i*ny*nz + j*nz + k;
-	double kvec[3];
-        double khat[3];
-	khat_at(f->domain, i, j, k, khat);
 	// ---------------------------------------------------------------------
 	// Here we are taking the complex norm (absolute value squared) of the
 	// vector-valued Fourier amplitude corresponding to the wave-vector, k.
@@ -267,6 +261,8 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
 	//                        P(k) = |\vec{f}_\vec{k}|^2
 	//
 	// ---------------------------------------------------------------------
+	int m = i*ny*nz + j*nz + k;
+	double kvec[3];
 	double Kijk = k_at(f->domain, i, j, k, kvec);
 	double Pijk = cnorm(gx[m]) + cnorm(gy[m]) + cnorm(gz[m]);
 	cow_histogram_addsample1(hist, Kijk, Pijk/norm);
@@ -544,6 +540,80 @@ void cow_fft_inversecurl(cow_dfield *B, cow_dfield *A)
 
   cow_dfield_replace(A, I0, I1, res);
   cow_dfield_syncguard(A);
+  free(res);
+  printf("[%s] %s took %3.2f seconds\n",
+	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
+#endif // COW_FFTW
+}
+
+void cow_fft_curl(cow_dfield *B, cow_dfield *J)
+{
+#if (COW_FFTW)
+  if (!J->committed || !B->committed) return;
+  if (J->n_members != 3 || B->n_members != 3) {
+    printf("[%s] error: need two 3-component fields for %s", MODULE, __FUNCTION__);
+    return;
+  }
+  clock_t start = clock();
+  int nx = cow_domain_getnumlocalzonesinterior(B->domain, 0);
+  int ny = cow_domain_getnumlocalzonesinterior(B->domain, 1);
+  int nz = cow_domain_getnumlocalzonesinterior(B->domain, 2);
+  int ng = cow_domain_getguard(B->domain);
+  int ntot = nx * ny * nz;
+  int I0[3] = { ng, ng, ng };
+  int I1[3] = { nx + ng, ny + ng, nz + ng };
+
+  double *input = (double*) malloc(3 * ntot * sizeof(double));
+  cow_dfield_extract(B, I0, I1, input);
+
+  FFT_DATA *gx = _fwd(B->domain, input, 0, 3); // start, stride
+  FFT_DATA *gy = _fwd(B->domain, input, 1, 3);
+  FFT_DATA *gz = _fwd(B->domain, input, 2, 3);
+  free(input);
+
+  FFT_DATA *Jkx = (FFT_DATA*) malloc(ntot * sizeof(FFT_DATA));
+  FFT_DATA *Jky = (FFT_DATA*) malloc(ntot * sizeof(FFT_DATA));
+  FFT_DATA *Jkz = (FFT_DATA*) malloc(ntot * sizeof(FFT_DATA));
+  for (int i=0; i<nx; ++i) {
+    for (int j=0; j<ny; ++j) {
+      for (int k=0; k<nz; ++k) {
+	int m = i*ny*nz + j*nz + k;
+	double kvec[3];
+	k_at_wspc(B->domain, i, j, k, kvec);
+
+	Jkx[m][0] = -(kvec[1] * gz[m][1] - kvec[2] * gy[m][1]);
+	Jkx[m][1] = +(kvec[1] * gz[m][0] - kvec[2] * gy[m][0]);
+
+	Jky[m][0] = -(kvec[2] * gx[m][1] - kvec[0] * gz[m][1]);
+	Jky[m][1] = +(kvec[2] * gx[m][0] - kvec[0] * gz[m][0]);
+
+	Jkz[m][0] = -(kvec[0] * gy[m][1] - kvec[1] * gx[m][1]);
+	Jkz[m][1] = +(kvec[0] * gy[m][0] - kvec[1] * gx[m][0]);
+      }
+    }
+  }
+  free(gx);
+  free(gy);
+  free(gz);
+  double *fx_p = _rev(J->domain, Jkx);
+  double *fy_p = _rev(J->domain, Jky);
+  double *fz_p = _rev(J->domain, Jkz);
+  free(Jkx);
+  free(Jky);
+  free(Jkz);
+
+  double *res = (double*) malloc(3 * ntot * sizeof(double));
+  for (int i=0; i<ntot; ++i) {
+    res[3*i + 0] = fx_p[i];
+    res[3*i + 1] = fy_p[i];
+    res[3*i + 2] = fz_p[i];
+  }
+  free(fx_p);
+  free(fy_p);
+  free(fz_p);
+
+  cow_dfield_replace(J, I0, I1, res);
+  cow_dfield_syncguard(J);
   free(res);
   printf("[%s] %s took %3.2f seconds\n",
 	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);

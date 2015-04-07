@@ -13,6 +13,7 @@ struct config_t
   char *dset_name_E1;
   char *dset_name_E2;
   char *dset_name_E3;
+  int write_derived_fields;
 } ;
 
 static void process_file(char *filename, struct config_t cfg);
@@ -29,6 +30,7 @@ static struct config_t configure_for_ffe()
   cfg.dset_name_E1 = "E1";
   cfg.dset_name_E2 = "E2";
   cfg.dset_name_E3 = "E3";
+  cfg.write_derived_fields = 0;
   return cfg;
 }
 
@@ -44,6 +46,7 @@ static struct config_t configure_for_mara()
   cfg.dset_name_E1 = "vx";
   cfg.dset_name_E2 = "vy";
   cfg.dset_name_E3 = "vz";
+  cfg.write_derived_fields = 0;
   return cfg;
 }
 
@@ -59,6 +62,7 @@ static struct config_t configure_for_m2()
   cfg.dset_name_E1 = "v1";
   cfg.dset_name_E2 = "v2";
   cfg.dset_name_E3 = "v3";
+  cfg.write_derived_fields = 0;
   return cfg;
 }
 
@@ -78,7 +82,7 @@ int main(int argc, char **argv)
   }
 
 
-  enum DatasetType dset_type = DSET_TYPE_MARA;
+  enum DatasetType dset_type = DSET_TYPE_M2;
   struct config_t cfg;
 
   switch (dset_type) {
@@ -88,12 +92,12 @@ int main(int argc, char **argv)
   default: cfg = configure_for_m2(); break;
   }
 
+  cfg.write_derived_fields = 1;
 
 
 
 
-
-  cow_init(0, NULL, 0);
+  cow_init(0, NULL, COW_DISABLE_MPI);
 
   for (int n=1; n<argc; ++n) {
     process_file(argv[n], cfg);
@@ -115,6 +119,7 @@ void process_file(char *filename, struct config_t cfg)
   cow_dfield *magnetic = cow_dfield_new();
   cow_dfield *electric = cow_dfield_new();
   cow_dfield *vecpoten = cow_dfield_new();
+  cow_dfield *jcurrent = cow_dfield_new();
   cow_dfield *helicity = cow_dfield_new();
 
   cow_domain_readsize(domain, filename, cfg.dset_name_for_size);
@@ -142,6 +147,13 @@ void process_file(char *filename, struct config_t cfg)
   cow_dfield_addmember(vecpoten, "A3");
   cow_dfield_commit(vecpoten);
 
+  cow_dfield_setdomain(jcurrent, domain);
+  cow_dfield_setname(jcurrent, "electric_current");
+  cow_dfield_addmember(jcurrent, "J1");
+  cow_dfield_addmember(jcurrent, "J2");
+  cow_dfield_addmember(jcurrent, "J3");
+  cow_dfield_commit(jcurrent);
+
   cow_dfield_setdomain(helicity, domain);
   cow_dfield_setname(helicity, "helicity");
   cow_dfield_addmember(helicity, "H");
@@ -152,10 +164,15 @@ void process_file(char *filename, struct config_t cfg)
   cow_dfield_read(magnetic, filename);
   cow_dfield_read(electric, filename);
   cow_fft_inversecurl(magnetic, vecpoten);
+  cow_fft_curl(magnetic, jcurrent);
 
-  double *A = (double*) cow_dfield_getdatabuffer(magnetic);
-  double *B = (double*) cow_dfield_getdatabuffer(vecpoten);
+
+  double *A = (double*) cow_dfield_getdatabuffer(vecpoten);
+  double *B = (double*) cow_dfield_getdatabuffer(magnetic);
   double *H = (double*) cow_dfield_getdatabuffer(helicity);
+  //double *E = (double*) cow_dfield_getdatabuffer(electric);
+  //double *J = (double*) cow_dfield_getdatabuffer(jcurrent);
+
 
   double htot = 0.0;
   for (int n=0; n<cow_domain_getnumlocalzonesincguard(domain, COW_ALL_DIMS); ++n) {
@@ -204,7 +221,6 @@ void process_file(char *filename, struct config_t cfg)
 
 
 
-
   cow_fft_pspecvecfield(magnetic, Pb);
   cow_fft_pspecvecfield(electric, Pe);
   cow_fft_helicityspec(magnetic, Hr, Hi);
@@ -214,7 +230,10 @@ void process_file(char *filename, struct config_t cfg)
   cow_histogram_dumphdf5(Hi, filename, "spectra");
   cow_histogram_dumphdf5(Hr, filename, "spectra");
 
-  //cow_dfield_write(vecpoten, filename);
+  if (cfg.write_derived_fields) {
+    cow_dfield_write(vecpoten, filename);
+    cow_dfield_write(jcurrent, filename);
+  }
 
   cow_histogram_del(Pb);
   cow_histogram_del(Pe);
@@ -223,6 +242,7 @@ void process_file(char *filename, struct config_t cfg)
   cow_dfield_del(magnetic);
   cow_dfield_del(electric);
   cow_dfield_del(vecpoten);
+  cow_dfield_del(jcurrent);
   cow_dfield_del(helicity);
   cow_domain_del(domain);
 }
