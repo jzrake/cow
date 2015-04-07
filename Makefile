@@ -16,7 +16,8 @@ TMP_H := $(shell mktemp -u make.XXXXXX)
 # object code required for executables
 # --------------------------------------------------
 SRC = cow.c fft.c fft_3d.c hist.c \
-	  io.c pack_3d.c remap_3d.c samp.c
+	io.c pack_3d.c remap_3d.c samp.c
+
 OBJ = $(SRC:.c=.o)
 DEP = $(SRC:.c=.dep)
 LIB = libcow.a
