@@ -15,14 +15,11 @@ TMP_H := $(shell mktemp -u make.XXXXXX)
 
 # object code required for executables
 # --------------------------------------------------
-SRC = cow.c fft.c fft_3d.c hist.c \
-	io.c pack_3d.c remap_3d.c samp.c \
-	read-ff-sdf.c
-
+SRC = $(wildcard *.c)
 OBJ = $(SRC:.c=.o)
-DEP = $(SRC:.c=.dep)
+DEP = $(OBJ:.o=.dep)
 LIB = libcow.a
-EXE = ffe-pspec2d
+EXE = ffe-pspec2d ffe
 
 
 ifeq ($(HAVE_HDF5), 1)
@@ -43,10 +40,13 @@ endif
 
 # build rules
 # --------------------------------------------------
-default : $(EXE)
+default : ffe ffe-pspec2d
 
-$(EXE) : $(EXE).c $(LIB)
-	$(CC) $(CFLAGS) $(CLIBS) $^ $(HDF5_I) $(FFTW_I) $(HDF5_L) $(FFTW_L) $(RNPL_L) -o $@
+ffe-pspec2d : ffe-pspec2d.o $(LIB)
+	$(CC) $(CFLAGS) $(CLIBS) $^ $(HDF5_L) $(FFTW_L) $(RNPL_L) -o $@
+
+ffe : ffe.o $(LIB)
+	$(CC) $(CFLAGS) $(CLIBS) $^ $(HDF5_L) $(FFTW_L) $(RNPL_L) -o $@
 
 $(LIB) : $(OBJ)
 	$(AR) $@ $?
@@ -71,8 +71,8 @@ show :
 	@echo "CC: $(CC)"
 	@echo "CFLAGS: $(CFLAGS)"
 	@echo "EXE: $(EXE)"
-	@echo "OBJ: $(OBJ)"
 	@echo "SRC: $(SRC)"
+	@echo "OBJ: $(OBJ)"
 	@echo "DEP: $(DEP)"
 
 clean :
