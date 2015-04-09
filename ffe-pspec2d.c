@@ -1,10 +1,20 @@
 #include <stdio.h>
 #include "cow.h"
+#include "read-ff-sdf.h"
 
 
+
+enum DatasetType {
+  DSET_TYPE_FFE,
+  DSET_TYPE_MARA,
+  DSET_TYPE_M2,
+} ;
 
 struct config_t
 {
+  enum DatasetType dset_type;
+  char *filename;
+  char *output_filename;
   char *dset_name_for_size;
   char *dset_name_primitive;
   char *dset_name_B1;
@@ -14,14 +24,21 @@ struct config_t
   char *dset_name_E2;
   char *dset_name_E3;
   int write_derived_fields;
+  int resolution; /* only used for sdf files; array size not inferred */
+  int num_blocks;
 } ;
 
-static void process_file(char *filename, struct config_t cfg);
+
+static void process_file(struct config_t cfg);
+static void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *electric);
 
 
 static struct config_t configure_for_ffe()
 {
   struct config_t cfg;
+  cfg.dset_type = DSET_TYPE_FFE;
+  cfg.filename = NULL;
+  cfg.output_filename = NULL;
   cfg.dset_name_for_size = NULL;
   cfg.dset_name_primitive = "cell_primitive";
   cfg.dset_name_B1 = "B1";
@@ -31,6 +48,8 @@ static struct config_t configure_for_ffe()
   cfg.dset_name_E2 = "E2";
   cfg.dset_name_E3 = "E3";
   cfg.write_derived_fields = 0;
+  cfg.resolution = 0;
+  cfg.num_blocks = 0;
   return cfg;
 }
 
@@ -38,6 +57,9 @@ static struct config_t configure_for_ffe()
 static struct config_t configure_for_mara()
 {
   struct config_t cfg;
+  cfg.dset_type = DSET_TYPE_MARA;
+  cfg.filename = NULL;
+  cfg.output_filename = NULL;
   cfg.dset_name_for_size = "prim/Bx";
   cfg.dset_name_primitive = "prim";
   cfg.dset_name_B1 = "Bx";
@@ -47,6 +69,8 @@ static struct config_t configure_for_mara()
   cfg.dset_name_E2 = "vy";
   cfg.dset_name_E3 = "vz";
   cfg.write_derived_fields = 0;
+  cfg.resolution = 0;
+  cfg.num_blocks = 0;
   return cfg;
 }
 
@@ -54,6 +78,9 @@ static struct config_t configure_for_mara()
 static struct config_t configure_for_m2()
 {
   struct config_t cfg;
+  cfg.dset_type = DSET_TYPE_M2;
+  cfg.filename = NULL;
+  cfg.output_filename = NULL;
   cfg.dset_name_for_size = "cell_primitive/B1";
   cfg.dset_name_primitive = "cell_primitive";
   cfg.dset_name_B1 = "B1";
@@ -63,15 +90,10 @@ static struct config_t configure_for_m2()
   cfg.dset_name_E2 = "v2";
   cfg.dset_name_E3 = "v3";
   cfg.write_derived_fields = 0;
+  cfg.resolution = 0;
+  cfg.num_blocks = 0;
   return cfg;
 }
-
-
-enum DatasetType {
-  DSET_TYPE_FFE,
-  DSET_TYPE_MARA,
-  DSET_TYPE_M2,
-} ;
 
 
 int main(int argc, char **argv)
@@ -82,28 +104,54 @@ int main(int argc, char **argv)
   }
 
 
-  enum DatasetType dset_type = DSET_TYPE_M2;
+
+  enum DatasetType dset_type = DSET_TYPE_FFE;
   struct config_t cfg;
 
+
+  /* ================================================================
+   * ================= setup for input data format ==================
+   * ================================================================ */
   switch (dset_type) {
-  case DSET_TYPE_FFE : cfg = configure_for_ffe();  break;
-  case DSET_TYPE_MARA: cfg = configure_for_mara(); break;
-  case DSET_TYPE_M2  : cfg = configure_for_m2();   break;
-  default: cfg = configure_for_m2(); break;
+  case DSET_TYPE_FFE:
+    cfg = configure_for_ffe();
+    cfg.resolution = 128; /* TODO: get from user */
+    cfg.num_blocks = 8; /* TODO: get from user */
+    cfg.output_filename = "test-sdf.h5";
+    break;
+  case DSET_TYPE_MARA:
+    cfg = configure_for_mara();
+    break;
+  case DSET_TYPE_M2:
+    cfg = configure_for_m2();
+    break;
   }
 
-  cfg.write_derived_fields = 1;
 
 
 
+  cfg.write_derived_fields = 1; /* TODO: get from user */
 
-  cow_init(0, NULL, COW_DISABLE_MPI);
+  int modes = 0;
 
+  // TODO: get from user
+  // modes |= COW_DISABLE_MPI);
+  // modes |= COW_NOREOPEN_STDOUT;
+
+  cow_init(0, NULL, modes);
+
+  /* ================================================================
+   * ================= process input files ==========================
+   * ================================================================ */
   for (int n=1; n<argc; ++n) {
-    process_file(argv[n], cfg);
+    cfg.filename = argv[n];
+    if (cfg.dset_type != DSET_TYPE_FFE) {
+      cfg.output_filename = argv[n];
+    }
+    process_file(cfg);
   }
 
-  cow_finalize();  
+  cow_finalize();
 
   return 0;
 }
@@ -113,7 +161,7 @@ int main(int argc, char **argv)
 
 
 
-void process_file(char *filename, struct config_t cfg)
+void process_file(struct config_t cfg)
 {
   cow_domain *domain = cow_domain_new();
   cow_dfield *magnetic = cow_dfield_new();
@@ -122,10 +170,22 @@ void process_file(char *filename, struct config_t cfg)
   cow_dfield *jcurrent = cow_dfield_new();
   cow_dfield *helicity = cow_dfield_new();
 
-  cow_domain_readsize(domain, filename, cfg.dset_name_for_size);
+
+  /* Domain setup */
+  /* ---------------------------------------------------- */
+  if (cfg.dset_name_for_size) {
+    cow_domain_readsize(domain, cfg.filename, cfg.dset_name_for_size);
+  }
+  else {
+    cow_domain_setndim(domain, 2);
+    cow_domain_setsize(domain, 0, cfg.resolution);
+    cow_domain_setsize(domain, 1, cfg.resolution);
+  }
   cow_domain_commit(domain);
 
 
+  /* Data fields setup */
+  /* ---------------------------------------------------- */
   cow_dfield_setdomain(magnetic, domain);
   cow_dfield_setname(magnetic, cfg.dset_name_primitive);
   cow_dfield_addmember(magnetic, cfg.dset_name_B1);
@@ -160,30 +220,8 @@ void process_file(char *filename, struct config_t cfg)
   cow_dfield_commit(helicity);
 
 
-
-  cow_dfield_read(magnetic, filename);
-  cow_dfield_read(electric, filename);
-  cow_fft_inversecurl(magnetic, vecpoten);
-  cow_fft_curl(magnetic, jcurrent);
-
-
-  double *A = (double*) cow_dfield_getdatabuffer(vecpoten);
-  double *B = (double*) cow_dfield_getdatabuffer(magnetic);
-  double *H = (double*) cow_dfield_getdatabuffer(helicity);
-  //double *E = (double*) cow_dfield_getdatabuffer(electric);
-  //double *J = (double*) cow_dfield_getdatabuffer(jcurrent);
-
-
-  double htot = 0.0;
-  for (int n=0; n<cow_domain_getnumlocalzonesincguard(domain, COW_ALL_DIMS); ++n) {
-    H[n] = A[3*n+0] * B[3*n+0] + A[3*n+1] * B[3*n+1] + A[3*n+2] * B[3*n+2];
-    htot += H[n];
-  }
-
-  htot = cow_domain_dblsum(domain, htot) / cow_domain_getnumglobalzones(domain, COW_ALL_DIMS);
-  printf("total magnetic helicity: %8.6e\n", htot);
-
-
+  /* Histograms setup */
+  /* ---------------------------------------------------- */
   cow_histogram *Pb = cow_histogram_new();
   cow_histogram_setlower(Pb, 0, 1);
   cow_histogram_setupper(Pb, 0, 8192);
@@ -220,19 +258,44 @@ void process_file(char *filename, struct config_t cfg)
   cow_histogram_setnickname(Hi, "helicity-imag");
 
 
+  read_data_from_file(cfg, magnetic, electric);
+
+  cow_fft_inversecurl(magnetic, vecpoten);
+  cow_fft_curl(magnetic, jcurrent);
+
+
+  double *A = (double*) cow_dfield_getdatabuffer(vecpoten);
+  double *B = (double*) cow_dfield_getdatabuffer(magnetic);
+  double *H = (double*) cow_dfield_getdatabuffer(helicity);
+  //double *E = (double*) cow_dfield_getdatabuffer(electric);
+  //double *J = (double*) cow_dfield_getdatabuffer(jcurrent);
+
+
+  double htot = 0.0;
+  for (int n=0; n<cow_domain_getnumlocalzonesincguard(domain, COW_ALL_DIMS); ++n) {
+    H[n] = A[3*n+0] * B[3*n+0] + A[3*n+1] * B[3*n+1] + A[3*n+2] * B[3*n+2];
+    htot += H[n];
+  }
+
+  htot = cow_domain_dblsum(domain, htot) / cow_domain_getnumglobalzones(domain, COW_ALL_DIMS);
+  printf("[main] total magnetic helicity: %8.6e\n", htot);
+
 
   cow_fft_pspecvecfield(magnetic, Pb);
   cow_fft_pspecvecfield(electric, Pe);
   cow_fft_helicityspec(magnetic, Hr, Hi);
 
-  cow_histogram_dumphdf5(Pb, filename, "spectra");
-  cow_histogram_dumphdf5(Pe, filename, "spectra");
-  cow_histogram_dumphdf5(Hi, filename, "spectra");
-  cow_histogram_dumphdf5(Hr, filename, "spectra");
+  if (cfg.output_filename) {
+    cow_histogram_dumphdf5(Pb, cfg.output_filename, "spectra");
+    cow_histogram_dumphdf5(Pe, cfg.output_filename, "spectra");
+    cow_histogram_dumphdf5(Hi, cfg.output_filename, "spectra");
+    cow_histogram_dumphdf5(Hr, cfg.output_filename, "spectra");
+  }
 
-  if (cfg.write_derived_fields) {
-    cow_dfield_write(vecpoten, filename);
-    cow_dfield_write(jcurrent, filename);
+  if (cfg.write_derived_fields && cfg.output_filename) {
+    cow_dfield_write(magnetic, cfg.output_filename);
+    cow_dfield_write(vecpoten, cfg.output_filename);
+    cow_dfield_write(jcurrent, cfg.output_filename);
   }
 
   cow_histogram_del(Pb);
@@ -245,4 +308,94 @@ void process_file(char *filename, struct config_t cfg)
   cow_dfield_del(jcurrent);
   cow_dfield_del(helicity);
   cow_domain_del(domain);
+}
+
+
+
+void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *electric)
+{
+  cow_domain *domain = cow_dfield_getdomain(magnetic);
+
+
+  /* If it's Mara or M2 */
+  /* ---------------------------------------------------- */
+  if (cfg.dset_type == DSET_TYPE_MARA ||
+      cfg.dset_type == DSET_TYPE_M2) {
+
+    cow_dfield_read(magnetic, cfg.filename);
+    cow_dfield_read(electric, cfg.filename);
+
+  }
+
+  /* If it's FFE */
+  /* ---------------------------------------------------- */
+  else if (cfg.dset_type == DSET_TYPE_FFE) {
+
+
+    printf("[main] reading ffe dataset\n");
+
+    int mpi_rank = cow_domain_getcartrank(domain);
+    int mpi_size = cow_domain_getcartsize(domain);
+    int block0 = (mpi_rank + 0) * cfg.num_blocks / mpi_size;
+    int block1 = (mpi_rank + 1) * cfg.num_blocks / mpi_size;
+
+    if (cfg.num_blocks % mpi_size != 0 ||
+	cfg.num_blocks < mpi_size) {
+      printf("[main] error: MPI size must divide, and be smaller than or equal"
+	     "to the number of blocks\n");
+      return;
+    }
+
+    for (int n=block0; n<block1; ++n) {
+
+      double *EBdata[6];
+      int startIndices[3] = {0, 0, 0};
+      int sizes[3] = {1, 1, 1};
+      double time;
+
+      int error = getEBFromSDF(n, 0, cfg.filename, EBdata, startIndices, sizes, &time);
+
+      if (cow_domain_intsum(domain, error)) {
+	printf("[main] error: something went wrong reading an SDF file");
+	return;
+      }
+
+      int num_zones = sizes[0] * sizes[1];
+      double *Edata = (double*) malloc(num_zones*3*sizeof(double));
+      double *Bdata = (double*) malloc(num_zones*3*sizeof(double));
+
+
+      for (int i=0; i<sizes[0]; ++i) {
+	for (int j=0; j<sizes[1]; ++j) {
+
+	  int ms = j * sizes[0] + i; /* source index (F) */
+	  int md = i * sizes[1] + j; /* dest index (C) */
+
+	  Edata[3*md + 0] = EBdata[0][ms];
+	  Edata[3*md + 1] = EBdata[1][ms];
+	  Edata[3*md + 2] = EBdata[2][ms];
+	  Bdata[3*md + 0] = EBdata[3][ms];
+	  Bdata[3*md + 1] = EBdata[4][ms];
+	  Bdata[3*md + 2] = EBdata[5][ms];
+
+	}
+      }
+
+      cow_dfield_remap(electric, startIndices, sizes, Edata);
+      cow_dfield_remap(magnetic, startIndices, sizes, Bdata);
+
+      printf("[main] block %d: i=%d j=%d nx=%d ny=%d\n",
+	     n, startIndices[0], startIndices[1], sizes[0], sizes[1]);
+
+
+      free(EBdata[0]);
+      free(EBdata[1]);
+      free(EBdata[2]);
+      free(EBdata[3]);
+      free(EBdata[4]);
+      free(EBdata[5]);
+      free(Edata);
+      free(Bdata);
+    }
+  }
 }

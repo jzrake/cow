@@ -14,6 +14,7 @@ RANLIB = ranlib
 HAVE_MPI = 0
 HAVE_HDF5 = 0
 HAVE_FFTW = 0
+HAVE_RNPL = 0
 
 
 # ----------------------------------------------------------
@@ -21,3 +22,4 @@ HAVE_FFTW = 0
 # ----------------------------------------------------------
 HDF5_HOME = /usr/local
 FFTW_HOME = /usr/local
+RNPL_HOME = /usr/local

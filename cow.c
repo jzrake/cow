@@ -768,9 +768,11 @@ void cow_dfield_remap(cow_dfield *f, int *globalI0, int *size, void *source)
   const int k1 = cow_domain_getnumlocalzonesinterior(d, 2) + k0 - 1;
   struct remap_plan_3d *plan =
     remap_3d_create_plan(d->mpi_cart,
-			 k0,k1, j0,j1, i0,i1,
-			 k0,k1, j0,j1, i0,i1,
-			 f->n_members, 0, 1, 2);
+			 globalI0[2], globalI0[2]+size[2]-1,
+			 globalI0[1], globalI0[1]+size[1]-1,
+			 globalI0[0], globalI0[0]+size[0]-1,
+    			 k0,k1, j0,j1, i0,i1,
+    			 f->n_members, 0, 1, 2);
   remap_3d(source, f->data, NULL, plan);
   remap_3d_destroy_plan(plan);
 #endif
