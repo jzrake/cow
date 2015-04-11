@@ -86,6 +86,7 @@ cow_dfield *cow_dfield_new(void);
 cow_dfield *cow_dfield_dup(cow_dfield *f);
 void cow_dfield_commit(cow_dfield *f);
 void cow_dfield_del(cow_dfield *f);
+void cow_dfield_copy(cow_dfield *f, cow_dfield *g);
 void cow_dfield_setdomain(cow_dfield *f, cow_domain *d);
 void cow_dfield_addmember(cow_dfield *f, char *name);
 void cow_dfield_setname(cow_dfield *f, char *name);

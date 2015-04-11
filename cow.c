@@ -133,6 +133,18 @@ void cow_domain_del(cow_domain *d)
   }
   free(d);
 }
+void cow_dfield_copy(cow_dfield *f, cow_dfield *g)
+{
+  size_t Sf = cow_dfield_getdatabytes(f);
+  size_t Sg = cow_dfield_getdatabytes(g);
+  if (Sf != Sg) {
+    printf("[cow] error: need arrays of equal size to copy");
+    return;
+  }
+  else {
+    memcpy(g->data, f->data, Sf);
+  }
+}
 void cow_domain_setsize(cow_domain *d, int dim, int size)
 {
   if (dim >= 3 || d->committed) return;
