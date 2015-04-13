@@ -20,16 +20,19 @@
  * Macro to calculate linear index of (i,j,k,m) ... m goes from 1, not 0
  * =====================================================================
  */
-#define IND(i,j,k,m) ((i)*si + (j)*sj + (k)*sk) + (m-1)
-
+#define IND(i,j,k,m) ((i)*si + (j)*sj + (k)*sk) + (m-1) 
 
 /*
  * Macros to calculate finite differences
  * =====================================================================
  */
 
-#define GRADC2(F,s) ((+1*(F)[+1*s] +		\
-		      -1*(F)[-1*s]) / 2.0)
+#define GRAD2C2(F,s) ((+1*(F)[-1*s] +		\
+		       -2*(F)[+0*s] +		\
+		       +1*(F)[+1*s]) / 1.0)
+
+#define GRADC2(F,s) ((-1*(F)[-1*s] +		\
+		      +1*(F)[+1*s]) / 2.0)
 
 #define GRADC4(F,s) ((+1*(F)[-2*s] +		\
 		      -8*(F)[-1*s] +		\
@@ -70,9 +73,10 @@ enum FfeSimParameter {
 
 struct ffe_measure
 {
-  double total_electric_energy;
-  double total_magnetic_energy;
-  double total_magnetic_helicity;
+  double electric_energy;
+  double magnetic_energy;
+  double magnetic_helicity;
+  double magnetic_monopole; /* |div(B)| */
 } ;
 
 
@@ -83,6 +87,7 @@ struct ffe_status
   double time_simulation;
   double time_final;
   double time_step;
+  double time_last_checkpoint;
   double kzps;
 } ;
 
@@ -99,9 +104,10 @@ struct ffe_sim
 
   enum FfeSimParameter flag_ohms_law;
   InitialDataFunction initial_data;
+  double time_between_checkpoints;
+  double time_final;
 
   struct ffe_status status;
-  struct ffe_measure measure;
 } ;
 
 
@@ -113,6 +119,8 @@ struct ffe_sim
  * -> Ni, Nj, Nk
  * -> initial_data
  * -> flag_ohms_law
+ * -> time_between_checkpoints
+ * -> time_final
  *
  * =====================================================================
  */
@@ -131,6 +139,9 @@ void ffe_sim_init(struct ffe_sim *sim)
   sim->status.checkpoint_number = 0;
   sim->status.time_simulation = 0.0;
   sim->status.time_step = 0.0;
+  sim->status.time_last_checkpoint = -sim->time_between_checkpoints;
+
+
 
   cow_domain_setndim(sim->domain, 3);
   cow_domain_setsize(sim->domain, 0, sim->Ni);
@@ -300,6 +311,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 #define D1(F,c) GRADC2(F+m+c,si)/dx
 #define D2(F,c) GRADC2(F+m+c,sj)/dy
 #define D3(F,c) GRADC2(F+m+c,sk)/dz
+#define KO(F,c) GRAD2C2(F+m+c,si)/(dx) + GRAD2C2(F+m+c,sj)/(dy) + GRAD2C2(F+m+c,sk)/(dz)
 
   double RKparam_array[4] = {0.0, 0.5, 0.5, 1.0};
   double RKparam = RKparam_array[RKstep];
@@ -338,16 +350,15 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
     double divB = D1(B,1) + D2(B,2) + D3(B,3);    
     double rotE[4] = {0, D2(E,3) - D3(E,2), D3(E,1) - D1(E,3), D1(E,2) - D2(E,1)};
     double rotB[4] = {0, D2(B,3) - D3(B,2), D3(B,1) - D1(B,3), D1(B,2) - D2(B,1)};
+    double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
+    double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
+
     double J[4];
 
     /* Hyperbolicity terms, eqn 48-49: Pfeiffer (2013) */
     double B2 = DOT(&B[m], &B[m]);
     //double EB = DOT(&E[m], &B[m]);
     double gradEdotB[4] = {0, 0, 0, 0}; /* TODO */
-
-    /* if (fabs(EB) > 1e-1) { */
-    /*   printf("divB=%3.2e EdotB=%3.2e\n", divB, EB); */
-    /* } */
 
     double S[4]   = CROSS(&E[m], &B[m]);
     double ct1[4] = CROSS(&E[m], gradEdotB);
@@ -373,6 +384,12 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
       if (0) {
 	dtE[m+d] -= gamma1 / B2 * ct1[d];
 	dtB[m+d] -= gamma2 / B2 * ct2[d] + gamma3 / B2 * ct3[d];
+      }
+
+      /* Kriess-Oliger dissipation terms */
+      if (1) {
+	dtE[m+d] += 0.25 * lplE[d];
+	dtB[m+d] += 0.25 * lplB[d];
       }
     }
   }
@@ -404,6 +421,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 #undef D1
 #undef D2
 #undef D3
+#undef KO
 }
 
 
@@ -505,11 +523,62 @@ void ffe_sim_advance(struct ffe_sim *sim)
 
 
 
+/*
+ * Carry out measurement diagnostic
+ * =====================================================================
+ */
+void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
+{
+#define D1(F,c) GRADC2(F+m+c,si)/dx
+#define D2(F,c) GRADC2(F+m+c,sj)/dy
+#define D3(F,c) GRADC2(F+m+c,sk)/dz
+
+  int Ni = cow_domain_getnumlocalzonesinterior(sim->domain, 0);
+  int Nj = cow_domain_getnumlocalzonesinterior(sim->domain, 1);
+  int Nk = cow_domain_getnumlocalzonesinterior(sim->domain, 2);
+  int si = cow_dfield_getstride(sim->electric[0], 0);
+  int sj = cow_dfield_getstride(sim->electric[0], 1);
+  int sk = cow_dfield_getstride(sim->electric[0], 2);
+  double dx = sim->grid_spacing[1];
+  double dy = sim->grid_spacing[2];
+  double dz = sim->grid_spacing[3];
+
+  double *E = cow_dfield_getdatabuffer(sim->electric[0]);
+  double *B = cow_dfield_getdatabuffer(sim->magnetic[0]);
+
+
+  FOR_ALL_INTERIOR(Ni, Nj, Nk) {
+
+    int m = IND(i,j,k,0);
+
+    double divE = D1(E,1) + D2(E,2) + D3(E,3);
+    double divB = D1(B,1) + D2(B,2) + D3(B,3);    
+
+    double EE = DOT(&E[m], &E[m]);
+    double BB = DOT(&B[m], &B[m]);
+
+    meas->electric_energy = 0.5 * EE;
+    meas->magnetic_energy = 0.5 * BB;
+    meas->magnetic_helicity = 0.0; /* TODO */
+    meas->magnetic_monopole = fabs(divB);
+  }
+
+#undef D1
+#undef D2
+#undef D3
+}
+
+
+
 int main(int argc, char **argv)
 {
   const char *problem_name = NULL;
+  const char *logfile_name = "ffe.dat";
   struct ffe_sim sim;
-  double tmax = 1.0;
+  struct ffe_measure measure;
+
+  sim.time_final = 1.0;
+  sim.time_between_checkpoints = 1.0;
 
 
 
@@ -517,10 +586,12 @@ int main(int argc, char **argv)
    * Print a help message
    * ===================================================================
    */
+
+  printf("\nForce-free electrodynamics solver\n");
+  printf("Jonathan Zrake, Stanford University (2015)\n");
+
   if (argc == 1) {
-    printf("Force-free electrodynamics solver\n");
-    printf("Jonathan Zrake, Stanford University (2015)\n");
-    printf("usage: ffe <problem-name> [tmax=1.0] [N=16,16,16]\n");
+    printf("usage: ffe <problem-name> [sim.time_final=1.0] [N=16,16,16]\n");
     printf("problems are:\n");
     ffe_problem_setup(NULL, NULL);
     return 0;
@@ -548,7 +619,10 @@ int main(int argc, char **argv)
   for (int n=2; n<argc; ++n) {
 
     if (!strncmp(argv[n], "tmax=", 5)) {
-      sscanf(argv[n], "tmax=%lf", &tmax);
+      sscanf(argv[n], "tmax=%lf", &sim.time_final);
+    }
+    else if (!strncmp(argv[n], "cpi=", 4)) {
+      sscanf(argv[n], "cpi=%lf", &sim.time_between_checkpoints);
     }
     else if (!strncmp(argv[n], "N=", 2)) {
       int num = sscanf(argv[n], "N=%d,%d,%d", &sim.Ni, &sim.Nj, &sim.Nk);
@@ -565,20 +639,80 @@ int main(int argc, char **argv)
 
 
 
-
   cow_init(0, NULL, 0);
 
   ffe_sim_init(&sim);
   ffe_sim_initial_data(&sim);
 
+
+  printf("\n-----------------------------------------\n");
+  printf("tmax ....................... %12.10lf\n", sim.time_final);
+  printf("time_between_checkpoints ... %12.10lf\n", sim.time_between_checkpoints);
+  printf("-----------------------------------------\n\n");
+
+
   int local_grid_size = cow_domain_getnumlocalzonesinterior(sim.domain,
 							    COW_ALL_DIMS);
 
-  cow_dfield_write(sim.magnetic[0], "chkpt.0000.h5");
-  cow_dfield_write(sim.electric[0], "chkpt.0000.h5");
 
-  while (sim.status.time_simulation < tmax) {
 
+  if (logfile_name != NULL) {
+    FILE *logf = fopen(logfile_name, "w");
+    
+    if (logf == NULL) {
+      printf("[ffe] error: could not open log file '%s'\n", logfile_name);
+      sim.time_final = 0.0;
+    }
+
+  }
+
+
+  while (sim.status.time_simulation < sim.time_final) {
+
+
+    /*
+     * Write a checkpoint if it's time
+     * =================================================================
+     */
+    if (sim.status.time_simulation - sim.status.time_last_checkpoint >
+	sim.time_between_checkpoints) {
+
+      char chkpt_name[1024];
+      snprintf(chkpt_name, 1024, "chkpt.%04d.h5", sim.status.checkpoint_number);
+
+      cow_dfield_write(sim.magnetic[0], chkpt_name);
+      cow_dfield_write(sim.electric[0], chkpt_name);
+
+      sim.status.time_last_checkpoint += sim.time_between_checkpoints;
+      sim.status.checkpoint_number += 1;
+    }
+
+
+    /*
+     * Handle post-processing and reductions
+     * =================================================================
+     */
+    ffe_sim_measure(&sim, &measure);
+    if (cow_domain_getcartrank(sim.domain) == 0) {
+
+      FILE *logf = fopen(logfile_name, "a");
+
+      fprintf(logf, "%+12.10e %+12.10e %+12.10e %+12.10e %+12.10e\n",
+	      sim.status.time_simulation,
+	      measure.electric_energy,
+	      measure.magnetic_energy,
+	      measure.magnetic_helicity,
+	      measure.magnetic_monopole);
+
+      fclose(logf);
+    }
+
+
+
+    /*
+     * Evolve the system
+     * =================================================================
+     */
     clock_t start_cycle, stop_cycle;
     start_cycle = clock();
 
@@ -594,8 +728,10 @@ int main(int argc, char **argv)
 	   sim.status.kzps);
   }
 
-  cow_dfield_write(sim.magnetic[0], "chkpt.0001.h5");
-  cow_dfield_write(sim.electric[0], "chkpt.0001.h5");
+
+
+  cow_dfield_write(sim.magnetic[0], "chkpt.final.h5");
+  cow_dfield_write(sim.electric[0], "chkpt.final.h5");
 
 
   ffe_sim_free(&sim);
@@ -637,9 +773,10 @@ void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4]
 {
   double a=1, b=1, c=0;
   double alpha = 2 * M_PI * 2;
+  double p = 1e-8; /* perturbation */
 
-  E[1] = 0.0;
-  E[2] = 0.0;
+  E[1] = p * sin(alpha * x[1]);
+  E[2] = p * cos(alpha * x[2]);
   E[3] = 0.0;
 
   B[1] = 0.0;
