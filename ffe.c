@@ -209,7 +209,6 @@ int ffe_problem_setup(struct ffe_sim *sim, const char *problem_name)
     sim->Nj = 128;
     sim->Nk = 4;
     sim->initial_data = initial_data_abc;
-    //sim->flag_ohms_law = FFE_OHMS_LAW_VACUUM;
     sim->flag_ohms_law = FFE_OHMS_LAW_FORCE_FREE;
     return 0;
   }
@@ -343,7 +342,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 
     /* Hyperbolicity terms, eqn 48-49: Pfeiffer (2013) */
     double B2 = DOT(&B[m], &B[m]);
-    double EB = DOT(&E[m], &B[m]);
+    //double EB = DOT(&E[m], &B[m]);
     double gradEdotB[4] = {0, 0, 0, 0}; /* TODO */
 
     /* if (fabs(EB) > 1e-1) { */
@@ -394,6 +393,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
     B[m+1] = B0[m+1] + dt * dtB[m+1];
     B[m+2] = B0[m+2] + dt * dtB[m+2];
     B[m+3] = B0[m+3] + dt * dtB[m+3];
+    
   }
 
   cow_dfield_syncguard(sim->electric[0]);
@@ -452,6 +452,21 @@ void ffe_sim_average_rk(struct ffe_sim *sim)
     B[m+1] += dt/6 * (dtB0[m+1] + 2*dtB1[m+1] + 2*dtB2[m+1] + dtB3[m+1]);
     B[m+2] += dt/6 * (dtB0[m+2] + 2*dtB1[m+2] + 2*dtB2[m+2] + dtB3[m+2]);
     B[m+3] += dt/6 * (dtB0[m+3] + 2*dtB1[m+3] + 2*dtB2[m+3] + dtB3[m+3]);
+
+
+    /*
+     * Subtract out component of E parallel to B
+     */
+    double BB = DOT(&B[m], &B[m]);
+    double EB = DOT(&E[m], &B[m]);
+
+    if (EB > 1e-12) {
+
+      E[m+1] -= EB * B[m+1] / BB;
+      E[m+2] -= EB * B[m+2] / BB;
+      E[m+3] -= EB * B[m+3] / BB;
+
+    }
 
   }
 
@@ -625,18 +640,18 @@ void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4]
 
   E[1] = 0.0;
   E[2] = 0.0;
-  E[3] = 0.0;//sin(alpha * (x[1] + x[2])) * 1e-4;
+  E[3] = 0.0;
 
   B[1] = 0.0;
   B[2] = 0.0;
   B[3] = 0.0;
 
   B[2] += a * cos(alpha * x[1]);
-  B[3] -= a * sin(alpha * x[1]) * 0.5;
+  B[3] -= a * sin(alpha * x[1]);
   B[1] += 0.0;
 
   B[3] += b * cos(alpha * x[2]);
-  B[1] -= b * sin(alpha * x[2]) * 0.5;
+  B[1] -= b * sin(alpha * x[2]);
   B[2] += 0.0;
 
   B[1] += c * cos(alpha * x[3]);
