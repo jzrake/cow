@@ -10,11 +10,10 @@
  * Macro for a three-dimensional loop over all interior cells
  * =====================================================================
  */
-#define FOR_ALL_INTERIOR(N1, N2, N3)		\
-  for (int i=2; i<N1+2; ++i)			\
-    for (int j=2; j<N2+2; ++j)			\
-      for (int k=2; k<N3+2; ++k)
-
+#define FOR_ALL_INTERIOR(N1, N2, N3)			\
+  for (int i=N1==1?0:2; i<N1+(N1==1?0:2); ++i)		\
+    for (int j=N2==1?0:2; j<N2+(N2==1?0:2); ++j)	\
+      for (int k=N3==1?0:2; k<N3+(N3==1?0:2); ++k)	\
 
 /*
  * Macro to calculate linear index of (i,j,k,m) ... m goes from 1, not 0
@@ -143,7 +142,7 @@ void ffe_sim_init(struct ffe_sim *sim)
 
 
 
-  cow_domain_setndim(sim->domain, 3);
+  cow_domain_setndim(sim->domain, (sim->Ni>1) + (sim->Nj>1) + (sim->Nk>1));
   cow_domain_setsize(sim->domain, 0, sim->Ni);
   cow_domain_setsize(sim->domain, 1, sim->Nj);
   cow_domain_setsize(sim->domain, 2, sim->Nk);
@@ -308,10 +307,13 @@ void ffe_sim_ohms_law(struct ffe_sim *sim,
  */
 void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 {
-#define D1(F,c) GRADC2(F+m+c,si)/dx
-#define D2(F,c) GRADC2(F+m+c,sj)/dy
-#define D3(F,c) GRADC2(F+m+c,sk)/dz
-#define KO(F,c) GRAD2C2(F+m+c,si)/(dx) + GRAD2C2(F+m+c,sj)/(dy) + GRAD2C2(F+m+c,sk)/(dz)
+#define D1(F,c) (Ni==1 ? 0.0 : GRADC2(F+m+c,si)/dx)
+#define D2(F,c) (Nj==1 ? 0.0 : GRADC2(F+m+c,sj)/dy)
+#define D3(F,c) (Nk==1 ? 0.0 : GRADC2(F+m+c,sk)/dz)
+
+#define KO(F,c) ((Ni==1 ? 0.0 : GRAD2C2(F+m+c,si)/(dx)) +	     \
+		 (Nj==1 ? 0.0 : GRAD2C2(F+m+c,sj)/(dy)) +	     \
+		 (Nk==1 ? 0.0 : GRAD2C2(F+m+c,sk)/(dz)))
 
   double RKparam_array[4] = {0.0, 0.5, 0.5, 1.0};
   double RKparam = RKparam_array[RKstep];
@@ -529,9 +531,9 @@ void ffe_sim_advance(struct ffe_sim *sim)
  */
 void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
 {
-#define D1(F,c) GRADC2(F+m+c,si)/dx
-#define D2(F,c) GRADC2(F+m+c,sj)/dy
-#define D3(F,c) GRADC2(F+m+c,sk)/dz
+#define D1(F,c) (Ni==1 ? 0.0 : GRADC2(F+m+c,si)/dx)
+#define D2(F,c) (Nj==1 ? 0.0 : GRADC2(F+m+c,sj)/dy)
+#define D3(F,c) (Nk==1 ? 0.0 : GRADC2(F+m+c,sk)/dz)
 
   int Ni = cow_domain_getnumlocalzonesinterior(sim->domain, 0);
   int Nj = cow_domain_getnumlocalzonesinterior(sim->domain, 1);
@@ -674,7 +676,7 @@ int main(int argc, char **argv)
      * Write a checkpoint if it's time
      * =================================================================
      */
-    if (sim.status.time_simulation - sim.status.time_last_checkpoint >
+    if (sim.status.time_simulation - sim.status.time_last_checkpoint >=
 	sim.time_between_checkpoints) {
 
       char chkpt_name[1024];
