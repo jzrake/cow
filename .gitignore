@@ -1,5 +1,7 @@
 *.o
 *.a
 *.dep
+*.h5
+
 Makefile.in
 /cow-cfg.h

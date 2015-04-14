@@ -335,13 +335,13 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 
   /* ===========================================================================
    * Fill in the n-th (n=0,1,2,3) time-derivative register, reading from the
-   * n-th field register
+   * [1] field register
    * ===========================================================================
    */
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
-    int m = IND(i,j,k,0);
 
+    int m = IND(i,j,k,0);
     double divE = D1(E,1) + D2(E,2) + D3(E,3);
     double divB = D1(B,1) + D2(B,2) + D3(B,3);    
     double rotE[4] = {0, D2(E,3) - D3(E,2), D3(E,1) - D1(E,3), D1(E,2) - D2(E,1)};
@@ -349,43 +349,45 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
     double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
     double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
 
-    double J[4];
-
-    /* Hyperbolicity terms, eqn 48-49: Pfeiffer (2013) */
-    double B2 = DOT(&B[m], &B[m]);
-    //double EB = DOT(&E[m], &B[m]);
-    double gradEdotB[4] = {0, 0, 0, 0}; /* TODO */
-
-    double S[4]   = CROSS(&E[m], &B[m]);
-    double ct1[4] = CROSS(&E[m], gradEdotB);
-    double ct3[4] = CROSS(&B[m], gradEdotB);
-    double ct2[4] = {0, S[1] * divB, S[2] * divB, S[3] * divB};
-
-    double gamma1 = 0.0;
-    double gamma2 = 1.0;
-    double gamma3 = 1.0;
 
     /* Current evaluation */
-    ffe_sim_ohms_law(sim,
-		     &E[m], rotE, divE, 
-		     &B[m], rotB, divB, J);
+    double J[4];
+    ffe_sim_ohms_law(sim, &E[m], rotE, divE, &B[m], rotB, divB, J);
 
+
+    /* Maxwell's equations */
     for (int d=1; d<=3; ++d) {
-
-      /* Maxwell's equations */
       dtE[m+d] = +rotB[d] - J[d];
       dtB[m+d] = -rotE[d];
+    }
 
-      /* Addition of Pfeiffer's hyperbolicity terms */
-      if (0) {
-	dtE[m+d] -= gamma1 / B2 * ct1[d];
-	dtB[m+d] -= gamma2 / B2 * ct2[d] + gamma3 / B2 * ct3[d];
-      }
 
-      /* Kriess-Oliger dissipation terms */
-      if (1) {
+    /* Kriess-Oliger dissipation terms */
+    if (1) {
+      for (int d=1; d<=3; ++d) {
 	dtE[m+d] += 0.25 * lplE[d];
 	dtB[m+d] += 0.25 * lplB[d];
+      }
+    }
+
+
+    /* Hyperbolicity terms, eqn 48-49: Pfeiffer (2013) */
+    if (0) {
+      double B2 = DOT(&B[m], &B[m]);
+      double gradEdotB[4] = {0, 0, 0, 0};
+
+      double S[4]   = CROSS(&E[m], &B[m]);
+      double ct1[4] = CROSS(&E[m], gradEdotB);
+      double ct3[4] = CROSS(&B[m], gradEdotB);
+      double ct2[4] = {0, S[1] * divB, S[2] * divB, S[3] * divB};
+
+      double gamma1 = 0.0;
+      double gamma2 = 1.0;
+      double gamma3 = 1.0;
+
+      for (int d=1; d<=3; ++d) {
+	dtE[m+d] -= gamma1 / B2 * ct1[d];
+	dtB[m+d] -= gamma2 / B2 * ct2[d] + gamma3 / B2 * ct3[d];
       }
     }
   }
