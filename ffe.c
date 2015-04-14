@@ -238,25 +238,19 @@ void ffe_sim_initial_data(struct ffe_sim *sim)
   int Ni = cow_domain_getnumlocalzonesinterior(sim->domain, 0);
   int Nj = cow_domain_getnumlocalzonesinterior(sim->domain, 1);
   int Nk = cow_domain_getnumlocalzonesinterior(sim->domain, 2);
-  int i0 = cow_domain_getglobalstartindex(sim->domain, 1);
-  int j0 = cow_domain_getglobalstartindex(sim->domain, 2);
-  int k0 = cow_domain_getglobalstartindex(sim->domain, 3);
   int si = cow_dfield_getstride(sim->electric[0], 0);
   int sj = cow_dfield_getstride(sim->electric[0], 1);
   int sk = cow_dfield_getstride(sim->electric[0], 2);
   double *E = cow_dfield_getdatabuffer(sim->electric[0]);
   double *B = cow_dfield_getdatabuffer(sim->magnetic[0]);
-  double dx = sim->grid_spacing[1];
-  double dy = sim->grid_spacing[2];
-  double dz = sim->grid_spacing[3];
 
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {    
 
     int m = IND(i,j,k,0);
     double x[4] = {0,
-		   dx * (i + i0 - 2),
-		   dy * (j + j0 - 2),
-		   dz * (k + k0 - 2)};
+    		   cow_domain_positionatindex(sim->domain, 0, i),
+    		   cow_domain_positionatindex(sim->domain, 1, j),
+    		   cow_domain_positionatindex(sim->domain, 2, k)};
 
     sim->initial_data(sim, x, &E[m], &B[m]);
   }
@@ -289,7 +283,7 @@ void ffe_sim_ohms_law(struct ffe_sim *sim,
       double Jb = DOT(B, rotB) - DOT(E, rotE);
       double Js = divE;
 
-      if (B2 < 1e-8) B2 = 1e-8; /* Don't divide by zero! */
+      if (B2 < 1e-8) B2 = 1e-12; /* Don't divide by zero! */
 
       J[1] = (B[1] * Jb + S[1] * Js) / B2;
       J[2] = (B[2] * Jb + S[2] * Js) / B2;
@@ -553,7 +547,6 @@ void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
 
     int m = IND(i,j,k,0);
 
-    double divE = D1(E,1) + D2(E,2) + D3(E,3);
     double divB = D1(B,1) + D2(B,2) + D3(B,3);    
 
     double EE = DOT(&E[m], &E[m]);
@@ -574,6 +567,10 @@ void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
 
 int main(int argc, char **argv)
 {
+  cow_init(0, NULL, 0);
+
+
+
   const char *problem_name = NULL;
   const char *logfile_name = "ffe.dat";
   struct ffe_sim sim;
@@ -641,7 +638,7 @@ int main(int argc, char **argv)
 
 
 
-  cow_init(0, NULL, 0);
+
 
   ffe_sim_init(&sim);
   ffe_sim_initial_data(&sim);
@@ -732,8 +729,10 @@ int main(int argc, char **argv)
 
 
 
-  cow_dfield_write(sim.magnetic[0], "chkpt.final.h5");
-  cow_dfield_write(sim.electric[0], "chkpt.final.h5");
+  char chkpt_name[1024];
+  snprintf(chkpt_name, 1024, "chkpt.%04d.h5", sim.status.checkpoint_number);
+  cow_dfield_write(sim.magnetic[0], chkpt_name);
+  cow_dfield_write(sim.electric[0], chkpt_name);
 
 
   ffe_sim_free(&sim);
