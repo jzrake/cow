@@ -25,18 +25,23 @@
  * Macros to calculate finite differences
  * =====================================================================
  */
+#define DIFF1C2(F,s) ((-1*(F)[-1*s] +		\
+		       +1*(F)[+1*s]) / 2.0)
 
-#define GRAD2C2(F,s) ((+1*(F)[-1*s] +		\
+#define DIFF1C4(F,s) ((+1*(F)[-2*s] +		\
+		       -8*(F)[-1*s] +		\
+		       +8*(F)[+1*s] +		\
+		       -1*(F)[+2*s]) / 12.0)
+
+#define DIFF2C2(F,s) ((+1*(F)[-1*s] +		\
 		       -2*(F)[+0*s] +		\
 		       +1*(F)[+1*s]) / 1.0)
 
-#define GRADC2(F,s) ((-1*(F)[-1*s] +		\
-		      +1*(F)[+1*s]) / 2.0)
-
-#define GRADC4(F,s) ((+1*(F)[-2*s] +		\
-		      -8*(F)[-1*s] +		\
-		      +8*(F)[+1*s] +		\
-		      -1*(F)[+2*s]) / 12.0)
+#define DIFF2C4(F,s) ((+1*(F)[-2*s] +		\
+		       -4*(F)[-1*s] +		\
+		       +6*(F)[+0*s] +		\
+		       -4*(F)[+1*s] +		\
+		       +1*(F)[+2*s]) / 1.0)
 
 #define CROSS(E,B) {0.0,				\
       (E)[2]*(B)[3]-(E)[3]*(B)[2],			\
@@ -301,13 +306,13 @@ void ffe_sim_ohms_law(struct ffe_sim *sim,
  */
 void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 {
-#define D1(F,c) (Ni==1 ? 0.0 : GRADC2(F+m+c,si)/dx)
-#define D2(F,c) (Nj==1 ? 0.0 : GRADC2(F+m+c,sj)/dy)
-#define D3(F,c) (Nk==1 ? 0.0 : GRADC2(F+m+c,sk)/dz)
+#define D1(F,c)  (Ni==1 ? 0.0 : DIFF1C2(F+m+c,si)/dx)
+#define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C2(F+m+c,sj)/dy)
+#define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C2(F+m+c,sk)/dz)
 
-#define KO(F,c) ((Ni==1 ? 0.0 : GRAD2C2(F+m+c,si)/(dx)) +	     \
-		 (Nj==1 ? 0.0 : GRAD2C2(F+m+c,sj)/(dy)) +	     \
-		 (Nk==1 ? 0.0 : GRAD2C2(F+m+c,sk)/(dz)))
+#define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)/(dx)) +	     \
+		 (Nj==1 ? 0.0 : DIFF2C2(F+m+c,sj)/(dy)) +	     \
+		 (Nk==1 ? 0.0 : DIFF2C2(F+m+c,sk)/(dz)))
 
   double RKparam_array[4] = {0.0, 0.5, 0.5, 1.0};
   double RKparam = RKparam_array[RKstep];
@@ -408,7 +413,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
     B[m+1] = B0[m+1] + dt * dtB[m+1];
     B[m+2] = B0[m+2] + dt * dtB[m+2];
     B[m+3] = B0[m+3] + dt * dtB[m+3];
-    
+
   }
 
   cow_dfield_syncguard(sim->electric[0]);
@@ -471,7 +476,7 @@ void ffe_sim_average_rk(struct ffe_sim *sim)
 
 
     /*
-     * Subtract out component of E parallel to B
+     * Subtract out the component of E parallel to B
      */
     double BB = DOT(&B[m], &B[m]);
     double EB = DOT(&E[m], &B[m]);
@@ -481,6 +486,22 @@ void ffe_sim_average_rk(struct ffe_sim *sim)
       E[m+1] -= EB * B[m+1] / BB;
       E[m+2] -= EB * B[m+2] / BB;
       E[m+3] -= EB * B[m+3] / BB;
+
+    }
+
+
+    /*
+     * Cap the electric field vector to ensure E <= B
+     */
+    double EE = DOT(&E[m], &E[m]);
+
+    if (EE > BB) {
+
+      double f = sqrt(BB/EE);
+
+      E[m+1] *= f;
+      E[m+2] *= f;
+      E[m+3] *= f;
 
     }
 
@@ -527,9 +548,9 @@ void ffe_sim_advance(struct ffe_sim *sim)
  */
 void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
 {
-#define D1(F,c) (Ni==1 ? 0.0 : GRADC2(F+m+c,si)/dx)
-#define D2(F,c) (Nj==1 ? 0.0 : GRADC2(F+m+c,sj)/dy)
-#define D3(F,c) (Nk==1 ? 0.0 : GRADC2(F+m+c,sk)/dz)
+#define D1(F,c) (Ni==1 ? 0.0 : DIFF1C2(F+m+c,si)/dx)
+#define D2(F,c) (Nj==1 ? 0.0 : DIFF1C2(F+m+c,sj)/dy)
+#define D3(F,c) (Nk==1 ? 0.0 : DIFF1C2(F+m+c,sk)/dz)
 
   int Ni = cow_domain_getnumlocalzonesinterior(sim->domain, 0);
   int Nj = cow_domain_getnumlocalzonesinterior(sim->domain, 1);
@@ -798,19 +819,3 @@ void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4]
   B[2] -= c * sin(alpha * x[3]);
   B[3] += 0.0;
 }
-
-
-/*
- * Scratch -------------------------------------------
-
-
-double GE[4][4] = {0, 0, 0, 0,
-		   0, D1(E,1), D1(E,2), D1(E,3),
-		   0, D2(E,1), D2(E,2), D2(E,3),
-		   0, D3(E,1), D3(E,2), D3(E,3)};
-double GB[4][4] = {0, 0, 0, 0,
-		   0, D1(B,1), D1(B,2), D1(B,3),
-		   0, D2(B,1), D2(B,2), D2(B,3),
-		   0, D3(B,1), D3(B,2), D3(B,3)};
-
-*/
