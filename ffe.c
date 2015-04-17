@@ -6,14 +6,19 @@
 #include "cow.h"
 
 
+
+#define FFE_NG 3 /* number of guard zones */
+#define FFE_DIFFERENCE_ORDER 4
+#define FFE_DISSIPATION_ORDER 4
+
 /*
  * Macro for a three-dimensional loop over all interior cells
  * =====================================================================
  */
-#define FOR_ALL_INTERIOR(N1, N2, N3)			\
-  for (int i=N1==1?0:2; i<N1+(N1==1?0:2); ++i)		\
-    for (int j=N2==1?0:2; j<N2+(N2==1?0:2); ++j)	\
-      for (int k=N3==1?0:2; k<N3+(N3==1?0:2); ++k)	\
+#define FOR_ALL_INTERIOR(N1, N2, N3)				\
+  for (int i=N1==1?0:FFE_NG; i<N1+(N1==1?0:FFE_NG); ++i)	\
+    for (int j=N2==1?0:FFE_NG; j<N2+(N2==1?0:FFE_NG); ++j)	\
+      for (int k=N3==1?0:FFE_NG; k<N3+(N3==1?0:FFE_NG); ++k)	\
 
 /*
  * Macro to calculate linear index of (i,j,k,m) ... m goes from 1, not 0
@@ -37,11 +42,26 @@
 		       -2*(F)[+0*s] +		\
 		       +1*(F)[+1*s]) / 1.0)
 
-#define DIFF2C4(F,s) ((+1*(F)[-2*s] +		\
+#define DIFF2C4(F,s) ((-1 *(F)[-2*s] +		\
+		       +16*(F)[-1*s] +		\
+		       -30*(F)[+0*s] +		\
+		       +16*(F)[+1*s] +		\
+		       -1 *(F)[+2*s]) / 12.0)
+
+#define DIFF4C2(F,s) ((+1*(F)[-2*s] +		\
 		       -4*(F)[-1*s] +		\
 		       +6*(F)[+0*s] +		\
 		       -4*(F)[+1*s] +		\
 		       +1*(F)[+2*s]) / 1.0)
+
+#define DIFF4C4(F,s) ((-1 *(F)[-3*s] +		\
+		       +12*(F)[-2*s] +		\
+		       -39*(F)[-1*s] +		\
+		       +56*(F)[+0*s] +		\
+		       -39*(F)[+1*s] +		\
+		       +12*(F)[+2*s] +		\
+		       -1 *(F)[+3*s]) / 6.0)
+
 
 #define CROSS(E,B) {0.0,				\
       (E)[2]*(B)[3]-(E)[3]*(B)[2],			\
@@ -151,7 +171,7 @@ void ffe_sim_init(struct ffe_sim *sim)
   cow_domain_setsize(sim->domain, 0, sim->Ni);
   cow_domain_setsize(sim->domain, 1, sim->Nj);
   cow_domain_setsize(sim->domain, 2, sim->Nk);
-  cow_domain_setguard(sim->domain, 2);
+  cow_domain_setguard(sim->domain, FFE_NG);
   cow_domain_commit(sim->domain);
 
   for (int n=0; n<6; ++n) {
@@ -288,7 +308,7 @@ void ffe_sim_ohms_law(struct ffe_sim *sim,
       double Jb = DOT(B, rotB) - DOT(E, rotE);
       double Js = divE;
 
-      if (B2 < 1e-8) B2 = 1e-12; /* Don't divide by zero! */
+      if (B2 < 1e-12) B2 = 1e-12; /* Don't divide by zero! */
 
       J[1] = (B[1] * Jb + S[1] * Js) / B2;
       J[2] = (B[2] * Jb + S[2] * Js) / B2;
@@ -306,13 +326,16 @@ void ffe_sim_ohms_law(struct ffe_sim *sim,
  */
 void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 {
+/* https://einsteintoolkit.org/documentation/ThornDoc/CactusNumerical/Dissipation */
+#if (FFE_DIFFERENCE_ORDER == 2)
 #define D1(F,c)  (Ni==1 ? 0.0 : DIFF1C2(F+m+c,si)/dx)
 #define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C2(F+m+c,sj)/dy)
 #define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C2(F+m+c,sk)/dz)
-
-#define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)/(dx)) +	     \
-		 (Nj==1 ? 0.0 : DIFF2C2(F+m+c,sj)/(dy)) +	     \
-		 (Nk==1 ? 0.0 : DIFF2C2(F+m+c,sk)/(dz)))
+#elif (FFE_DIFFERENCE_ORDER == 4)
+#define D1(F,c)  (Ni==1 ? 0.0 : DIFF1C4(F+m+c,si)/dx)
+#define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C4(F+m+c,sj)/dy)
+#define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C4(F+m+c,sk)/dz)
+#endif
 
   double RKparam_array[4] = {0.0, 0.5, 0.5, 1.0};
   double RKparam = RKparam_array[RKstep];
@@ -351,8 +374,6 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
     double divB = D1(B,1) + D2(B,2) + D3(B,3);    
     double rotE[4] = {0, D2(E,3) - D3(E,2), D3(E,1) - D1(E,3), D1(E,2) - D2(E,1)};
     double rotB[4] = {0, D2(B,3) - D3(B,2), D3(B,1) - D1(B,3), D1(B,2) - D2(B,1)};
-    double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
-    double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
 
 
     /* Current evaluation */
@@ -364,15 +385,6 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
     for (int d=1; d<=3; ++d) {
       dtE[m+d] = +rotB[d] - J[d];
       dtB[m+d] = -rotE[d];
-    }
-
-
-    /* Kriess-Oliger dissipation terms */
-    if (1) {
-      for (int d=1; d<=3; ++d) {
-	dtE[m+d] += 0.25 * lplE[d];
-	dtB[m+d] += 0.25 * lplB[d];
-      }
     }
 
 
@@ -390,12 +402,15 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
       double gamma2 = 1.0;
       double gamma3 = 1.0;
 
+      if (B2 < 1e-12) B2 = 1e-12;
+
       for (int d=1; d<=3; ++d) {
 	dtE[m+d] -= gamma1 / B2 * ct1[d];
 	dtB[m+d] -= gamma2 / B2 * ct2[d] + gamma3 / B2 * ct3[d];
       }
     }
   }
+
 
 
   /* ===========================================================================
@@ -424,6 +439,61 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 #undef D1
 #undef D2
 #undef D3
+}
+
+
+
+/*
+ * Apply Kreiss-Oliger operator to subtract high frequencies
+ * =====================================================================
+ */
+void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
+{
+#if (FFE_DISSIPATION_ORDER == 2)
+#define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)) +	\
+		 (Nj==1 ? 0.0 : DIFF2C2(F+m+c,sj)) +	\
+		 (Nk==1 ? 0.0 : DIFF2C2(F+m+c,sk)))
+  double KO_const = -1.0/4;
+#elif (FFE_DISSIPATION_ORDER == 4)
+#define KO(F,c) ((Ni==1 ? 0.0 : DIFF4C2(F+m+c,si)) +	\
+		 (Nj==1 ? 0.0 : DIFF4C2(F+m+c,sj)) +	\
+		 (Nk==1 ? 0.0 : DIFF4C2(F+m+c,sk)))
+  double KO_const = +1.0/16;
+#endif
+
+  int Ni = cow_domain_getnumlocalzonesinterior(sim->domain, 0);
+  int Nj = cow_domain_getnumlocalzonesinterior(sim->domain, 1);
+  int Nk = cow_domain_getnumlocalzonesinterior(sim->domain, 2);
+  int si = cow_dfield_getstride(sim->electric[0], 0);
+  int sj = cow_dfield_getstride(sim->electric[0], 1);
+  int sk = cow_dfield_getstride(sim->electric[0], 2);
+  double *E = cow_dfield_getdatabuffer(sim->electric[0]);
+  double *B = cow_dfield_getdatabuffer(sim->magnetic[0]);
+
+  /* ===========================================================================
+   * Fill in the n-th (n=0,1,2,3) time-derivative register, reading from the
+   * [1] field register
+   * ===========================================================================
+   */
+  FOR_ALL_INTERIOR(Ni, Nj, Nk) {
+
+    int m = IND(i,j,k,0);
+
+    double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
+    double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
+    double eps = 0.5;
+
+    for (int d=1; d<=3; ++d) {
+      E[m+d] -= eps * KO_const * lplE[d];
+      B[m+d] -= eps * KO_const * lplB[d];
+    }
+
+  }
+
+
+  cow_dfield_syncguard(sim->electric[0]);
+  cow_dfield_syncguard(sim->magnetic[0]);
+
 #undef KO
 }
 
@@ -475,19 +545,20 @@ void ffe_sim_average_rk(struct ffe_sim *sim)
     B[m+3] += dt/6 * (dtB0[m+3] + 2*dtB1[m+3] + 2*dtB2[m+3] + dtB3[m+3]);
 
 
+
+
     /*
      * Subtract out the component of E parallel to B
      */
     double BB = DOT(&B[m], &B[m]);
     double EB = DOT(&E[m], &B[m]);
 
-    if (EB > 1e-12) {
 
-      E[m+1] -= EB * B[m+1] / BB;
-      E[m+2] -= EB * B[m+2] / BB;
-      E[m+3] -= EB * B[m+3] / BB;
+    E[m+1] -= EB/BB * B[m+1];
+    E[m+2] -= EB/BB * B[m+2];
+    E[m+3] -= EB/BB * B[m+3];
 
-    }
+
 
 
     /*
@@ -535,6 +606,7 @@ void ffe_sim_advance(struct ffe_sim *sim)
   ffe_sim_advance_rk(sim, 2);
   ffe_sim_advance_rk(sim, 3);
   ffe_sim_average_rk(sim);
+  ffe_sim_kreiss_oliger(sim);
 
   sim->status.iteration += 1;
   sim->status.time_simulation += dt;
@@ -548,13 +620,26 @@ void ffe_sim_advance(struct ffe_sim *sim)
  */
 void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
 {
-#define D1(F,c) (Ni==1 ? 0.0 : DIFF1C2(F+m+c,si)/dx)
-#define D2(F,c) (Nj==1 ? 0.0 : DIFF1C2(F+m+c,sj)/dy)
-#define D3(F,c) (Nk==1 ? 0.0 : DIFF1C2(F+m+c,sk)/dz)
+#if (FFE_DIFFERENCE_ORDER == 2)
+
+#define D1(F,c)  (Ni==1 ? 0.0 : DIFF1C2(F+m+c,si)/dx)
+#define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C2(F+m+c,sj)/dy)
+#define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C2(F+m+c,sk)/dz)
+
+#elif (FFE_DIFFERENCE_ORDER == 4)
+
+#define D1(F,c)  (Ni==1 ? 0.0 : DIFF1C4(F+m+c,si)/dx)
+#define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C4(F+m+c,sj)/dy)
+#define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C4(F+m+c,sk)/dz)
+
+#endif
+
+#define GLB_AVG(x) x = cow_domain_dblsum(sim->domain, x) / Nt
 
   int Ni = cow_domain_getnumlocalzonesinterior(sim->domain, 0);
   int Nj = cow_domain_getnumlocalzonesinterior(sim->domain, 1);
   int Nk = cow_domain_getnumlocalzonesinterior(sim->domain, 2);
+  int Nt = cow_domain_getnumglobalzones(sim->domain, COW_ALL_DIMS);
   int si = cow_dfield_getstride(sim->electric[0], 0);
   int sj = cow_dfield_getstride(sim->electric[0], 1);
   int sk = cow_dfield_getstride(sim->electric[0], 2);
@@ -565,6 +650,10 @@ void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
   double *E = cow_dfield_getdatabuffer(sim->electric[0]);
   double *B = cow_dfield_getdatabuffer(sim->magnetic[0]);
 
+  meas->electric_energy = 0.0;
+  meas->magnetic_energy = 0.0;
+  meas->magnetic_monopole = 0.0; /* TODO */
+  meas->magnetic_helicity = 0.0;
 
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
@@ -575,11 +664,15 @@ void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
     double EE = DOT(&E[m], &E[m]);
     double BB = DOT(&B[m], &B[m]);
 
-    meas->electric_energy = 0.5 * EE;
-    meas->magnetic_energy = 0.5 * BB;
-    meas->magnetic_helicity = 0.0; /* TODO */
-    meas->magnetic_monopole = fabs(divB);
+    meas->electric_energy += 0.5 * EE;
+    meas->magnetic_energy += 0.5 * BB;
+    meas->magnetic_monopole += fabs(divB);
+
   }
+
+  GLB_AVG(meas->electric_energy);
+  GLB_AVG(meas->magnetic_energy);
+  GLB_AVG(meas->magnetic_monopole);
 
 #undef D1
 #undef D2
@@ -797,7 +890,7 @@ void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4]
 {
   double a=1, b=1, c=0;
   double alpha = 2 * M_PI * 2;
-  double p = 1e-8; /* perturbation */
+  double p = 0;//1e-8; /* perturbation */
 
   E[1] = p * sin(alpha * x[1]);
   E[2] = p * cos(alpha * x[2]);
