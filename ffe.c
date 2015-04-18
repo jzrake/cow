@@ -5,6 +5,10 @@
 #include <time.h>
 #include "cow.h"
 
+#ifndef M_PI
+#define M_PI 3.1415926535897926
+#endif
+
 
 
 #define FFE_NG 3 /* number of guard zones */
