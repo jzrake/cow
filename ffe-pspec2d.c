@@ -107,6 +107,15 @@ int main(int argc, char **argv)
 
 
 
+  int modes = 0;
+
+  // TODO: get from user
+  // modes |= COW_DISABLE_MPI);
+  // modes |= COW_NOREOPEN_STDOUT;
+
+  cow_init(0, NULL, modes);
+
+
   enum DatasetType dset_type = DSET_TYPE_FFE;
   struct config_t cfg = configure_new();
   char output_filename[1024] = "";
@@ -160,7 +169,7 @@ int main(int argc, char **argv)
     configure_for_ffe(&cfg);
     printf("[cfg] using format=ffe\n");
     cfg.checkpoint_number0 = 0;
-    cfg.checkpoint_number1 = 2;
+    cfg.checkpoint_number1 = 128;
     break;
   case DSET_TYPE_MARA:
     configure_for_mara(&cfg);
@@ -172,14 +181,6 @@ int main(int argc, char **argv)
     break;
   }
 
-
-  int modes = 0;
-
-  // TODO: get from user
-  // modes |= COW_DISABLE_MPI);
-  // modes |= COW_NOREOPEN_STDOUT;
-
-  cow_init(0, NULL, modes);
 
   /* ================================================================
    * ================= process input files ==========================
@@ -208,6 +209,7 @@ int main(int argc, char **argv)
 
     for (int n=cfg.checkpoint_number0; n<=cfg.checkpoint_number1; ++n) {
 
+      cfg.filename = argv[1];
       cfg.checkpoint_number = n;
       process_file(cfg);
 
@@ -385,7 +387,9 @@ void process_file(struct config_t cfg)
 
 
 
-void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *electric, double *time)
+void read_data_from_file(struct config_t cfg,
+			 cow_dfield *magnetic,
+			 cow_dfield *electric, double *time)
 {
   cow_domain *domain = cow_dfield_getdomain(magnetic);
 
