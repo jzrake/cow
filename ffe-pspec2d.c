@@ -27,11 +27,14 @@ struct config_t
   int write_derived_fields;
   int resolution; /* only used for sdf files; array size not inferred */
   int num_blocks;
+  int checkpoint_number;
+  int checkpoint_number0;
+  int checkpoint_number1;
 } ;
 
 
 static void process_file(struct config_t cfg);
-static void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *electric);
+static void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *electric, double *time);
 
 
 static struct config_t configure_new()
@@ -51,6 +54,9 @@ static struct config_t configure_new()
   cfg.write_derived_fields = 0;
   cfg.resolution = 0;
   cfg.num_blocks = 0;
+  cfg.checkpoint_number = 0;
+  cfg.checkpoint_number0 = 0;
+  cfg.checkpoint_number1 = 0;
   return cfg;
 }
 
@@ -153,6 +159,8 @@ int main(int argc, char **argv)
   case DSET_TYPE_FFE:
     configure_for_ffe(&cfg);
     printf("[cfg] using format=ffe\n");
+    cfg.checkpoint_number0 = 0;
+    cfg.checkpoint_number1 = 2;
     break;
   case DSET_TYPE_MARA:
     configure_for_mara(&cfg);
@@ -176,17 +184,34 @@ int main(int argc, char **argv)
   /* ================================================================
    * ================= process input files ==========================
    * ================================================================ */
-  for (int n=1; n<argc; ++n) {
 
-    if (strchr(argv[n], '=') != NULL) {
-      continue; /* this arg was an option, not a filename */
-    }
+  if (cfg.dset_type != DSET_TYPE_FFE) {
 
-    cfg.filename = argv[n];
-    if (cfg.dset_type != DSET_TYPE_FFE && cfg.output_filename == NULL) {
-      cfg.output_filename = argv[n];
+    for (int n=1; n<argc; ++n) {
+
+      if (strchr(argv[n], '=') != NULL) {
+	continue; /* this arg was an option, not a filename */
+      }
+
+      cfg.filename = argv[n];
+
+      if (cfg.output_filename == NULL) {
+	cfg.output_filename = argv[n];
+      }
+
+      process_file(cfg);
+
     }
-    process_file(cfg);
+  }
+
+  else {
+
+    for (int n=cfg.checkpoint_number0; n<=cfg.checkpoint_number1; ++n) {
+
+      cfg.checkpoint_number = n;
+      process_file(cfg);
+
+    }
   }
 
   cow_finalize();
@@ -295,8 +320,8 @@ void process_file(struct config_t cfg)
   cow_histogram_setfullname(Hi, "helicity-imag");
   cow_histogram_setnickname(Hi, "helicity-imag");
 
-
-  read_data_from_file(cfg, magnetic, electric);
+  double time = 0.0;
+  read_data_from_file(cfg, magnetic, electric, &time);
 
   cow_fft_inversecurl(magnetic, vecpoten);
   cow_fft_curl(magnetic, jcurrent);
@@ -324,10 +349,20 @@ void process_file(struct config_t cfg)
   cow_fft_helicityspec(magnetic, Hr, Hi);
 
   if (cfg.output_filename) {
-    cow_histogram_dumphdf5(Pb, cfg.output_filename, "spectra");
-    cow_histogram_dumphdf5(Pe, cfg.output_filename, "spectra");
-    cow_histogram_dumphdf5(Hi, cfg.output_filename, "spectra");
-    cow_histogram_dumphdf5(Hr, cfg.output_filename, "spectra");
+
+    char gname[1024];
+
+    if (cfg.dset_type == DSET_TYPE_FFE) {
+      snprintf(gname, 1024, "spectra-%6.4e", time);
+    }
+    else {
+      snprintf(gname, 1024, "spectra");
+    }
+
+    cow_histogram_dumphdf5(Pb, cfg.output_filename, gname);
+    cow_histogram_dumphdf5(Pe, cfg.output_filename, gname);
+    cow_histogram_dumphdf5(Hi, cfg.output_filename, gname);
+    cow_histogram_dumphdf5(Hr, cfg.output_filename, gname);
   }
 
   if (cfg.write_derived_fields && cfg.output_filename) {
@@ -350,7 +385,7 @@ void process_file(struct config_t cfg)
 
 
 
-void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *electric)
+void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *electric, double *time)
 {
   cow_domain *domain = cow_dfield_getdomain(magnetic);
 
@@ -362,6 +397,7 @@ void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *
 
     cow_dfield_read(magnetic, cfg.filename);
     cow_dfield_read(electric, cfg.filename);
+    *time = 0.0;
 
   }
 
@@ -370,16 +406,17 @@ void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *
   else if (cfg.dset_type == DSET_TYPE_FFE) {
 
 
-    printf("[main] reading ffe dataset\n");
+    printf("[main] reading ffe dataset %s\n", cfg.filename);
 
     int mpi_rank = cow_domain_getcartrank(domain);
     int mpi_size = cow_domain_getcartsize(domain);
     int block0 = (mpi_rank + 0) * cfg.num_blocks / mpi_size;
     int block1 = (mpi_rank + 1) * cfg.num_blocks / mpi_size;
 
+
     if (cfg.num_blocks % mpi_size != 0 ||
 	cfg.num_blocks < mpi_size) {
-      printf("[main] error: MPI size must divide, and be smaller than or equal"
+      printf("[main] error: MPI size must divide, and be smaller than or equal "
 	     "to the number of blocks\n");
       return;
     }
@@ -389,12 +426,13 @@ void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *
       double *EBdata[6];
       int startIndices[3] = {0, 0, 0};
       int sizes[3] = {1, 1, 1};
-      double time;
 
-      int error = getEBFromSDF(n, 0, cfg.filename, EBdata, startIndices, sizes, &time);
+
+      int error = getEBFromSDF(n, cfg.checkpoint_number, cfg.filename,
+			       EBdata, startIndices, sizes, time);
 
       if (cow_domain_intsum(domain, error)) {
-	printf("[main] error: something went wrong reading an SDF file");
+	printf("[main] error: something went wrong reading an SDF file\n");
 	return;
       }
 
@@ -422,8 +460,9 @@ void read_data_from_file(struct config_t cfg, cow_dfield *magnetic, cow_dfield *
       cow_dfield_remap(electric, startIndices, sizes, Edata);
       cow_dfield_remap(magnetic, startIndices, sizes, Bdata);
 
-      printf("[main] block %d: i=%d j=%d nx=%d ny=%d\n",
-	     n, startIndices[0], startIndices[1], sizes[0], sizes[1]);
+      printf("[main] checkpoint %d (t=%3.2e) block %d: i=%d j=%d nx=%d ny=%d\n",
+	     cfg.checkpoint_number,
+	     *time, n, startIndices[0], startIndices[1], sizes[0], sizes[1]);
 
 
       free(EBdata[0]);
