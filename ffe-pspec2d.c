@@ -56,7 +56,7 @@ static struct config_t configure_new()
   cfg.num_blocks = 0;
   cfg.checkpoint_number = 0;
   cfg.checkpoint_number0 = 0;
-  cfg.checkpoint_number1 = 0;
+  cfg.checkpoint_number1 = 128;
   return cfg;
 }
 
@@ -142,6 +142,10 @@ int main(int argc, char **argv)
     else if (!strncmp(argv[n], "num_blocks=", 11)) {
       sscanf(argv[n], "num_blocks=%d", &cfg.num_blocks);
     }
+    else if (!strncmp(argv[n], "checkpoint_numbers=", 19)) {
+      sscanf(argv[n], "checkpoint_numbers=%d-%d",
+	     &cfg.checkpoint_number0, &cfg.checkpoint_number1);
+    }
     else if (!strncmp(argv[n], "write_derived_fields=", 21)) {
       sscanf(argv[n], "write_derived_fields=%d", &cfg.write_derived_fields);
     }
@@ -158,6 +162,8 @@ int main(int argc, char **argv)
   printf("[cfg] using resolution=%d\n", cfg.resolution);
   printf("[cfg] using num_blocks=%d\n", cfg.num_blocks);
   printf("[cfg] using write_derived_fields=%d\n", cfg.write_derived_fields);
+  printf("[cfg] using checkpoint_numbers=%d-%d\n",
+	 cfg.checkpoint_number0, cfg.checkpoint_number1);
 
 
 
@@ -168,8 +174,6 @@ int main(int argc, char **argv)
   case DSET_TYPE_FFE:
     configure_for_ffe(&cfg);
     printf("[cfg] using format=ffe\n");
-    cfg.checkpoint_number0 = 0;
-    cfg.checkpoint_number1 = 128;
     break;
   case DSET_TYPE_MARA:
     configure_for_mara(&cfg);
