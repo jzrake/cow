@@ -28,7 +28,7 @@
  * Macro to calculate linear index of (i,j,k,m) ... m goes from 1, not 0
  * =====================================================================
  */
-#define IND(i,j,k,m) ((i)*si + (j)*sj + (k)*sk) + (m-1) 
+#define IND(i,j,k,m) ((i)*si + (j)*sj + (k)*sk) + (m-1)
 
 /*
  * Macros to calculate finite differences
@@ -340,6 +340,18 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 #define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C4(F+m+c,sj)/dy)
 #define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C4(F+m+c,sk)/dz)
 #endif
+#if (FFE_DIFFERENCE_ORDER == 2)
+#define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)/dt) +            \
+                 (Nj==1 ? 0.0 : DIFF2C2(F+m+c,sj)/dt) +            \
+                 (Nk==1 ? 0.0 : DIFF2C2(F+m+c,sk)/dt))
+  double KO_const = -1.0/4;
+#elif (FFE_DIFFERENCE_ORDER == 4)
+#define KO(F,c) ((Ni==1 ? 0.0 : DIFF4C2(F+m+c,si)/dt) +	   \
+		 (Nj==1 ? 0.0 : DIFF4C2(F+m+c,sj)/dt) +	   \
+                 (Nk==1 ? 0.0 : DIFF4C2(F+m+c,sk)/dt))
+  double KO_const = +1.0/16;
+#endif
+
 
   double RKparam_array[4] = {0.0, 0.5, 0.5, 1.0};
   double RKparam = RKparam_array[RKstep];
@@ -363,7 +375,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
   double dx = sim->grid_spacing[1];
   double dy = sim->grid_spacing[2];
   double dz = sim->grid_spacing[3];
-  double dt = sim->status.time_step * RKparam;
+  double dt = sim->status.time_step;
 
   /* ===========================================================================
    * Fill in the n-th (n=0,1,2,3) time-derivative register, reading from the
@@ -390,6 +402,19 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
       dtE[m+d] = +rotB[d] - J[d];
       dtB[m+d] = -rotE[d];
     }
+
+
+
+    /* Kreiss-Oliger dissipation */
+    double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
+    double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
+    double eps = 0.75;
+
+    for (int d=1; d<=3; ++d) {
+      dtE[m+d] -= eps * KO_const * lplE[d];
+      dtB[m+d] -= eps * KO_const * lplB[d];
+    }
+
 
 
     /* Hyperbolicity terms, eqn 48-49: Pfeiffer (2013) */
@@ -425,13 +450,13 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 
     int m = IND(i,j,k,0);
 
-    E[m+1] = E0[m+1] + dt * dtE[m+1];
-    E[m+2] = E0[m+2] + dt * dtE[m+2];
-    E[m+3] = E0[m+3] + dt * dtE[m+3];
+    E[m+1] = E0[m+1] + dt * RKparam * dtE[m+1];
+    E[m+2] = E0[m+2] + dt * RKparam * dtE[m+2];
+    E[m+3] = E0[m+3] + dt * RKparam * dtE[m+3];
 
-    B[m+1] = B0[m+1] + dt * dtB[m+1];
-    B[m+2] = B0[m+2] + dt * dtB[m+2];
-    B[m+3] = B0[m+3] + dt * dtB[m+3];
+    B[m+1] = B0[m+1] + dt * RKparam * dtB[m+1];
+    B[m+2] = B0[m+2] + dt * RKparam * dtB[m+2];
+    B[m+3] = B0[m+3] + dt * RKparam * dtB[m+3];
 
   }
 
@@ -443,6 +468,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 #undef D1
 #undef D2
 #undef D3
+#undef KO
 }
 
 
@@ -610,7 +636,7 @@ void ffe_sim_advance(struct ffe_sim *sim)
   ffe_sim_advance_rk(sim, 2);
   ffe_sim_advance_rk(sim, 3);
   ffe_sim_average_rk(sim);
-  ffe_sim_kreiss_oliger(sim);
+  //ffe_sim_kreiss_oliger(sim);
 
   sim->status.iteration += 1;
   sim->status.time_simulation += dt;
