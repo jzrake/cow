@@ -3,6 +3,8 @@
 #include <string.h>
 #include <stdio.h>
 #include <time.h>
+#include <complex.h>
+#include "jsw_rand.h"
 #include "cow.h"
 
 #ifndef M_PI
@@ -90,7 +92,8 @@ typedef void (*InitialDataFunction)(struct ffe_sim *sim, double x[4], double E[4
 static void initial_data_emwave    (struct ffe_sim *sim, double x[4], double E[4], double B[4]);
 static void initial_data_alfvenwave(struct ffe_sim *sim, double x[4], double E[4], double B[4]);
 static void initial_data_abc       (struct ffe_sim *sim, double x[4], double E[4], double B[4]);
-
+static void initial_data_beltrami  (struct ffe_sim *sim, double x[4], double E[4], double B[4]);
+static void random_beltrami_field(double x[4], double B[4], int model, int k2);
 
 
 enum FfeSimParameter {
@@ -140,6 +143,14 @@ struct ffe_sim
 
   char output_directory[1024];
 } ;
+
+
+
+void ffe_sim_init(struct ffe_sim *sim);
+void ffe_sim_free(struct ffe_sim *sim);
+void ffe_sim_analyze(struct ffe_sim *sim, char *filename);
+void ffe_sim_initial_data(struct ffe_sim *sim);
+int  ffe_sim_problem_setup(struct ffe_sim *sim, const char *problem_name);
 
 
 
@@ -223,12 +234,13 @@ void ffe_sim_free(struct ffe_sim *sim)
 
 
 
-int ffe_problem_setup(struct ffe_sim *sim, const char *problem_name)
+int ffe_sim_problem_setup(struct ffe_sim *sim, const char *problem_name)
 {
   if (problem_name == NULL) {
     printf("1. emwave\n");
     printf("2. alfvenwave\n");
     printf("3. abc\n");
+    printf("4. beltrami\n");
     return 0;
   }
   else if (!strcmp(problem_name, "emwave")) {
@@ -250,8 +262,16 @@ int ffe_problem_setup(struct ffe_sim *sim, const char *problem_name)
   else if (!strcmp(problem_name, "abc")) {
     sim->Ni = 128;
     sim->Nj = 128;
-    sim->Nk = 4;
+    sim->Nk = 1;
     sim->initial_data = initial_data_abc;
+    sim->flag_ohms_law = FFE_OHMS_LAW_FORCE_FREE;
+    return 0;
+  }
+  else if (!strcmp(problem_name, "beltrami")) {
+    sim->Ni = 64;
+    sim->Nj = 64;
+    sim->Nk = 64;
+    sim->initial_data = initial_data_beltrami;
     sim->flag_ohms_law = FFE_OHMS_LAW_FORCE_FREE;
     return 0;
   }
@@ -731,6 +751,7 @@ int main(int argc, char **argv)
   strcpy(sim.output_directory, ".");
 
 
+
   /*
    * Print a help message
    * ===================================================================
@@ -742,7 +763,7 @@ int main(int argc, char **argv)
   if (argc == 1) {
     printf("usage: ffe <problem-name> [sim.time_final=1.0] [N=16,16,16]\n");
     printf("problems are:\n");
-    ffe_problem_setup(NULL, NULL);
+    ffe_sim_problem_setup(NULL, NULL);
     return 0;
   }
   else {
@@ -750,13 +771,14 @@ int main(int argc, char **argv)
   }
 
 
+
   /*
    * Set up the problem defaults
    * ===================================================================
    */
-  if (ffe_problem_setup(&sim, problem_name)) {
+  if (ffe_sim_problem_setup(&sim, problem_name)) {
     printf("[ffe] error: unkown problem name: '%s', choose one of\n", problem_name);
-    ffe_problem_setup(NULL, NULL);
+    ffe_sim_problem_setup(NULL, NULL);
     return 1;
   }
 
@@ -862,7 +884,13 @@ int main(int argc, char **argv)
      * Handle post-processing and reductions
      * =================================================================
      */
+
     ffe_sim_measure(&sim, &measure);
+
+    if (sim.status.iteration % 10 == 0) {
+      ffe_sim_analyze(&sim, "analysis.h5");
+    }
+
     if (cow_domain_getcartrank(sim.domain) == 0) {
 
       FILE *logf = fopen(logfile_name, "a");
@@ -947,12 +975,11 @@ void initial_data_alfvenwave(struct ffe_sim *sim, double x[4], double E[4], doub
 
 void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4])
 {
-  double a=1, b=1, c=1;
-  double alpha = 2 * M_PI * 2;
-  double p = 0;//1e-8; /* perturbation */
+  double a=1, b=1, c=0;
+  double alpha = 16 * M_PI * 2;
 
-  E[1] = p * sin(alpha * x[1]);
-  E[2] = p * cos(alpha * x[2]);
+  E[1] = 0.0;
+  E[2] = 0.0;
   E[3] = 0.0;
 
   B[1] = 0.0;
@@ -970,4 +997,262 @@ void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4]
   B[1] += c * cos(alpha * x[3]);
   B[2] -= c * sin(alpha * x[3]);
   B[3] += 0.0;
+}
+
+void initial_data_beltrami(struct ffe_sim *sim, double x[4], double E[4], double B[4])
+{
+  E[1] = 0.0;
+  E[2] = 0.0;
+  E[3] = 0.0;
+
+  double X[4] = {0,
+		 -1 + 2*x[1],
+		 -1 + 2*x[2],
+		 -1 + 2*x[3]};
+
+  random_beltrami_field(X, B, 0, 11);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void ffe_sim_analyze(struct ffe_sim *sim, char *filename)
+{
+  cow_domain *domain = sim->domain;
+  cow_dfield *magnetic = sim->magnetic[0];
+  cow_dfield *electric = sim->electric[0];
+  cow_dfield *vecpoten = cow_dfield_new();
+  cow_dfield *jcurrent = cow_dfield_new();
+
+
+
+  /* Data fields setup */
+  /* ---------------------------------------------------- */
+  cow_dfield_setdomain(vecpoten, domain);
+  cow_dfield_setname(vecpoten, "vector_potential");
+  cow_dfield_addmember(vecpoten, "A1");
+  cow_dfield_addmember(vecpoten, "A2");
+  cow_dfield_addmember(vecpoten, "A3");
+  cow_dfield_commit(vecpoten);
+
+  cow_dfield_setdomain(jcurrent, domain);
+  cow_dfield_setname(jcurrent, "electric_current");
+  cow_dfield_addmember(jcurrent, "J1");
+  cow_dfield_addmember(jcurrent, "J2");
+  cow_dfield_addmember(jcurrent, "J3");
+  cow_dfield_commit(jcurrent);
+
+
+
+  /* Histograms setup */
+  /* ---------------------------------------------------- */
+  cow_histogram *Pb = cow_histogram_new();
+  cow_histogram_setlower(Pb, 0, 1);
+  cow_histogram_setupper(Pb, 0, 8192);
+  cow_histogram_setnbins(Pb, 0, 4096);
+  cow_histogram_setspacing(Pb, COW_HIST_SPACING_LINEAR);
+  cow_histogram_setfullname(Pb, "magnetic");
+  cow_histogram_setnickname(Pb, "magnetic");
+
+
+  cow_histogram *Pe = cow_histogram_new();
+  cow_histogram_setlower(Pe, 0, 1);
+  cow_histogram_setupper(Pe, 0, 8192);
+  cow_histogram_setnbins(Pe, 0, 4096);
+  cow_histogram_setspacing(Pe, COW_HIST_SPACING_LINEAR);
+  cow_histogram_setfullname(Pe, "electric");
+  cow_histogram_setnickname(Pe, "electric");
+
+
+  cow_histogram *Hr = cow_histogram_new();
+  cow_histogram_setlower(Hr, 0, 1);
+  cow_histogram_setupper(Hr, 0, 8192);
+  cow_histogram_setnbins(Hr, 0, 4096);
+  cow_histogram_setspacing(Hr, COW_HIST_SPACING_LINEAR);
+  cow_histogram_setfullname(Hr, "helicity-real");
+  cow_histogram_setnickname(Hr, "helicity-real");
+
+
+  cow_histogram *Hi = cow_histogram_new();
+  cow_histogram_setlower(Hi, 0, 1);
+  cow_histogram_setupper(Hi, 0, 8192);
+  cow_histogram_setnbins(Hi, 0, 4096);
+  cow_histogram_setspacing(Hi, COW_HIST_SPACING_LINEAR);
+  cow_histogram_setfullname(Hi, "helicity-imag");
+  cow_histogram_setnickname(Hi, "helicity-imag");
+
+
+  cow_fft_inversecurl(magnetic, vecpoten);
+  cow_fft_curl       (magnetic, jcurrent);
+
+
+
+  cow_fft_pspecvecfield(magnetic, Pb);
+  cow_fft_pspecvecfield(electric, Pe);
+  cow_fft_helicityspec(magnetic, Hr, Hi);
+
+  if (filename) {
+
+    char gname[1024];
+
+    snprintf(gname, 1024, "spectra-%06d", sim->status.iteration);
+
+    cow_histogram_dumphdf5(Pb, filename, gname);
+    cow_histogram_dumphdf5(Pe, filename, gname);
+    cow_histogram_dumphdf5(Hi, filename, gname);
+    cow_histogram_dumphdf5(Hr, filename, gname);
+
+
+    if (0) { /* write derived fields */
+      cow_dfield_write(magnetic, filename);
+      cow_dfield_write(vecpoten, filename);
+      cow_dfield_write(jcurrent, filename);
+    }
+
+  }
+
+  cow_histogram_del(Pb);
+  cow_histogram_del(Pe);
+  cow_histogram_del(Hr);
+  cow_histogram_del(Hi);
+
+  cow_dfield_del(vecpoten);
+  cow_dfield_del(jcurrent);
+}
+
+
+
+
+
+
+
+
+
+typedef complex double Complex;
+typedef struct fourier_mode
+{
+  double k[4];
+  Complex A[4];
+} fourier_mode;
+
+
+
+
+void random_beltrami_field(double x[4], double B[4], int model, int k2)
+{
+#define RAND jsw_random_double(&rand, -1, 1)
+  int m,i,j,k;
+  jsw_rand_t rand;
+  jsw_seed(&rand, model);
+
+
+  int k2_sphere = k2;
+  int k_cube = floor(sqrt(k2_sphere)) + 1;
+  fourier_mode *modes = NULL;
+  int num_modes = 0;
+  Complex A[4] = {0, 0, 0, 0};
+  double amp;
+
+  for (i=-k_cube; i<=k_cube; ++i) {
+    for (j=-k_cube; j<=k_cube; ++j) {
+      for (k=-k_cube; k<=k_cube; ++k) {
+  	fourier_mode M;
+
+  	if (i*i + j*j + k*k != k2_sphere) {
+  	  continue;
+  	}
+  	else {
+  	  M.k[0] = 0.0;
+  	  M.k[1] = i;
+  	  M.k[2] = j;
+  	  M.k[3] = k;
+  	  M.A[0] = 0.0;
+  	  M.A[1] = RAND + RAND*I;
+  	  M.A[2] = RAND + RAND*I;
+  	  M.A[3] = RAND + RAND*I;
+  	  amp = sqrt(M.A[1]*conj(M.A[1]) + M.A[2]*conj(M.A[2]) + M.A[3]*conj(M.A[3]));
+  	  M.A[1] /= amp;
+  	  M.A[2] /= amp;
+  	  M.A[3] /= amp;
+  	  num_modes += 1;
+  	  modes = (fourier_mode *) realloc(modes, num_modes * sizeof(fourier_mode));
+  	  modes[num_modes-1] = M;
+
+  	  /* printf("k[%d] = [%d %d %d] is on shell\n", num_modes, i, j, k); */
+  	}
+      }
+    }
+  }
+
+
+  for (m=0; m<num_modes; ++m) {
+    fourier_mode M = modes[m];
+    double a = sqrt(M.k[1]*M.k[1] + M.k[2]*M.k[2] + M.k[3]*M.k[3]);
+    Complex K[4] = {0, I*M.k[1], I*M.k[2], I*M.k[3]};
+    Complex Ikx  = (K[1]*x[1] + K[2]*x[2] + K[3]*x[3]) * M_PI;
+    Complex P[4] = {0, M.A[1], M.A[2], M.A[3]}; /* a times psi */
+
+    Complex T[4] = {0, /* T = K cross (a psi) */
+		    K[2]*P[3] - K[3]*P[2],
+		    K[3]*P[1] - K[1]*P[3],
+		    K[1]*P[2] - K[2]*P[1]};
+
+    Complex S[4] = {0, /* S = K cross T / alpha */
+		    (K[2]*T[3] - K[3]*T[2])/a,
+		    (K[3]*T[1] - K[1]*T[3])/a,
+		    (K[1]*T[2] - K[2]*T[1])/a};
+
+    A[1] += (S[1] + T[1])/a * cexp(Ikx);
+    A[2] += (S[2] + T[2])/a * cexp(Ikx);
+    A[3] += (S[3] + T[3])/a * cexp(Ikx);
+  }
+
+
+  free(modes);
+
+  B[1] = A[1];
+  B[2] = A[2];
+  B[3] = A[3];
+
+#undef RAND
 }
