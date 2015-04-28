@@ -128,7 +128,8 @@ struct ffe_sim
 
   int Ni, Nj, Nk;
   double grid_spacing[4];
-  double cfl_parameter;
+  double cfl_parameter; /* Courant number [0.0 - 0.25]*/
+  double eps_parameter; /* Kreiss-Oliger parameter [0 - 1] */
 
   enum FfeSimParameter flag_ohms_law;
   InitialDataFunction initial_data;
@@ -136,6 +137,8 @@ struct ffe_sim
   double time_final;
 
   struct ffe_status status;
+
+  char output_directory[1024];
 } ;
 
 
@@ -149,6 +152,7 @@ struct ffe_sim
  * -> flag_ohms_law
  * -> time_between_checkpoints
  * -> time_final
+ * -> output_directory
  *
  * =====================================================================
  */
@@ -156,12 +160,12 @@ void ffe_sim_init(struct ffe_sim *sim)
 {
   sim->domain = cow_domain_new();
 
+
   sim->grid_spacing[0] = 0.0;
   sim->grid_spacing[1] = 1.0 / sim->Ni;
   sim->grid_spacing[2] = 1.0 / sim->Nj;
   sim->grid_spacing[3] = 1.0 / sim->Nk;
   sim->cfl_parameter = 0.25;
-
 
   sim->status.iteration = 0;
   sim->status.checkpoint_number = 0;
@@ -718,13 +722,13 @@ int main(int argc, char **argv)
 
 
   const char *problem_name = NULL;
-  const char *logfile_name = "ffe.dat";
+  char logfile_name[1024];
   struct ffe_sim sim;
   struct ffe_measure measure;
 
   sim.time_final = 1.0;
   sim.time_between_checkpoints = 1.0;
-
+  strcpy(sim.output_directory, ".");
 
 
   /*
@@ -757,6 +761,7 @@ int main(int argc, char **argv)
   }
 
 
+
   /*
    * Scan command line arguments
    * ===================================================================
@@ -776,6 +781,9 @@ int main(int argc, char **argv)
 	return 1;
       }
     }
+    else if (!strncmp(argv[n], "outdir=", 7)) {
+      sscanf(argv[n], "outdir=%1024s", sim.output_directory);
+    }
     else {
       printf("[ffe] error: unrecognized option '%s'\n", argv[n]);
       return 1;
@@ -793,22 +801,37 @@ int main(int argc, char **argv)
   printf("\n-----------------------------------------\n");
   printf("tmax ....................... %12.10lf\n", sim.time_final);
   printf("time_between_checkpoints ... %12.10lf\n", sim.time_between_checkpoints);
+  printf("output_directory ........... %s\n", sim.output_directory);
   printf("-----------------------------------------\n\n");
 
 
+  int invalid_output = 0;
   int local_grid_size = cow_domain_getnumlocalzonesinterior(sim.domain,
 							    COW_ALL_DIMS);
 
 
+  snprintf(logfile_name, 1024, "%s/ffe.dat", sim.output_directory);
 
-  if (logfile_name != NULL) {
+  if (cow_domain_getcartrank(sim.domain) == 0) {
+  
     FILE *logf = fopen(logfile_name, "w");
     
     if (logf == NULL) {
       printf("[ffe] error: could not open log file '%s'\n", logfile_name);
-      sim.time_final = 0.0;
+      invalid_output = 1;
     }
+    else {
+      fclose(logf);
+      invalid_output = 0;
+    }
+  }
 
+
+  /* Propagate any errors to all procs */
+  invalid_output = cow_domain_intsum(sim.domain, invalid_output);  
+
+  if (invalid_output) {
+    sim.time_final = 0.0;
   }
 
 
@@ -823,7 +846,9 @@ int main(int argc, char **argv)
 	sim.time_between_checkpoints) {
 
       char chkpt_name[1024];
-      snprintf(chkpt_name, 1024, "chkpt.%04d.h5", sim.status.checkpoint_number);
+      snprintf(chkpt_name, 1024, "%s/chkpt.%04d.h5",
+	       sim.output_directory,
+	       sim.status.checkpoint_number);
 
       cow_dfield_write(sim.magnetic[0], chkpt_name);
       cow_dfield_write(sim.electric[0], chkpt_name);
@@ -875,10 +900,14 @@ int main(int argc, char **argv)
 
 
 
-  char chkpt_name[1024];
-  snprintf(chkpt_name, 1024, "chkpt.%04d.h5", sim.status.checkpoint_number);
-  cow_dfield_write(sim.magnetic[0], chkpt_name);
-  cow_dfield_write(sim.electric[0], chkpt_name);
+  if (invalid_output == 0) {
+    char chkpt_name[1024];
+    snprintf(chkpt_name, 1024, "%s/chkpt.%04d.h5",
+	     sim.output_directory,
+	     sim.status.checkpoint_number);
+    cow_dfield_write(sim.magnetic[0], chkpt_name);
+    cow_dfield_write(sim.electric[0], chkpt_name);
+  }
 
 
   ffe_sim_free(&sim);
@@ -918,7 +947,7 @@ void initial_data_alfvenwave(struct ffe_sim *sim, double x[4], double E[4], doub
 
 void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4])
 {
-  double a=1, b=1, c=0;
+  double a=1, b=1, c=1;
   double alpha = 2 * M_PI * 2;
   double p = 0;//1e-8; /* perturbation */
 
