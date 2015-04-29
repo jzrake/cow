@@ -68,6 +68,15 @@
 		       +12*(F)[+2*s] +		\
 		       -1 *(F)[+3*s]) / 6.0)
 
+#define DIFF6C2(F,s) (( 1 *(F)[-3*s] +		\
+		       -6 *(F)[-2*s] +		\
+		       +15*(F)[-1*s] +		\
+		       -20*(F)[+0*s] +		\
+		       +15*(F)[+1*s] +		\
+		       -6 *(F)[+2*s] +		\
+		        1 *(F)[+3*s]) / 1.0)
+
+
 
 #define CROSS(E,B) {0.0,				\
       (E)[2]*(B)[3]-(E)[3]*(B)[2],			\
@@ -177,6 +186,7 @@ void ffe_sim_init(struct ffe_sim *sim)
   sim->grid_spacing[2] = 1.0 / sim->Nj;
   sim->grid_spacing[3] = 1.0 / sim->Nk;
   sim->cfl_parameter = 0.25;
+  sim->eps_parameter = 1.00; /* [0-1] */
 
   sim->status.iteration = 0;
   sim->status.checkpoint_number = 0;
@@ -364,16 +374,21 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 #define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C4(F+m+c,sj)/dy)
 #define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C4(F+m+c,sk)/dz)
 #endif
-#if (FFE_DIFFERENCE_ORDER == 2)
-#define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)/dt) +            \
-                 (Nj==1 ? 0.0 : DIFF2C2(F+m+c,sj)/dt) +            \
+#if (FFE_DISSIPATION_ORDER == 2)
+#define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)/dt) +    \
+                 (Nj==1 ? 0.0 : DIFF2C2(F+m+c,sj)/dt) +    \
                  (Nk==1 ? 0.0 : DIFF2C2(F+m+c,sk)/dt))
   double KO_const = -1.0/4;
-#elif (FFE_DIFFERENCE_ORDER == 4)
+#elif (FFE_DISSIPATION_ORDER == 4)
 #define KO(F,c) ((Ni==1 ? 0.0 : DIFF4C2(F+m+c,si)/dt) +	   \
 		 (Nj==1 ? 0.0 : DIFF4C2(F+m+c,sj)/dt) +	   \
                  (Nk==1 ? 0.0 : DIFF4C2(F+m+c,sk)/dt))
   double KO_const = +1.0/16;
+#elif (FFE_DISSIPATION_ORDER == 6)
+#define KO(F,c) ((Ni==1 ? 0.0 : DIFF6C2(F+m+c,si)/dt) +	   \
+		 (Nj==1 ? 0.0 : DIFF6C2(F+m+c,sj)/dt) +	   \
+                 (Nk==1 ? 0.0 : DIFF6C2(F+m+c,sk)/dt))
+  double KO_const = -1.0/64;
 #endif
 
 
@@ -430,13 +445,15 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 
 
     /* Kreiss-Oliger dissipation */
-    double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
-    double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
-    double eps = 0.75;
+    if (0) {
+      double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
+      double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
+      double eps = sim->eps_parameter;
 
-    for (int d=1; d<=3; ++d) {
-      dtE[m+d] -= eps * KO_const * lplE[d];
-      dtB[m+d] -= eps * KO_const * lplB[d];
+      for (int d=1; d<=3; ++d) {
+	dtE[m+d] -= eps * KO_const * lplE[d];
+	dtB[m+d] -= eps * KO_const * lplB[d];
+      }
     }
 
 
@@ -513,6 +530,11 @@ void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
 		 (Nj==1 ? 0.0 : DIFF4C2(F+m+c,sj)) +	\
 		 (Nk==1 ? 0.0 : DIFF4C2(F+m+c,sk)))
   double KO_const = +1.0/16;
+#elif (FFE_DISSIPATION_ORDER == 6)
+#define KO(F,c) ((Ni==1 ? 0.0 : DIFF6C2(F+m+c,si)) +	   \
+		 (Nj==1 ? 0.0 : DIFF6C2(F+m+c,sj)) +	   \
+                 (Nk==1 ? 0.0 : DIFF6C2(F+m+c,sk)))
+  double KO_const = -1.0/64;
 #endif
 
   int Ni = cow_domain_getnumlocalzonesinterior(sim->domain, 0);
@@ -523,6 +545,9 @@ void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
   int sk = cow_dfield_getstride(sim->electric[0], 2);
   double *E = cow_dfield_getdatabuffer(sim->electric[0]);
   double *B = cow_dfield_getdatabuffer(sim->magnetic[0]);
+  double *dE = cow_dfield_getdatabuffer(sim->electric[2]); /* use dt registers */
+  double *dB = cow_dfield_getdatabuffer(sim->magnetic[2]);
+
 
   /* ===========================================================================
    * Fill in the n-th (n=0,1,2,3) time-derivative register, reading from the
@@ -533,13 +558,21 @@ void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
 
     int m = IND(i,j,k,0);
 
-    double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
-    double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
-    double eps = 0.5;
+    for (int d=1; d<=3; ++d) {
+      dE[m+d] = KO(E,d);
+      dB[m+d] = KO(B,d);
+    }
+
+  }
+
+  FOR_ALL_INTERIOR(Ni, Nj, Nk) {
+
+    int m = IND(i,j,k,0);
+    double eps = sim->eps_parameter;
 
     for (int d=1; d<=3; ++d) {
-      E[m+d] -= eps * KO_const * lplE[d];
-      B[m+d] -= eps * KO_const * lplB[d];
+      E[m+d] -= eps * KO_const * dE[m+d];
+      B[m+d] -= eps * KO_const * dB[m+d];
     }
 
   }
@@ -660,7 +693,7 @@ void ffe_sim_advance(struct ffe_sim *sim)
   ffe_sim_advance_rk(sim, 2);
   ffe_sim_advance_rk(sim, 3);
   ffe_sim_average_rk(sim);
-  //ffe_sim_kreiss_oliger(sim);
+  ffe_sim_kreiss_oliger(sim);
 
   sim->status.iteration += 1;
   sim->status.time_simulation += dt;
@@ -806,6 +839,9 @@ int main(int argc, char **argv)
     else if (!strncmp(argv[n], "outdir=", 7)) {
       sscanf(argv[n], "outdir=%1024s", sim.output_directory);
     }
+    else if (!strncmp(argv[n], "eps=", 4)) {
+      sscanf(argv[n], "eps=%lf", &sim.eps_parameter);
+    }
     else {
       printf("[ffe] error: unrecognized option '%s'\n", argv[n]);
       return 1;
@@ -823,6 +859,7 @@ int main(int argc, char **argv)
   printf("\n-----------------------------------------\n");
   printf("tmax ....................... %12.10lf\n", sim.time_final);
   printf("time_between_checkpoints ... %12.10lf\n", sim.time_between_checkpoints);
+  printf("eps_parameter .............. %12.10lf\n", sim.eps_parameter);
   printf("output_directory ........... %s\n", sim.output_directory);
   printf("-----------------------------------------\n\n");
 
@@ -887,7 +924,7 @@ int main(int argc, char **argv)
 
     ffe_sim_measure(&sim, &measure);
 
-    if (sim.status.iteration % 10 == 0) {
+    if (sim.status.iteration % 100 == 0) {
       ffe_sim_analyze(&sim, "analysis.h5");
     }
 
@@ -976,7 +1013,7 @@ void initial_data_alfvenwave(struct ffe_sim *sim, double x[4], double E[4], doub
 void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4])
 {
   double a=1, b=1, c=0;
-  double alpha = 16 * M_PI * 2;
+  double alpha = 2 * M_PI * 2;
 
   E[1] = 0.0;
   E[2] = 0.0;
