@@ -30,7 +30,10 @@
  * Macro to calculate linear index of (i,j,k,m) ... m goes from 1, not 0
  * =====================================================================
  */
-#define IND(i,j,k,m) ((i)*si + (j)*sj + (k)*sk) + (m-1)
+
+#define INDV(i,j,k) ((i)*si + (j)*sj + (k)*sk - 1)
+#define INDS(i,j,k) ((i)*ti + (j)*tj + (k)*tk) /* for scalar field */
+
 
 /*
  * Macros to calculate finite differences
@@ -75,7 +78,6 @@
 		       +15*(F)[+1*s] +		\
 		       -6 *(F)[+2*s] +		\
 		        1 *(F)[+3*s]) / 1.0)
-
 
 
 #define CROSS(E,B) {0.0,				\
@@ -137,6 +139,7 @@ struct ffe_sim
   cow_domain *domain;
   cow_dfield *electric[6]; /* 0,1: E, 4-6: dtE */
   cow_dfield *magnetic[6];
+  cow_dfield *psifield[6]; /* 0,1: P, 4-6: dtP (Dedner psi field) */
 
   int Ni, Nj, Nk;
   double grid_spacing[4];
@@ -206,12 +209,15 @@ void ffe_sim_init(struct ffe_sim *sim)
   for (int n=0; n<6; ++n) {
     sim->electric[n] = cow_dfield_new();
     sim->magnetic[n] = cow_dfield_new();
+    sim->psifield[n] = cow_dfield_new();
 
     cow_dfield_setname(sim->electric[n], "electric");
     cow_dfield_setname(sim->magnetic[n], "magnetic");
+    cow_dfield_setname(sim->psifield[n], "psifield");
 
     cow_dfield_setdomain(sim->electric[n], sim->domain);
     cow_dfield_setdomain(sim->magnetic[n], sim->domain);
+    cow_dfield_setdomain(sim->psifield[n], sim->domain);
 
     cow_dfield_addmember(sim->electric[n], "E1");
     cow_dfield_addmember(sim->electric[n], "E2");
@@ -220,8 +226,11 @@ void ffe_sim_init(struct ffe_sim *sim)
     cow_dfield_addmember(sim->magnetic[n], "B2");
     cow_dfield_addmember(sim->magnetic[n], "B3");
 
+    cow_dfield_addmember(sim->psifield[n], "P");
+
     cow_dfield_commit(sim->electric[n]);
     cow_dfield_commit(sim->magnetic[n]);
+    cow_dfield_commit(sim->psifield[n]);
   }
 }
 
@@ -237,6 +246,7 @@ void ffe_sim_free(struct ffe_sim *sim)
   for (int n=0; n<6; ++n) {
     cow_dfield_del(sim->electric[n]);
     cow_dfield_del(sim->magnetic[n]);
+    cow_dfield_del(sim->psifield[n]);
   }
 
   cow_domain_del(sim->domain);
@@ -304,22 +314,29 @@ void ffe_sim_initial_data(struct ffe_sim *sim)
   int si = cow_dfield_getstride(sim->electric[0], 0);
   int sj = cow_dfield_getstride(sim->electric[0], 1);
   int sk = cow_dfield_getstride(sim->electric[0], 2);
+  int ti = cow_dfield_getstride(sim->psifield[0], 0);
+  int tj = cow_dfield_getstride(sim->psifield[0], 1);
+  int tk = cow_dfield_getstride(sim->psifield[0], 2);
   double *E = cow_dfield_getdatabuffer(sim->electric[0]);
   double *B = cow_dfield_getdatabuffer(sim->magnetic[0]);
+  double *P = cow_dfield_getdatabuffer(sim->psifield[0]);
 
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {    
 
-    int m = IND(i,j,k,0);
+    int m = INDV(i,j,k);
+    int n = INDS(i,j,k);
     double x[4] = {0,
     		   cow_domain_positionatindex(sim->domain, 0, i),
     		   cow_domain_positionatindex(sim->domain, 1, j),
     		   cow_domain_positionatindex(sim->domain, 2, k)};
 
     sim->initial_data(sim, x, &E[m], &B[m]);
+    P[n] = 0.0;
   }
 
   cow_dfield_syncguard(sim->electric[0]);
   cow_dfield_syncguard(sim->magnetic[0]);
+  cow_dfield_syncguard(sim->psifield[0]);
 }
 
 
@@ -369,10 +386,21 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 #define D1(F,c)  (Ni==1 ? 0.0 : DIFF1C2(F+m+c,si)/dx)
 #define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C2(F+m+c,sj)/dy)
 #define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C2(F+m+c,sk)/dz)
+
+#define S1(F  )  (Ni==1 ? 0.0 : DIFF1C2(F+n+0,ti)/dx)
+#define S2(F  )  (Nj==1 ? 0.0 : DIFF1C2(F+n+0,tj)/dy)
+#define S3(F  )  (Nk==1 ? 0.0 : DIFF1C2(F+n+0,tk)/dz)
+
 #elif (FFE_DIFFERENCE_ORDER == 4)
+
 #define D1(F,c)  (Ni==1 ? 0.0 : DIFF1C4(F+m+c,si)/dx)
 #define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C4(F+m+c,sj)/dy)
 #define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C4(F+m+c,sk)/dz)
+
+#define S1(F  )  (Ni==1 ? 0.0 : DIFF1C4(F+n+0,ti)/dx)
+#define S2(F  )  (Nj==1 ? 0.0 : DIFF1C4(F+n+0,tj)/dy)
+#define S3(F  )  (Nk==1 ? 0.0 : DIFF1C4(F+n+0,tk)/dz)
+
 #endif
 #if (FFE_DISSIPATION_ORDER == 2)
 #define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)/dt) +    \
@@ -391,7 +419,6 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
   double KO_const = -1.0/64;
 #endif
 
-
   double RKparam_array[4] = {0.0, 0.5, 0.5, 1.0};
   double RKparam = RKparam_array[RKstep];
 
@@ -402,19 +429,29 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
   int si = cow_dfield_getstride(sim->electric[0], 0);
   int sj = cow_dfield_getstride(sim->electric[0], 1);
   int sk = cow_dfield_getstride(sim->electric[0], 2);
+  int ti = cow_dfield_getstride(sim->psifield[0], 0);
+  int tj = cow_dfield_getstride(sim->psifield[0], 1);
+  int tk = cow_dfield_getstride(sim->psifield[0], 2);
 
   double *E0 = cow_dfield_getdatabuffer(sim->electric[0]);
   double *B0 = cow_dfield_getdatabuffer(sim->magnetic[0]);
+  double *P0 = cow_dfield_getdatabuffer(sim->psifield[0]);
   double *E  = cow_dfield_getdatabuffer(sim->electric[1]);
   double *B  = cow_dfield_getdatabuffer(sim->magnetic[1]);
+  double *P  = cow_dfield_getdatabuffer(sim->psifield[1]);
 
   double *dtE = cow_dfield_getdatabuffer(sim->electric[RKstep+2]);
   double *dtB = cow_dfield_getdatabuffer(sim->magnetic[RKstep+2]);
+  double *dtP = cow_dfield_getdatabuffer(sim->psifield[RKstep+2]);
 
   double dx = sim->grid_spacing[1];
   double dy = sim->grid_spacing[2];
   double dz = sim->grid_spacing[3];
   double dt = sim->status.time_step;
+
+  double ch2 = 1.00; /* Dedner wave speed (squared) */
+  double tau = 0.02; /* Dedner damping time */
+
 
   /* ===========================================================================
    * Fill in the n-th (n=0,1,2,3) time-derivative register, reading from the
@@ -423,29 +460,44 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
    */
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
+    int m = INDV(i,j,k);
+    int n = INDS(i,j,k);
 
-    int m = IND(i,j,k,0);
     double divE = D1(E,1) + D2(E,2) + D3(E,3);
     double divB = D1(B,1) + D2(B,2) + D3(B,3);    
     double rotE[4] = {0, D2(E,3) - D3(E,2), D3(E,1) - D1(E,3), D1(E,2) - D2(E,1)};
     double rotB[4] = {0, D2(B,3) - D3(B,2), D3(B,1) - D1(B,3), D1(B,2) - D2(B,1)};
 
 
-    /* Current evaluation */
+
+
+    /* Electric and magnetic current evaluation */
     double J[4];
+    double F[4];
+
     ffe_sim_ohms_law(sim, &E[m], rotE, divE, &B[m], rotB, divB, J);
+
+    F[1] = -S1(P); /* (minus) grad-psi = magnetic current */
+    F[2] = -S2(P);
+    F[3] = -S3(P);
 
 
     /* Maxwell's equations */
     for (int d=1; d<=3; ++d) {
       dtE[m+d] = +rotB[d] - J[d];
-      dtB[m+d] = -rotE[d];
+      dtB[m+d] = -rotE[d] + F[d];
     }
 
 
 
+    /* Dedner */
+    dtP[n] = -ch2 * divB - P[n] / tau;
+
+
+
+
     /* Kreiss-Oliger dissipation */
-    if (0) {
+    if (1) {
       double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
       double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
       double eps = sim->eps_parameter;
@@ -489,7 +541,8 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
    */
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
-    int m = IND(i,j,k,0);
+    int m = INDV(i,j,k);
+    int n = INDS(i,j,k);
 
     E[m+1] = E0[m+1] + dt * RKparam * dtE[m+1];
     E[m+2] = E0[m+2] + dt * RKparam * dtE[m+2];
@@ -499,16 +552,23 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
     B[m+2] = B0[m+2] + dt * RKparam * dtB[m+2];
     B[m+3] = B0[m+3] + dt * RKparam * dtB[m+3];
 
+    P[n] = P0[n] + dt * RKparam * dtP[n];
+
   }
 
-  cow_dfield_syncguard(sim->electric[0]);
+  cow_dfield_syncguard(sim->electric[0]); /* TODO: these first 3 are redundant */
   cow_dfield_syncguard(sim->magnetic[0]);
+  cow_dfield_syncguard(sim->psifield[0]);
   cow_dfield_syncguard(sim->electric[1]);
   cow_dfield_syncguard(sim->magnetic[1]);
+  cow_dfield_syncguard(sim->psifield[1]);
 
 #undef D1
 #undef D2
 #undef D3
+#undef S1
+#undef S2
+#undef S3
 #undef KO
 }
 
@@ -556,7 +616,7 @@ void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
    */
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
-    int m = IND(i,j,k,0);
+    int m = INDV(i,j,k);
 
     for (int d=1; d<=3; ++d) {
       dE[m+d] = KO(E,d);
@@ -567,7 +627,7 @@ void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
 
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
-    int m = IND(i,j,k,0);
+    int m = INDV(i,j,k);
     double eps = sim->eps_parameter;
 
     for (int d=1; d<=3; ++d) {
@@ -599,18 +659,26 @@ void ffe_sim_average_rk(struct ffe_sim *sim)
   int si = cow_dfield_getstride(sim->electric[0], 0);
   int sj = cow_dfield_getstride(sim->electric[0], 1);
   int sk = cow_dfield_getstride(sim->electric[0], 2);
+  int ti = cow_dfield_getstride(sim->psifield[0], 0);
+  int tj = cow_dfield_getstride(sim->psifield[0], 1);
+  int tk = cow_dfield_getstride(sim->psifield[0], 2);
 
   double *E = cow_dfield_getdatabuffer(sim->electric[0]);
   double *B = cow_dfield_getdatabuffer(sim->magnetic[0]);
+  double *P = cow_dfield_getdatabuffer(sim->psifield[0]);
 
   double *dtE0 = cow_dfield_getdatabuffer(sim->electric[2]);
   double *dtB0 = cow_dfield_getdatabuffer(sim->magnetic[2]);
+  double *dtP0 = cow_dfield_getdatabuffer(sim->psifield[2]);
   double *dtE1 = cow_dfield_getdatabuffer(sim->electric[3]);
   double *dtB1 = cow_dfield_getdatabuffer(sim->magnetic[3]);
+  double *dtP1 = cow_dfield_getdatabuffer(sim->psifield[3]);
   double *dtE2 = cow_dfield_getdatabuffer(sim->electric[4]);
   double *dtB2 = cow_dfield_getdatabuffer(sim->magnetic[4]);
+  double *dtP2 = cow_dfield_getdatabuffer(sim->psifield[4]);
   double *dtE3 = cow_dfield_getdatabuffer(sim->electric[5]);
   double *dtB3 = cow_dfield_getdatabuffer(sim->magnetic[5]);
+  double *dtP3 = cow_dfield_getdatabuffer(sim->psifield[5]);
 
   double dt = sim->status.time_step;
 
@@ -621,7 +689,8 @@ void ffe_sim_average_rk(struct ffe_sim *sim)
    */
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
-    int m = IND(i,j,k,0);
+    int m = INDV(i,j,k);
+    int n = INDS(i,j,k);
 
     E[m+1] += dt/6 * (dtE0[m+1] + 2*dtE1[m+1] + 2*dtE2[m+1] + dtE3[m+1]);
     E[m+2] += dt/6 * (dtE0[m+2] + 2*dtE1[m+2] + 2*dtE2[m+2] + dtE3[m+2]);
@@ -630,6 +699,9 @@ void ffe_sim_average_rk(struct ffe_sim *sim)
     B[m+1] += dt/6 * (dtB0[m+1] + 2*dtB1[m+1] + 2*dtB2[m+1] + dtB3[m+1]);
     B[m+2] += dt/6 * (dtB0[m+2] + 2*dtB1[m+2] + 2*dtB2[m+2] + dtB3[m+2]);
     B[m+3] += dt/6 * (dtB0[m+3] + 2*dtB1[m+3] + 2*dtB2[m+3] + dtB3[m+3]);
+
+    P[n] += dt/6 * (dtP0[n] + 2*dtP1[n] + 2*dtP2[n] + dtP3[n]);
+
 
 
 
@@ -667,6 +739,7 @@ void ffe_sim_average_rk(struct ffe_sim *sim)
 
   cow_dfield_syncguard(sim->electric[0]);
   cow_dfield_syncguard(sim->magnetic[0]);
+  cow_dfield_syncguard(sim->psifield[0]);
 }
 
 
@@ -693,7 +766,7 @@ void ffe_sim_advance(struct ffe_sim *sim)
   ffe_sim_advance_rk(sim, 2);
   ffe_sim_advance_rk(sim, 3);
   ffe_sim_average_rk(sim);
-  ffe_sim_kreiss_oliger(sim);
+  //ffe_sim_kreiss_oliger(sim);
 
   sim->status.iteration += 1;
   sim->status.time_simulation += dt;
@@ -744,7 +817,7 @@ void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
 
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
-    int m = IND(i,j,k,0);
+    int m = INDV(i,j,k);
 
     double divB = D1(B,1) + D2(B,2) + D3(B,3);    
 
