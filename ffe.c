@@ -154,6 +154,9 @@ struct ffe_sim
   struct ffe_status status;
 
   char output_directory[1024];
+
+
+  int alpha_squared; /* wave-number (squared) of initial configuration */
 } ;
 
 
@@ -176,6 +179,9 @@ int  ffe_sim_problem_setup(struct ffe_sim *sim, const char *problem_name);
  * -> time_between_checkpoints
  * -> time_final
  * -> output_directory
+ * -> alpha_squared
+ * -> eps_parameter
+ * -> cfl_parameter
  *
  * =====================================================================
  */
@@ -188,8 +194,6 @@ void ffe_sim_init(struct ffe_sim *sim)
   sim->grid_spacing[1] = 1.0 / sim->Ni;
   sim->grid_spacing[2] = 1.0 / sim->Nj;
   sim->grid_spacing[3] = 1.0 / sim->Nk;
-  sim->cfl_parameter = 0.25;
-  sim->eps_parameter = 1.00; /* [0-1] */
 
   sim->status.iteration = 0;
   sim->status.checkpoint_number = 0;
@@ -497,7 +501,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 
 
     /* Kreiss-Oliger dissipation */
-    if (1) {
+    if (0) {
       double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
       double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
       double eps = sim->eps_parameter;
@@ -605,8 +609,8 @@ void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
   int sk = cow_dfield_getstride(sim->electric[0], 2);
   double *E = cow_dfield_getdatabuffer(sim->electric[0]);
   double *B = cow_dfield_getdatabuffer(sim->magnetic[0]);
-  double *dE = cow_dfield_getdatabuffer(sim->electric[2]); /* use dt registers */
-  double *dB = cow_dfield_getdatabuffer(sim->magnetic[2]);
+  double *dE = cow_dfield_getdatabuffer(sim->electric[1]); /* use dt registers */
+  double *dB = cow_dfield_getdatabuffer(sim->magnetic[1]);
 
 
   /* ===========================================================================
@@ -766,7 +770,7 @@ void ffe_sim_advance(struct ffe_sim *sim)
   ffe_sim_advance_rk(sim, 2);
   ffe_sim_advance_rk(sim, 3);
   ffe_sim_average_rk(sim);
-  //ffe_sim_kreiss_oliger(sim);
+  ffe_sim_kreiss_oliger(sim);
 
   sim->status.iteration += 1;
   sim->status.time_simulation += dt;
@@ -846,14 +850,19 @@ int main(int argc, char **argv)
   cow_init(0, NULL, 0);
 
 
-
-  const char *problem_name = NULL;
   char logfile_name[1024];
+  char anlfile_name[1024];
+  const char *problem_name = NULL;
   struct ffe_sim sim;
   struct ffe_measure measure;
 
   sim.time_final = 1.0;
   sim.time_between_checkpoints = 1.0;
+  sim.alpha_squared = 1.0;
+  sim.cfl_parameter = 0.25;
+  sim.eps_parameter = 0.50; /* [0-1] */
+
+
   strcpy(sim.output_directory, ".");
 
 
@@ -915,6 +924,9 @@ int main(int argc, char **argv)
     else if (!strncmp(argv[n], "eps=", 4)) {
       sscanf(argv[n], "eps=%lf", &sim.eps_parameter);
     }
+    else if (!strncmp(argv[n], "k2=", 3)) {
+      sscanf(argv[n], "k2=%d", &sim.alpha_squared);
+    }
     else {
       printf("[ffe] error: unrecognized option '%s'\n", argv[n]);
       return 1;
@@ -934,6 +946,7 @@ int main(int argc, char **argv)
   printf("time_between_checkpoints ... %12.10lf\n", sim.time_between_checkpoints);
   printf("eps_parameter .............. %12.10lf\n", sim.eps_parameter);
   printf("output_directory ........... %s\n", sim.output_directory);
+  printf("alpha_squared .............. %d\n", sim.alpha_squared);
   printf("-----------------------------------------\n\n");
 
 
@@ -942,7 +955,8 @@ int main(int argc, char **argv)
 							    COW_ALL_DIMS);
 
 
-  snprintf(logfile_name, 1024, "%s/ffe.dat", sim.output_directory);
+  snprintf(logfile_name, 1024, "%s/ffe.dat"    , sim.output_directory);
+  snprintf(anlfile_name, 1024, "%s/analysis.h5", sim.output_directory);
 
   if (cow_domain_getcartrank(sim.domain) == 0) {
   
@@ -998,7 +1012,7 @@ int main(int argc, char **argv)
     ffe_sim_measure(&sim, &measure);
 
     if (sim.status.iteration % 100 == 0) {
-      ffe_sim_analyze(&sim, "analysis.h5");
+      ffe_sim_analyze(&sim, anlfile_name);
     }
 
     if (cow_domain_getcartrank(sim.domain) == 0) {
@@ -1085,8 +1099,8 @@ void initial_data_alfvenwave(struct ffe_sim *sim, double x[4], double E[4], doub
 
 void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4])
 {
-  double a=1, b=1, c=0;
-  double alpha = 2 * M_PI * 2;
+  double a=1, b=1, c=1;
+  double alpha = sqrt(sim->alpha_squared) * 2 * M_PI;
 
   E[1] = 0.0;
   E[2] = 0.0;
@@ -1120,7 +1134,7 @@ void initial_data_beltrami(struct ffe_sim *sim, double x[4], double E[4], double
 		 -1 + 2*x[2],
 		 -1 + 2*x[3]};
 
-  random_beltrami_field(X, B, 0, 11);
+  random_beltrami_field(X, B, 0, sim->alpha_squared);
 }
 
 
