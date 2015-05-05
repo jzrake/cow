@@ -17,6 +17,8 @@
 #define FFE_DIFFERENCE_ORDER 4
 #define FFE_DISSIPATION_ORDER 4
 
+
+
 /*
  * Macro for a three-dimensional loop over all interior cells
  * =====================================================================
@@ -26,6 +28,8 @@
     for (int j=N2==1?0:FFE_NG; j<N2+(N2==1?0:FFE_NG); ++j)	\
       for (int k=N3==1?0:FFE_NG; k<N3+(N3==1?0:FFE_NG); ++k)	\
 
+
+
 /*
  * Macro to calculate linear index of (i,j,k,m) ... m goes from 1, not 0
  * =====================================================================
@@ -33,6 +37,7 @@
 
 #define INDV(i,j,k) ((i)*si + (j)*sj + (k)*sk - 1)
 #define INDS(i,j,k) ((i)*ti + (j)*tj + (k)*tk) /* for scalar field */
+
 
 
 /*
@@ -94,6 +99,10 @@
 
 
 struct ffe_sim;
+struct ffe_status;
+struct ffe_measure;
+
+
 
 /*
  * Initial data library
@@ -385,8 +394,8 @@ void ffe_sim_ohms_law(struct ffe_sim *sim,
  */
 void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 {
-/* https://einsteintoolkit.org/documentation/ThornDoc/CactusNumerical/Dissipation */
 #if (FFE_DIFFERENCE_ORDER == 2)
+
 #define D1(F,c)  (Ni==1 ? 0.0 : DIFF1C2(F+m+c,si)/dx)
 #define D2(F,c)  (Nj==1 ? 0.0 : DIFF1C2(F+m+c,sj)/dy)
 #define D3(F,c)  (Nk==1 ? 0.0 : DIFF1C2(F+m+c,sk)/dz)
@@ -406,6 +415,9 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 #define S3(F  )  (Nk==1 ? 0.0 : DIFF1C4(F+n+0,tk)/dz)
 
 #endif
+
+
+/* https://einsteintoolkit.org/documentation/ThornDoc/CactusNumerical/Dissipation */
 #if (FFE_DISSIPATION_ORDER == 2)
 #define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)/dt) +    \
                  (Nj==1 ? 0.0 : DIFF2C2(F+m+c,sj)/dt) +    \
@@ -1002,6 +1014,7 @@ int main(int argc, char **argv)
       sim.status.time_last_checkpoint += sim.time_between_checkpoints;
       sim.status.checkpoint_number += 1;
     }
+
 
 
     /*
