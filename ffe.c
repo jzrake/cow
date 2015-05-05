@@ -2,8 +2,9 @@
 #include <math.h>
 #include <string.h>
 #include <stdio.h>
-#include <time.h>
 #include <complex.h>
+#include <time.h>
+#include <sys/stat.h> /* mkdir */
 #include "jsw_rand.h"
 #include "cow.h"
 
@@ -574,9 +575,6 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 
   }
 
-  cow_dfield_syncguard(sim->electric[0]); /* TODO: these first 3 are redundant */
-  cow_dfield_syncguard(sim->magnetic[0]);
-  cow_dfield_syncguard(sim->psifield[0]);
   cow_dfield_syncguard(sim->electric[1]);
   cow_dfield_syncguard(sim->magnetic[1]);
   cow_dfield_syncguard(sim->psifield[1]);
@@ -602,16 +600,25 @@ void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
 #define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)) +	\
 		 (Nj==1 ? 0.0 : DIFF2C2(F+m+c,sj)) +	\
 		 (Nk==1 ? 0.0 : DIFF2C2(F+m+c,sk)))
+#define KOS(F) ((Ni==1 ? 0.0 : DIFF2C2(F+n,ti)) +	\
+		(Nj==1 ? 0.0 : DIFF2C2(F+n,tj)) +	\
+		(Nk==1 ? 0.0 : DIFF2C2(F+n,tk)))
   double KO_const = -1.0/4;
 #elif (FFE_DISSIPATION_ORDER == 4)
 #define KO(F,c) ((Ni==1 ? 0.0 : DIFF4C2(F+m+c,si)) +	\
 		 (Nj==1 ? 0.0 : DIFF4C2(F+m+c,sj)) +	\
 		 (Nk==1 ? 0.0 : DIFF4C2(F+m+c,sk)))
+#define KOS(F) ((Ni==1 ? 0.0 : DIFF4C2(F+n,ti)) +	\
+		(Nj==1 ? 0.0 : DIFF4C2(F+n,tj)) +	\
+		(Nk==1 ? 0.0 : DIFF4C2(F+n,tk)))
   double KO_const = +1.0/16;
 #elif (FFE_DISSIPATION_ORDER == 6)
 #define KO(F,c) ((Ni==1 ? 0.0 : DIFF6C2(F+m+c,si)) +	   \
 		 (Nj==1 ? 0.0 : DIFF6C2(F+m+c,sj)) +	   \
                  (Nk==1 ? 0.0 : DIFF6C2(F+m+c,sk)))
+#define KOS(F) ((Ni==1 ? 0.0 : DIFF6C2(F+n,ti)) +	\
+		(Nj==1 ? 0.0 : DIFF6C2(F+n,tj)) +	\
+		(Nk==1 ? 0.0 : DIFF6C2(F+n,tk)))
   double KO_const = -1.0/64;
 #endif
 
@@ -621,31 +628,35 @@ void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
   int si = cow_dfield_getstride(sim->electric[0], 0);
   int sj = cow_dfield_getstride(sim->electric[0], 1);
   int sk = cow_dfield_getstride(sim->electric[0], 2);
+  int ti = cow_dfield_getstride(sim->psifield[0], 0);
+  int tj = cow_dfield_getstride(sim->psifield[0], 1);
+  int tk = cow_dfield_getstride(sim->psifield[0], 2);
   double *E = cow_dfield_getdatabuffer(sim->electric[0]);
   double *B = cow_dfield_getdatabuffer(sim->magnetic[0]);
-  double *dE = cow_dfield_getdatabuffer(sim->electric[1]); /* use dt registers */
+  double *P = cow_dfield_getdatabuffer(sim->psifield[0]);
+  double *dE = cow_dfield_getdatabuffer(sim->electric[1]);
   double *dB = cow_dfield_getdatabuffer(sim->magnetic[1]);
+  double *dP = cow_dfield_getdatabuffer(sim->psifield[1]);
 
 
-  /* ===========================================================================
-   * Fill in the n-th (n=0,1,2,3) time-derivative register, reading from the
-   * [1] field register
-   * ===========================================================================
-   */
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
     int m = INDV(i,j,k);
+    int n = INDS(i,j,k);
 
     for (int d=1; d<=3; ++d) {
       dE[m+d] = KO(E,d);
       dB[m+d] = KO(B,d);
     }
 
+    dP[n] = KOS(P);
   }
 
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
     int m = INDV(i,j,k);
+    int n = INDS(i,j,k);
+
     double eps = sim->eps_parameter;
 
     for (int d=1; d<=3; ++d) {
@@ -653,11 +664,14 @@ void ffe_sim_kreiss_oliger(struct ffe_sim *sim)
       B[m+d] -= eps * KO_const * dB[m+d];
     }
 
+    P[n] -= eps * KO_const * dP[n];
+
   }
 
 
   cow_dfield_syncguard(sim->electric[0]);
   cow_dfield_syncguard(sim->magnetic[0]);
+  cow_dfield_syncguard(sim->psifield[0]);
 
 #undef KO
 }
@@ -724,6 +738,9 @@ void ffe_sim_average_rk(struct ffe_sim *sim)
 
 
 
+
+
+
     /*
      * Subtract out the component of E parallel to B
      */
@@ -778,6 +795,7 @@ void ffe_sim_advance(struct ffe_sim *sim)
   /* copy data from [0] register into [1] register */
   cow_dfield_copy(sim->electric[0], sim->electric[1]);
   cow_dfield_copy(sim->magnetic[0], sim->magnetic[1]);
+  cow_dfield_copy(sim->psifield[0], sim->psifield[1]);
 
   ffe_sim_advance_rk(sim, 0);
   ffe_sim_advance_rk(sim, 1);
@@ -830,8 +848,8 @@ void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
 
   meas->electric_energy = 0.0;
   meas->magnetic_energy = 0.0;
-  meas->magnetic_monopole = 0.0; /* TODO */
-  meas->magnetic_helicity = 0.0;
+  meas->magnetic_monopole = 0.0;
+  meas->magnetic_helicity = 0.0; /* TODO */
 
   FOR_ALL_INTERIOR(Ni, Nj, Nk) {
 
@@ -856,6 +874,15 @@ void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
 #undef D2
 #undef D3
 }
+
+
+/* #include <hdf5.h> */
+/* #include <hdf5_hl.h> */
+
+/* void ffe_sim_write_checkpoint(struct ffe_sim *sim) */
+/* { */
+
+/* } */
 
 
 
@@ -977,6 +1004,8 @@ int main(int argc, char **argv)
 
   if (cow_domain_getcartrank(sim.domain) == 0) {
   
+    mkdir(sim.output_directory, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+
     FILE *logf = fopen(logfile_name, "w");
     
     if (logf == NULL) {
@@ -1015,6 +1044,7 @@ int main(int argc, char **argv)
 
       cow_dfield_write(sim.magnetic[0], chkpt_name);
       cow_dfield_write(sim.electric[0], chkpt_name);
+      //ffe_sim_write_checkpoint(&sim);
 
       sim.status.time_last_checkpoint += sim.time_between_checkpoints;
       sim.status.checkpoint_number += 1;
@@ -1062,7 +1092,7 @@ int main(int argc, char **argv)
     sim.status.kzps = 1e-3 * local_grid_size / (stop_cycle - start_cycle) *
       CLOCKS_PER_SEC;
 
-    printf("[ffe] n=%06d t=%3.2e %3.2f kzps\n",
+    printf("[ffe] n=%06d t=%6.4e %3.2f kzps\n",
 	   sim.status.iteration,
 	   sim.status.time_simulation,
 	   sim.status.kzps);
