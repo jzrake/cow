@@ -16,7 +16,7 @@
 
 #define FFE_NG 3 /* number of guard zones */
 #define FFE_DIFFERENCE_ORDER 4
-#define FFE_DISSIPATION_ORDER 4
+#define FFE_DISSIPATION_ORDER 6
 
 
 
@@ -425,16 +425,25 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 #define KO(F,c) ((Ni==1 ? 0.0 : DIFF2C2(F+m+c,si)/dt) +    \
                  (Nj==1 ? 0.0 : DIFF2C2(F+m+c,sj)/dt) +    \
                  (Nk==1 ? 0.0 : DIFF2C2(F+m+c,sk)/dt))
+#define KOS(F) ((Ni==1 ? 0.0 : DIFF2C2(F+n,ti)) +	\
+		(Nj==1 ? 0.0 : DIFF2C2(F+n,tj)) +	\
+		(Nk==1 ? 0.0 : DIFF2C2(F+n,tk)))
   double KO_const = -1.0/4;
 #elif (FFE_DISSIPATION_ORDER == 4)
 #define KO(F,c) ((Ni==1 ? 0.0 : DIFF4C2(F+m+c,si)/dt) +	   \
 		 (Nj==1 ? 0.0 : DIFF4C2(F+m+c,sj)/dt) +	   \
                  (Nk==1 ? 0.0 : DIFF4C2(F+m+c,sk)/dt))
+#define KOS(F) ((Ni==1 ? 0.0 : DIFF4C2(F+n,ti)) +	\
+		(Nj==1 ? 0.0 : DIFF4C2(F+n,tj)) +	\
+		(Nk==1 ? 0.0 : DIFF4C2(F+n,tk)))
   double KO_const = +1.0/16;
 #elif (FFE_DISSIPATION_ORDER == 6)
 #define KO(F,c) ((Ni==1 ? 0.0 : DIFF6C2(F+m+c,si)/dt) +	   \
 		 (Nj==1 ? 0.0 : DIFF6C2(F+m+c,sj)/dt) +	   \
                  (Nk==1 ? 0.0 : DIFF6C2(F+m+c,sk)/dt))
+#define KOS(F) ((Ni==1 ? 0.0 : DIFF6C2(F+n,ti)) +	\
+		(Nj==1 ? 0.0 : DIFF6C2(F+n,tj)) +	\
+		(Nk==1 ? 0.0 : DIFF6C2(F+n,tk)))
   double KO_const = -1.0/64;
 #endif
 
@@ -516,7 +525,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 
 
     /* Kreiss-Oliger dissipation */
-    if (0) {
+    if (1) {
       double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
       double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
       double eps = sim->eps_parameter;
@@ -525,6 +534,8 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 	dtE[m+d] -= eps * KO_const * lplE[d];
 	dtB[m+d] -= eps * KO_const * lplB[d];
       }
+
+      dtP[n] -= eps * KO_const * KOS(P);
     }
 
 
@@ -802,7 +813,7 @@ void ffe_sim_advance(struct ffe_sim *sim)
   ffe_sim_advance_rk(sim, 2);
   ffe_sim_advance_rk(sim, 3);
   ffe_sim_average_rk(sim);
-  ffe_sim_kreiss_oliger(sim);
+  //ffe_sim_kreiss_oliger(sim);
 
   sim->status.iteration += 1;
   sim->status.time_simulation += dt;
@@ -899,10 +910,11 @@ int main(int argc, char **argv)
 
   sim.time_final = 1.0;
   sim.time_between_checkpoints = 1.0;
-  sim.alpha_squared = 1.0;
-  sim.cfl_parameter = 0.25;
+  sim.cfl_parameter = 0.10;
   sim.eps_parameter = 0.50; /* [0-1] */
+  sim.alpha_squared = 1.0;
   sim.fractional_helicity = 1.0; /* [0-1] */
+
 
   strcpy(sim.output_directory, ".");
 
@@ -961,6 +973,9 @@ int main(int argc, char **argv)
     }
     else if (!strncmp(argv[n], "outdir=", 7)) {
       sscanf(argv[n], "outdir=%1024s", sim.output_directory);
+    }
+    else if (!strncmp(argv[n], "cfl=", 4)) {
+      sscanf(argv[n], "cfl=%lf", &sim.cfl_parameter);
     }
     else if (!strncmp(argv[n], "eps=", 4)) {
       sscanf(argv[n], "eps=%lf", &sim.eps_parameter);
