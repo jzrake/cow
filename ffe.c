@@ -113,7 +113,7 @@ static void initial_data_emwave    (struct ffe_sim *sim, double x[4], double E[4
 static void initial_data_alfvenwave(struct ffe_sim *sim, double x[4], double E[4], double B[4]);
 static void initial_data_abc       (struct ffe_sim *sim, double x[4], double E[4], double B[4]);
 static void initial_data_beltrami  (struct ffe_sim *sim, double x[4], double E[4], double B[4]);
-static void random_beltrami_field(double x[4], double B[4], int model, int k2);
+static void random_beltrami_field(double x[4], double B[4], int model, int k2, double h);
 
 
 enum FfeSimParameter {
@@ -166,6 +166,7 @@ struct ffe_sim
 
 
   int alpha_squared; /* wave-number (squared) of initial configuration */
+  double fractional_helicity;
 } ;
 
 
@@ -188,9 +189,10 @@ int  ffe_sim_problem_setup(struct ffe_sim *sim, const char *problem_name);
  * -> time_between_checkpoints
  * -> time_final
  * -> output_directory
- * -> alpha_squared
  * -> eps_parameter
  * -> cfl_parameter
+ * -> alpha_squared
+ * -> fractional_helicity
  *
  * =====================================================================
  */
@@ -873,7 +875,7 @@ int main(int argc, char **argv)
   sim.alpha_squared = 1.0;
   sim.cfl_parameter = 0.25;
   sim.eps_parameter = 0.50; /* [0-1] */
-
+  sim.fractional_helicity = 1.0; /* [0-1] */
 
   strcpy(sim.output_directory, ".");
 
@@ -938,6 +940,9 @@ int main(int argc, char **argv)
     }
     else if (!strncmp(argv[n], "k2=", 3)) {
       sscanf(argv[n], "k2=%d", &sim.alpha_squared);
+    }
+    else if (!strncmp(argv[n], "helicity=", 9)) {
+      sscanf(argv[n], "helicity=%lf", &sim.fractional_helicity);
     }
     else {
       printf("[ffe] error: unrecognized option '%s'\n", argv[n]);
@@ -1114,6 +1119,7 @@ void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4]
 {
   double a=1, b=1, c=1;
   double alpha = sqrt(sim->alpha_squared) * 2 * M_PI;
+  double h = sim->fractional_helicity;
 
   E[1] = 0.0;
   E[2] = 0.0;
@@ -1124,15 +1130,15 @@ void initial_data_abc(struct ffe_sim *sim, double x[4], double E[4], double B[4]
   B[3] = 0.0;
 
   B[2] += a * cos(alpha * x[1]);
-  B[3] -= a * sin(alpha * x[1]);
+  B[3] -= a * sin(alpha * x[1]) * h;
   B[1] += 0.0;
 
   B[3] += b * cos(alpha * x[2]);
-  B[1] -= b * sin(alpha * x[2]);
+  B[1] -= b * sin(alpha * x[2]) * h;
   B[2] += 0.0;
 
   B[1] += c * cos(alpha * x[3]);
-  B[2] -= c * sin(alpha * x[3]);
+  B[2] -= c * sin(alpha * x[3]) * h;
   B[3] += 0.0;
 }
 
@@ -1142,12 +1148,7 @@ void initial_data_beltrami(struct ffe_sim *sim, double x[4], double E[4], double
   E[2] = 0.0;
   E[3] = 0.0;
 
-  double X[4] = {0,
-		 -1 + 2*x[1],
-		 -1 + 2*x[2],
-		 -1 + 2*x[3]};
-
-  random_beltrami_field(X, B, 0, sim->alpha_squared);
+  random_beltrami_field(x, B, 0, sim->alpha_squared, sim->fractional_helicity);
 }
 
 
@@ -1315,7 +1316,7 @@ typedef struct fourier_mode
 
 
 
-void random_beltrami_field(double x[4], double B[4], int model, int k2)
+void random_beltrami_field(double x[4], double B[4], int model, int k2, double h)
 {
 #define RAND jsw_random_double(&rand, -1, 1)
   int m,i,j,k;
@@ -1366,7 +1367,7 @@ void random_beltrami_field(double x[4], double B[4], int model, int k2)
     fourier_mode M = modes[m];
     double a = sqrt(M.k[1]*M.k[1] + M.k[2]*M.k[2] + M.k[3]*M.k[3]);
     Complex K[4] = {0, I*M.k[1], I*M.k[2], I*M.k[3]};
-    Complex Ikx  = (K[1]*x[1] + K[2]*x[2] + K[3]*x[3]) * M_PI;
+    Complex Ikx  = (K[1]*x[1] + K[2]*x[2] + K[3]*x[3]) * 2 * M_PI;
     Complex P[4] = {0, M.A[1], M.A[2], M.A[3]}; /* a times psi */
 
     Complex T[4] = {0, /* T = K cross (a psi) */
@@ -1379,9 +1380,9 @@ void random_beltrami_field(double x[4], double B[4], int model, int k2)
 		    (K[3]*T[1] - K[1]*T[3])/a,
 		    (K[1]*T[2] - K[2]*T[1])/a};
 
-    A[1] += (S[1] + T[1])/a * cexp(Ikx);
-    A[2] += (S[2] + T[2])/a * cexp(Ikx);
-    A[3] += (S[3] + T[3])/a * cexp(Ikx);
+    A[1] += (h*S[1] + T[1])/a * cexp(Ikx);
+    A[2] += (h*S[2] + T[2])/a * cexp(Ikx);
+    A[3] += (h*S[3] + T[3])/a * cexp(Ikx);
   }
 
 
