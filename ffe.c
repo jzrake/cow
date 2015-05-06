@@ -137,7 +137,6 @@ struct ffe_status
   int iteration;
   int checkpoint_number;
   double time_simulation;
-  double time_final;
   double time_step;
   double time_last_checkpoint;
   double kzps;
@@ -146,28 +145,31 @@ struct ffe_status
 
 struct ffe_sim
 {
+  /* used by physics algorithm */
   cow_domain *domain;
   cow_dfield *electric[6]; /* 0,1: E, 4-6: dtE */
   cow_dfield *magnetic[6];
   cow_dfield *psifield[6]; /* 0,1: P, 4-6: dtP (Dedner psi field) */
-
-  int Ni, Nj, Nk;
-  double grid_spacing[4];
-  double cfl_parameter; /* Courant number [0.0 - 0.25]*/
-  double eps_parameter; /* Kreiss-Oliger parameter [0 - 1] */
-
-  enum FfeSimParameter flag_ohms_law;
-  InitialDataFunction initial_data;
-  double time_between_checkpoints;
-  double time_final;
-
   struct ffe_status status;
 
-  char output_directory[1024];
+
+  /* set by problem type */
+  double grid_spacing[4];
+  enum FfeSimParameter flag_ohms_law;
+  InitialDataFunction initial_data;
 
 
-  int alpha_squared; /* wave-number (squared) of initial configuration */
+  /* set by problem type and/or user */
+  int Ni, Nj, Nk;
+  double cfl_parameter; /* Courant number [0.0 - 0.25]*/
+  double eps_parameter; /* Kreiss-Oliger parameter [0 - 1] */
+  double time_between_checkpoints;
+  double time_final;
   double fractional_helicity;
+  int alpha_squared; /* wave-number (squared) of initial configuration */
+  char kreiss_oliger_mode; /* 'c': coarse, 'f': fine 'n': none */
+  char output_directory[1024];
+  char problem_name[1024];
 } ;
 
 
@@ -212,6 +214,7 @@ void ffe_sim_init(struct ffe_sim *sim)
   sim->status.time_simulation = 0.0;
   sim->status.time_step = 0.0;
   sim->status.time_last_checkpoint = -sim->time_between_checkpoints;
+  sim->status.kzps = 0.0;
 
 
 
@@ -525,7 +528,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 
 
     /* Kreiss-Oliger dissipation */
-    if (1) {
+    if (sim->kreiss_oliger_mode == 'f') {
       double lplE[4] = {0, KO(E,1), KO(E,2), KO(E,3)};
       double lplB[4] = {0, KO(B,1), KO(B,2), KO(B,3)};
       double eps = sim->eps_parameter;
@@ -542,6 +545,7 @@ void ffe_sim_advance_rk(struct ffe_sim *sim, int RKstep)
 
     /* Hyperbolicity terms, eqn 48-49: Pfeiffer (2013) */
     if (0) {
+
       double B2 = DOT(&B[m], &B[m]);
       double gradEdotB[4] = {0, 0, 0, 0};
 
@@ -813,7 +817,10 @@ void ffe_sim_advance(struct ffe_sim *sim)
   ffe_sim_advance_rk(sim, 2);
   ffe_sim_advance_rk(sim, 3);
   ffe_sim_average_rk(sim);
-  //ffe_sim_kreiss_oliger(sim);
+
+  if (sim->kreiss_oliger_mode == 'c') {
+    ffe_sim_kreiss_oliger(sim);
+  }
 
   sim->status.iteration += 1;
   sim->status.time_simulation += dt;
@@ -887,13 +894,147 @@ void ffe_sim_measure(struct ffe_sim *sim, struct ffe_measure *meas)
 }
 
 
-/* #include <hdf5.h> */
-/* #include <hdf5_hl.h> */
 
-/* void ffe_sim_write_checkpoint(struct ffe_sim *sim) */
-/* { */
+#if (COW_HDF5)
+#include <hdf5.h>
+#endif
 
-/* } */
+void read_write_status(struct ffe_sim *sim, const char *chkpt_name, char mode)
+{
+#if (COW_HDF5)
+#define ADD_MEM(nm, tp) H5Tinsert(h5t, #nm, HOFFSET(struct ffe_status, nm), tp)
+
+  hid_t h5f = H5Fopen(chkpt_name, H5F_ACC_RDWR, H5P_DEFAULT);
+  hid_t h5s = H5Screate(H5S_SCALAR);
+  hid_t h5t = H5Tcreate(H5T_COMPOUND, sizeof(struct ffe_status));
+  hid_t h5d = -1;
+
+  ADD_MEM(iteration, H5T_NATIVE_INT);
+  ADD_MEM(checkpoint_number, H5T_NATIVE_INT);
+  ADD_MEM(time_simulation, H5T_NATIVE_DOUBLE);
+  ADD_MEM(time_step, H5T_NATIVE_DOUBLE);
+  ADD_MEM(time_last_checkpoint, H5T_NATIVE_DOUBLE);
+  ADD_MEM(kzps, H5T_NATIVE_DOUBLE);
+
+
+  if (mode == 'w') {
+
+    if (H5Lexists(h5f, "status", H5P_DEFAULT)) {
+      H5Ldelete(h5f, "status", H5P_DEFAULT);
+    }
+
+    h5d = H5Dcreate(h5f, "status", h5t, h5s, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    H5Dwrite(h5d, h5t, H5S_ALL, H5S_ALL, H5P_DEFAULT, &sim->status);
+
+  }
+
+  else if (mode == 'r') {
+
+    h5d = H5Dopen(h5f, "status", H5P_DEFAULT);
+    hid_t type = H5Dget_type(h5d);
+
+    if (H5Tequal(type, h5t) <= 0) {
+      printf("[io] error: checkpoint format 'status' is not up-to-date\n");
+    }
+    else {
+      H5Dread(h5d, h5t, H5S_ALL, H5S_ALL, H5P_DEFAULT, &sim->status);
+    }
+
+    H5Tclose(type);
+
+  }
+
+
+  H5Dclose(h5d);
+  H5Tclose(h5t);
+  H5Sclose(h5s);
+  H5Fclose(h5f);
+
+#undef ADD_MEM
+#endif
+}
+
+
+
+void read_write_sim(struct ffe_sim *sim, const char *chkpt_name, char mode)
+{
+#if (COW_HDF5)
+#define ADD_MEM(nm, tp) H5Tinsert(h5t, #nm, HOFFSET(struct ffe_sim, nm), tp)
+
+  hid_t h5t_string_1024 = H5Tcopy(H5T_C_S1); H5Tset_size(h5t_string_1024, 1024);
+  hid_t h5f = H5Fopen(chkpt_name, H5F_ACC_RDWR, H5P_DEFAULT);
+  hid_t h5s = H5Screate(H5S_SCALAR);
+  hid_t h5t = H5Tcreate(H5T_COMPOUND, sizeof(struct ffe_sim));
+  hid_t h5d = -1;
+
+  ADD_MEM(Ni, H5T_NATIVE_INT);
+  ADD_MEM(Nj, H5T_NATIVE_INT);
+  ADD_MEM(Nk, H5T_NATIVE_INT);
+  ADD_MEM(cfl_parameter, H5T_NATIVE_DOUBLE);
+  ADD_MEM(eps_parameter, H5T_NATIVE_DOUBLE);
+  ADD_MEM(kreiss_oliger_mode, H5T_C_S1);
+  ADD_MEM(time_between_checkpoints, H5T_NATIVE_DOUBLE);
+  ADD_MEM(time_final, H5T_NATIVE_DOUBLE);
+  ADD_MEM(fractional_helicity, H5T_NATIVE_DOUBLE);
+  ADD_MEM(alpha_squared, H5T_NATIVE_INT);
+  ADD_MEM(output_directory, h5t_string_1024);
+  ADD_MEM(problem_name, h5t_string_1024);
+
+  if (mode == 'w') {
+
+    if (H5Lexists(h5f, "sim", H5P_DEFAULT)) {
+      H5Ldelete(h5f, "sim", H5P_DEFAULT);
+    }
+
+    h5d = H5Dcreate(h5f, "sim", h5t, h5s, H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+    H5Dwrite(h5d, h5t, H5S_ALL, H5S_ALL, H5P_DEFAULT, sim);
+
+  }
+
+  else if (mode == 'r') {
+
+    hid_t type = H5Dget_type(h5d);
+
+    if (H5Tequal(type, h5t) <= 0) {
+      printf("[io] error: checkpoint format 'sim' is not up-to-date\n");
+    }
+    else {
+      H5Dread(h5d, h5t, H5S_ALL, H5S_ALL, H5P_DEFAULT, sim);
+    }
+
+    H5Tclose(type);
+
+  }
+
+  H5Tclose(h5t_string_1024);
+  H5Dclose(h5d);
+  H5Tclose(h5t);
+  H5Sclose(h5s);
+  H5Fclose(h5f);
+
+#undef ADD_MEM
+#endif
+}
+
+
+
+void ffe_sim_write_checkpoint(struct ffe_sim *sim)
+{
+  char chkpt_name[1024];
+  snprintf(chkpt_name, 1024, "%s/chkpt.%04d.h5",
+	   sim->output_directory,
+	   sim->status.checkpoint_number);
+
+  cow_dfield_write(sim->magnetic[0], chkpt_name);
+  cow_dfield_write(sim->electric[0], chkpt_name);
+
+
+  if (cow_domain_getcartrank(sim->domain) == 0) {
+    read_write_status(sim, chkpt_name, 'w');
+    read_write_status(sim, chkpt_name, 'r');
+    read_write_sim(sim, chkpt_name, 'w');
+  }
+}
 
 
 
@@ -904,14 +1045,17 @@ int main(int argc, char **argv)
 
   char logfile_name[1024];
   char anlfile_name[1024];
-  const char *problem_name = NULL;
   struct ffe_sim sim;
   struct ffe_measure measure;
+
+  memset(sim.output_directory, '\0', 1024);
+  memset(sim.problem_name, '\0', 1024);
 
   sim.time_final = 1.0;
   sim.time_between_checkpoints = 1.0;
   sim.cfl_parameter = 0.10;
   sim.eps_parameter = 0.50; /* [0-1] */
+  sim.kreiss_oliger_mode = 'c';
   sim.alpha_squared = 1.0;
   sim.fractional_helicity = 1.0; /* [0-1] */
 
@@ -929,13 +1073,13 @@ int main(int argc, char **argv)
   printf("Jonathan Zrake, Stanford University (2015)\n");
 
   if (argc == 1) {
-    printf("usage: ffe <problem-name> [sim.time_final=1.0] [N=16,16,16]\n");
+    printf("usage: ffe <problem-name> [tmax=1.0] [N=16,16,16]\n");
     printf("problems are:\n");
     ffe_sim_problem_setup(NULL, NULL);
     return 0;
   }
   else {
-    problem_name = argv[1];
+    strncpy(sim.problem_name, argv[1], 1024);
   }
 
 
@@ -944,8 +1088,9 @@ int main(int argc, char **argv)
    * Set up the problem defaults
    * ===================================================================
    */
-  if (ffe_sim_problem_setup(&sim, problem_name)) {
-    printf("[ffe] error: unkown problem name: '%s', choose one of\n", problem_name);
+  if (ffe_sim_problem_setup(&sim, sim.problem_name)) {
+    printf("[ffe] error: unkown problem name: '%s', choose one of\n",
+	   sim.problem_name);
     ffe_sim_problem_setup(NULL, NULL);
     return 1;
   }
@@ -980,6 +1125,9 @@ int main(int argc, char **argv)
     else if (!strncmp(argv[n], "eps=", 4)) {
       sscanf(argv[n], "eps=%lf", &sim.eps_parameter);
     }
+    else if (!strncmp(argv[n], "ko=", 3)) {
+      sscanf(argv[n], "ko=%c", &sim.kreiss_oliger_mode);
+    }
     else if (!strncmp(argv[n], "k2=", 3)) {
       sscanf(argv[n], "k2=%d", &sim.alpha_squared);
     }
@@ -1001,10 +1149,13 @@ int main(int argc, char **argv)
 
 
   printf("\n-----------------------------------------\n");
+  printf("problem_name ............... %s\n", sim.problem_name);
+  printf("output_directory ........... %s\n", sim.output_directory);
   printf("tmax ....................... %12.10lf\n", sim.time_final);
   printf("time_between_checkpoints ... %12.10lf\n", sim.time_between_checkpoints);
+  printf("cfl_parameter .............. %12.10lf\n", sim.cfl_parameter);
   printf("eps_parameter .............. %12.10lf\n", sim.eps_parameter);
-  printf("output_directory ........... %s\n", sim.output_directory);
+  printf("kriess_oliger_mode ......... %c\n", sim.kreiss_oliger_mode);
   printf("alpha_squared .............. %d\n", sim.alpha_squared);
   printf("-----------------------------------------\n\n");
 
@@ -1052,14 +1203,7 @@ int main(int argc, char **argv)
     if (sim.status.time_simulation - sim.status.time_last_checkpoint >=
 	sim.time_between_checkpoints) {
 
-      char chkpt_name[1024];
-      snprintf(chkpt_name, 1024, "%s/chkpt.%04d.h5",
-	       sim.output_directory,
-	       sim.status.checkpoint_number);
-
-      cow_dfield_write(sim.magnetic[0], chkpt_name);
-      cow_dfield_write(sim.electric[0], chkpt_name);
-      //ffe_sim_write_checkpoint(&sim);
+      ffe_sim_write_checkpoint(&sim);
 
       sim.status.time_last_checkpoint += sim.time_between_checkpoints;
       sim.status.checkpoint_number += 1;
@@ -1116,12 +1260,7 @@ int main(int argc, char **argv)
 
 
   if (invalid_output == 0) {
-    char chkpt_name[1024];
-    snprintf(chkpt_name, 1024, "%s/chkpt.%04d.h5",
-	     sim.output_directory,
-	     sim.status.checkpoint_number);
-    cow_dfield_write(sim.magnetic[0], chkpt_name);
-    cow_dfield_write(sim.electric[0], chkpt_name);
+    ffe_sim_write_checkpoint(&sim);
   }
 
 
