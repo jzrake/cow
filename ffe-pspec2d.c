@@ -26,10 +26,13 @@ struct config_t
   char *dset_name_E3;
   int write_derived_fields;
   int resolution; /* only used for sdf files; array size not inferred */
+  int three_d;
   int num_blocks;
   int checkpoint_number;
   int checkpoint_number0;
   int checkpoint_number1;
+  int max_pspec_bin;
+  int num_pspec_bins;
 } ;
 
 
@@ -53,10 +56,13 @@ static struct config_t configure_new()
   cfg.dset_name_E3 = NULL;
   cfg.write_derived_fields = 0;
   cfg.resolution = 0;
+  cfg.three_d = 0;
   cfg.num_blocks = 0;
   cfg.checkpoint_number = 0;
   cfg.checkpoint_number0 = 0;
   cfg.checkpoint_number1 = 128;
+  cfg.max_pspec_bin = 8192;
+  cfg.num_pspec_bins = 4096;
   return cfg;
 }
 
@@ -139,6 +145,9 @@ int main(int argc, char **argv)
     else if (!strncmp(argv[n], "resolution=", 11)) {
       sscanf(argv[n], "resolution=%d", &cfg.resolution);
     }
+    else if (!strncmp(argv[n], "three_d=", 8)) {
+      sscanf(argv[n], "three_d=%d", &cfg.three_d);
+    }
     else if (!strncmp(argv[n], "num_blocks=", 11)) {
       sscanf(argv[n], "num_blocks=%d", &cfg.num_blocks);
     }
@@ -149,22 +158,27 @@ int main(int argc, char **argv)
     else if (!strncmp(argv[n], "write_derived_fields=", 21)) {
       sscanf(argv[n], "write_derived_fields=%d", &cfg.write_derived_fields);
     }
+    else if (!strncmp(argv[n], "bins=", 5)) {
+      sscanf(argv[n], "bins=%d,%d",
+	     &cfg.num_pspec_bins, &cfg.max_pspec_bin);
+    }
     else {
       printf("[cfg] error: unknown option '%s'\n", argv[n]);
       return 1;
     }
-
 
   }
 
 
   printf("[cfg] using output=%s\n", cfg.output_filename);
   printf("[cfg] using resolution=%d\n", cfg.resolution);
+  printf("[cfg] using three_d=%d\n", cfg.three_d);
   printf("[cfg] using num_blocks=%d\n", cfg.num_blocks);
   printf("[cfg] using write_derived_fields=%d\n", cfg.write_derived_fields);
+  printf("[cfg] using num_pspec_bins=%d\n", cfg.num_pspec_bins);
+  printf("[cfg] using max_pspec_bin=%d\n", cfg.max_pspec_bin);
   printf("[cfg] using checkpoint_numbers=%d-%d\n",
 	 cfg.checkpoint_number0, cfg.checkpoint_number1);
-
 
 
   /* ================================================================
@@ -245,6 +259,12 @@ void process_file(struct config_t cfg)
   if (cfg.dset_name_for_size) {
     cow_domain_readsize(domain, cfg.filename, cfg.dset_name_for_size);
   }
+  else if (cfg.three_d) {
+    cow_domain_setndim(domain, 3);
+    cow_domain_setsize(domain, 0, cfg.resolution);
+    cow_domain_setsize(domain, 1, cfg.resolution);
+    cow_domain_setsize(domain, 2, cfg.resolution);
+  }
   else {
     cow_domain_setndim(domain, 2);
     cow_domain_setsize(domain, 0, cfg.resolution);
@@ -293,8 +313,8 @@ void process_file(struct config_t cfg)
   /* ---------------------------------------------------- */
   cow_histogram *Pb = cow_histogram_new();
   cow_histogram_setlower(Pb, 0, 1);
-  cow_histogram_setupper(Pb, 0, 8192);
-  cow_histogram_setnbins(Pb, 0, 4096);
+  cow_histogram_setupper(Pb, 0, cfg.max_pspec_bin);
+  cow_histogram_setnbins(Pb, 0, cfg.num_pspec_bins);
   cow_histogram_setspacing(Pb, COW_HIST_SPACING_LINEAR);
   cow_histogram_setfullname(Pb, "magnetic");
   cow_histogram_setnickname(Pb, "magnetic");
@@ -302,8 +322,8 @@ void process_file(struct config_t cfg)
 
   cow_histogram *Pe = cow_histogram_new();
   cow_histogram_setlower(Pe, 0, 1);
-  cow_histogram_setupper(Pe, 0, 8192);
-  cow_histogram_setnbins(Pe, 0, 4096);
+  cow_histogram_setupper(Pe, 0, cfg.max_pspec_bin);
+  cow_histogram_setnbins(Pe, 0, cfg.num_pspec_bins);
   cow_histogram_setspacing(Pe, COW_HIST_SPACING_LINEAR);
   cow_histogram_setfullname(Pe, "electric");
   cow_histogram_setnickname(Pe, "electric");
@@ -311,8 +331,8 @@ void process_file(struct config_t cfg)
 
   cow_histogram *Hr = cow_histogram_new();
   cow_histogram_setlower(Hr, 0, 1);
-  cow_histogram_setupper(Hr, 0, 8192);
-  cow_histogram_setnbins(Hr, 0, 4096);
+  cow_histogram_setupper(Hr, 0, cfg.max_pspec_bin);
+  cow_histogram_setnbins(Hr, 0, cfg.num_pspec_bins);
   cow_histogram_setspacing(Hr, COW_HIST_SPACING_LINEAR);
   cow_histogram_setfullname(Hr, "helicity-real");
   cow_histogram_setnickname(Hr, "helicity-real");
@@ -320,8 +340,8 @@ void process_file(struct config_t cfg)
 
   cow_histogram *Hi = cow_histogram_new();
   cow_histogram_setlower(Hi, 0, 1);
-  cow_histogram_setupper(Hi, 0, 8192);
-  cow_histogram_setnbins(Hi, 0, 4096);
+  cow_histogram_setupper(Hi, 0, cfg.max_pspec_bin);
+  cow_histogram_setnbins(Hi, 0, cfg.num_pspec_bins);
   cow_histogram_setspacing(Hi, COW_HIST_SPACING_LINEAR);
   cow_histogram_setfullname(Hi, "helicity-imag");
   cow_histogram_setnickname(Hi, "helicity-imag");

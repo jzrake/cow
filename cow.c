@@ -578,6 +578,7 @@ void cow_dfield_commit(cow_dfield *f)
     break;
   }
   f->committed = 1;
+  memset(f->data, 0, cow_dfield_getdatabytes(f));
 }
 void cow_dfield_syncguard(cow_dfield *f)
 {
