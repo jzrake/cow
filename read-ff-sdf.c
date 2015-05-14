@@ -46,9 +46,9 @@ int getEBFromSDF(int fileRank,
             return 1;
          }
          gft_read_rank(fileName, fileLevel, &rank);
-         if (rank!=2) {
+         if (rank!=2 && rank!=3) {
             gft_close_sdf_stream(fileName);
-            printf("Error rank!=2\n");
+            printf("Error rank!=2 or 3\n");
             return 1;
          }
 
