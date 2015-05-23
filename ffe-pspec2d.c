@@ -9,6 +9,7 @@ enum DatasetType {
   DSET_TYPE_FFE=1,
   DSET_TYPE_MARA=2,
   DSET_TYPE_M2=3,
+  DSET_TYPE_MFFE=4,
 } ;
 
 struct config_t
@@ -17,7 +18,8 @@ struct config_t
   char *filename;
   char *output_filename;
   char *dset_name_for_size;
-  char *dset_name_primitive;
+  char *dset_name_electric;
+  char *dset_name_magnetic;
   char *dset_name_B1;
   char *dset_name_B2;
   char *dset_name_B3;
@@ -47,7 +49,8 @@ static struct config_t configure_new()
   cfg.filename = NULL;
   cfg.output_filename = NULL;
   cfg.dset_name_for_size = NULL;
-  cfg.dset_name_primitive = NULL;
+  cfg.dset_name_electric = NULL;
+  cfg.dset_name_magnetic = NULL;
   cfg.dset_name_B1 = NULL;
   cfg.dset_name_B2 = NULL;
   cfg.dset_name_B3 = NULL;
@@ -69,7 +72,8 @@ static struct config_t configure_new()
 static void configure_for_ffe(struct config_t *cfg)
 {
   cfg->dset_type = DSET_TYPE_FFE;
-  cfg->dset_name_primitive = "cell_primitive";
+  cfg->dset_name_electric = "cell_primitive";
+  cfg->dset_name_magnetic = "cell_primitive";
   cfg->dset_name_B1 = "B1";
   cfg->dset_name_B2 = "B2";
   cfg->dset_name_B3 = "B3";
@@ -82,7 +86,8 @@ static void configure_for_mara(struct config_t *cfg)
 {
   cfg->dset_type = DSET_TYPE_MARA;
   cfg->dset_name_for_size = "prim/Bx";
-  cfg->dset_name_primitive = "prim";
+  cfg->dset_name_electric = "prim";
+  cfg->dset_name_magnetic = "prim";
   cfg->dset_name_B1 = "Bx";
   cfg->dset_name_B2 = "By";
   cfg->dset_name_B3 = "Bz";
@@ -93,14 +98,30 @@ static void configure_for_mara(struct config_t *cfg)
 
 static void configure_for_m2(struct config_t *cfg)
 {
+  cfg->dset_type = DSET_TYPE_M2;
   cfg->dset_name_for_size = "cell_primitive/B1";
-  cfg->dset_name_primitive = "cell_primitive";
+  cfg->dset_name_electric = "cell_primitive";
+  cfg->dset_name_magnetic = "cell_primitive";
   cfg->dset_name_B1 = "B1";
   cfg->dset_name_B2 = "B2";
   cfg->dset_name_B3 = "B3";
   cfg->dset_name_E1 = "v1";
   cfg->dset_name_E2 = "v2";
   cfg->dset_name_E3 = "v3";
+}
+
+static void configure_for_mffe(struct config_t *cfg)
+{
+  cfg->dset_type = DSET_TYPE_MFFE;
+  cfg->dset_name_for_size = "magnetic/B1";
+  cfg->dset_name_electric = "electric";
+  cfg->dset_name_magnetic = "magnetic";
+  cfg->dset_name_B1 = "B1";
+  cfg->dset_name_B2 = "B2";
+  cfg->dset_name_B3 = "B3";
+  cfg->dset_name_E1 = "E1";
+  cfg->dset_name_E2 = "E2";
+  cfg->dset_name_E3 = "E3";
 }
 
 
@@ -116,8 +137,8 @@ int main(int argc, char **argv)
   int modes = 0;
 
   // TODO: get from user
-  // modes |= COW_DISABLE_MPI);
-  // modes |= COW_NOREOPEN_STDOUT;
+  modes |= COW_DISABLE_MPI;
+  modes |= COW_NOREOPEN_STDOUT;
 
   cow_init(0, NULL, modes);
 
@@ -141,6 +162,9 @@ int main(int argc, char **argv)
     }
     else if (!strcmp(argv[n], "format=mara")) {
       dset_type = DSET_TYPE_MARA;
+    }
+    else if (!strcmp(argv[n], "format=mffe")) {
+      dset_type = DSET_TYPE_MFFE;
     }
     else if (!strncmp(argv[n], "resolution=", 11)) {
       sscanf(argv[n], "resolution=%d", &cfg.resolution);
@@ -196,6 +220,10 @@ int main(int argc, char **argv)
   case DSET_TYPE_M2:
     configure_for_m2(&cfg);
     printf("[cfg] using format=m2\n");
+    break;
+  case DSET_TYPE_MFFE:
+    configure_for_mffe(&cfg);
+    printf("[cfg] using format=mffe\n");
     break;
   }
 
@@ -276,14 +304,14 @@ void process_file(struct config_t cfg)
   /* Data fields setup */
   /* ---------------------------------------------------- */
   cow_dfield_setdomain(magnetic, domain);
-  cow_dfield_setname(magnetic, cfg.dset_name_primitive);
+  cow_dfield_setname(magnetic, cfg.dset_name_magnetic);
   cow_dfield_addmember(magnetic, cfg.dset_name_B1);
   cow_dfield_addmember(magnetic, cfg.dset_name_B2);
   cow_dfield_addmember(magnetic, cfg.dset_name_B3);
   cow_dfield_commit(magnetic);
 
   cow_dfield_setdomain(electric, domain);
-  cow_dfield_setname(electric, cfg.dset_name_primitive);
+  cow_dfield_setname(electric, cfg.dset_name_electric);
   cow_dfield_addmember(electric, cfg.dset_name_E1);
   cow_dfield_addmember(electric, cfg.dset_name_E2);
   cow_dfield_addmember(electric, cfg.dset_name_E3);
@@ -334,8 +362,8 @@ void process_file(struct config_t cfg)
   cow_histogram_setupper(Hr, 0, cfg.max_pspec_bin);
   cow_histogram_setnbins(Hr, 0, cfg.num_pspec_bins);
   cow_histogram_setspacing(Hr, COW_HIST_SPACING_LINEAR);
-  cow_histogram_setfullname(Hr, "helicity-real");
-  cow_histogram_setnickname(Hr, "helicity-real");
+  cow_histogram_setfullname(Hr, "helicity");
+  cow_histogram_setnickname(Hr, "helicity");
 
 
   cow_histogram *Hi = cow_histogram_new();
@@ -387,12 +415,10 @@ void process_file(struct config_t cfg)
 
     cow_histogram_dumphdf5(Pb, cfg.output_filename, gname);
     cow_histogram_dumphdf5(Pe, cfg.output_filename, gname);
-    cow_histogram_dumphdf5(Hi, cfg.output_filename, gname);
     cow_histogram_dumphdf5(Hr, cfg.output_filename, gname);
   }
 
   if (cfg.write_derived_fields && cfg.output_filename) {
-    cow_dfield_write(magnetic, cfg.output_filename);
     cow_dfield_write(vecpoten, cfg.output_filename);
     cow_dfield_write(jcurrent, cfg.output_filename);
   }
@@ -417,11 +443,11 @@ void read_data_from_file(struct config_t cfg,
 {
   cow_domain *domain = cow_dfield_getdomain(magnetic);
 
-
-  /* If it's Mara or M2 */
+  /* If it's Mara, M2, or MFFE */
   /* ---------------------------------------------------- */
   if (cfg.dset_type == DSET_TYPE_MARA ||
-      cfg.dset_type == DSET_TYPE_M2) {
+      cfg.dset_type == DSET_TYPE_M2 ||
+      cfg.dset_type == DSET_TYPE_MFFE) {
 
     cow_dfield_read(magnetic, cfg.filename);
     cow_dfield_read(electric, cfg.filename);
