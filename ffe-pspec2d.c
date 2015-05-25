@@ -125,6 +125,7 @@ static void configure_for_mffe(struct config_t *cfg)
 }
 
 
+
 int main(int argc, char **argv)
 {
   if (argc == 1) {
@@ -136,9 +137,20 @@ int main(int argc, char **argv)
 
   int modes = 0;
 
-  // TODO: get from user
-  modes |= COW_DISABLE_MPI;
-  modes |= COW_NOREOPEN_STDOUT;
+  for (int n=2; n<argc; ++n) {
+
+    if (argv[n][0] == '-') {
+      if (argv[n][1] == 's') {
+	printf("[cfg] running in serial mode\n");
+	modes |= COW_DISABLE_MPI;
+      }
+      else {
+	printf("[cfg] error: unknown arugment '%s'\n", argv[n]);
+	return 1;
+      }
+    }
+  }
+
 
   cow_init(0, NULL, modes);
 
@@ -149,8 +161,11 @@ int main(int argc, char **argv)
 
   for (int n=2; n<argc; ++n) {
 
+    if (argv[n][0] == '-') {
+      continue;
+    }
 
-    if (!strncmp(argv[n], "output=", 7)) {
+    else if (!strncmp(argv[n], "output=", 7)) {
       sscanf(argv[n], "output=%1024s", output_filename);
       cfg.output_filename = output_filename;
     }
@@ -169,9 +184,6 @@ int main(int argc, char **argv)
     else if (!strncmp(argv[n], "resolution=", 11)) {
       sscanf(argv[n], "resolution=%d", &cfg.resolution);
     }
-    else if (!strncmp(argv[n], "three_d=", 8)) {
-      sscanf(argv[n], "three_d=%d", &cfg.three_d);
-    }
     else if (!strncmp(argv[n], "num_blocks=", 11)) {
       sscanf(argv[n], "num_blocks=%d", &cfg.num_blocks);
     }
@@ -182,14 +194,11 @@ int main(int argc, char **argv)
     else if (!strncmp(argv[n], "write_derived_fields=", 21)) {
       sscanf(argv[n], "write_derived_fields=%d", &cfg.write_derived_fields);
     }
-    else if (!strncmp(argv[n], "bins=", 5)) {
-      sscanf(argv[n], "bins=%d,%d",
-	     &cfg.num_pspec_bins, &cfg.max_pspec_bin);
-    }
     else {
       printf("[cfg] error: unknown option '%s'\n", argv[n]);
       return 1;
     }
+
 
   }
 
@@ -237,7 +246,10 @@ int main(int argc, char **argv)
     for (int n=1; n<argc; ++n) {
 
       if (strchr(argv[n], '=') != NULL) {
-	continue; /* this arg was an option, not a filename */
+	continue; /* this was an argument, not a filename */
+      }
+      if (argv[n][0] == '-') {
+	continue; /* this was an option, not a filename */
       }
 
       cfg.filename = argv[n];
@@ -374,6 +386,18 @@ void process_file(struct config_t cfg)
   cow_histogram_setfullname(Hi, "helicity-imag");
   cow_histogram_setnickname(Hi, "helicity-imag");
 
+
+  cow_histogram *alpha_hist = cow_histogram_new();
+  cow_histogram_setlower(alpha_hist, 0, -256.0);
+  cow_histogram_setupper(alpha_hist, 0, +256.0);
+  cow_histogram_setnbins(alpha_hist, 0, 8192);
+  cow_histogram_setspacing(alpha_hist, COW_HIST_SPACING_LINEAR);
+  cow_histogram_setfullname(alpha_hist, "alpha-hist");
+  cow_histogram_setnickname(alpha_hist, "alpha-hist");
+  cow_histogram_setdomaincomm(alpha_hist, domain);
+  cow_histogram_commit(alpha_hist);
+
+
   double time = 0.0;
   read_data_from_file(cfg, magnetic, electric, &time);
 
@@ -385,7 +409,7 @@ void process_file(struct config_t cfg)
   double *B = (double*) cow_dfield_getdatabuffer(magnetic);
   double *H = (double*) cow_dfield_getdatabuffer(helicity);
   //double *E = (double*) cow_dfield_getdatabuffer(electric);
-  //double *J = (double*) cow_dfield_getdatabuffer(jcurrent);
+  double *J = (double*) cow_dfield_getdatabuffer(jcurrent);
 
 
   double htot = 0.0;
@@ -393,6 +417,14 @@ void process_file(struct config_t cfg)
     H[n] = A[3*n+0] * B[3*n+0] + A[3*n+1] * B[3*n+1] + A[3*n+2] * B[3*n+2];
     htot += H[n];
   }
+
+  for (int n=0; n<cow_domain_getnumlocalzonesincguard(domain, COW_ALL_DIMS); ++n) {
+    double JB = J[3*n+0] * B[3*n+0] + J[3*n+1] * B[3*n+1] + J[3*n+2] * B[3*n+2];
+    double BB = B[3*n+0] * B[3*n+0] + B[3*n+1] * B[3*n+1] + B[3*n+2] * B[3*n+2];
+    cow_histogram_addsample1(alpha_hist, JB/BB, 1.0);
+  }
+  cow_histogram_seal(alpha_hist);
+
 
   htot = cow_domain_dblsum(domain, htot) / cow_domain_getnumglobalzones(domain, COW_ALL_DIMS);
   printf("[main] total magnetic helicity: %8.6e\n", htot);
@@ -416,6 +448,7 @@ void process_file(struct config_t cfg)
     cow_histogram_dumphdf5(Pb, cfg.output_filename, gname);
     cow_histogram_dumphdf5(Pe, cfg.output_filename, gname);
     cow_histogram_dumphdf5(Hr, cfg.output_filename, gname);
+    cow_histogram_dumphdf5(alpha_hist, cfg.output_filename, gname);
   }
 
   if (cfg.write_derived_fields && cfg.output_filename) {
@@ -427,6 +460,7 @@ void process_file(struct config_t cfg)
   cow_histogram_del(Pe);
   cow_histogram_del(Hr);
   cow_histogram_del(Hi);
+  cow_histogram_del(alpha_hist);
   cow_dfield_del(magnetic);
   cow_dfield_del(electric);
   cow_dfield_del(vecpoten);
