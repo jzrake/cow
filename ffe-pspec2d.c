@@ -3,6 +3,10 @@
 #include "cow.h"
 #include "read-ff-sdf.h"
 
+#ifndef M_PI
+#define M_PI 3.1415926535897926
+#endif
+
 
 
 enum DatasetType {
@@ -162,7 +166,10 @@ int main(int argc, char **argv)
   for (int n=2; n<argc; ++n) {
 
     if (argv[n][0] == '-') {
-      continue;
+      continue; /* this was an option, not an argument*/
+    }
+    else if (strchr(argv[n], '=') == NULL) {
+      continue; /* this was a filename, not an argument */
     }
 
     else if (!strncmp(argv[n], "output=", 7)) {
@@ -254,9 +261,9 @@ int main(int argc, char **argv)
 
       cfg.filename = argv[n];
 
-      if (cfg.output_filename == NULL) {
-	cfg.output_filename = argv[n];
-      }
+      //if (cfg.output_filename == NULL) {
+      cfg.output_filename = argv[n];
+      //}
 
       process_file(cfg);
 
@@ -388,8 +395,8 @@ void process_file(struct config_t cfg)
 
 
   cow_histogram *alpha_hist = cow_histogram_new();
-  cow_histogram_setlower(alpha_hist, 0, -256.0);
-  cow_histogram_setupper(alpha_hist, 0, +256.0);
+  cow_histogram_setlower(alpha_hist, 0, -512.0);
+  cow_histogram_setupper(alpha_hist, 0, +512.0);
   cow_histogram_setnbins(alpha_hist, 0, 8192);
   cow_histogram_setspacing(alpha_hist, COW_HIST_SPACING_LINEAR);
   cow_histogram_setfullname(alpha_hist, "alpha-hist");
@@ -421,7 +428,7 @@ void process_file(struct config_t cfg)
   for (int n=0; n<cow_domain_getnumlocalzonesincguard(domain, COW_ALL_DIMS); ++n) {
     double JB = J[3*n+0] * B[3*n+0] + J[3*n+1] * B[3*n+1] + J[3*n+2] * B[3*n+2];
     double BB = B[3*n+0] * B[3*n+0] + B[3*n+1] * B[3*n+1] + B[3*n+2] * B[3*n+2];
-    cow_histogram_addsample1(alpha_hist, JB/BB, 1.0);
+    cow_histogram_addsample1(alpha_hist, JB/BB/(2*M_PI), 1.0);
   }
   cow_histogram_seal(alpha_hist);
 
@@ -430,9 +437,9 @@ void process_file(struct config_t cfg)
   printf("[main] total magnetic helicity: %8.6e\n", htot);
 
 
-  cow_fft_pspecvecfield(magnetic, Pb);
-  cow_fft_pspecvecfield(electric, Pe);
-  cow_fft_helicityspec(magnetic, Hr, Hi);
+  //cow_fft_pspecvecfield(magnetic, Pb);
+  //cow_fft_pspecvecfield(electric, Pe);
+  //cow_fft_helicityspec(magnetic, Hr, Hi);
 
   if (cfg.output_filename) {
 
