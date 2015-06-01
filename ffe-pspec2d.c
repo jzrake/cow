@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 #include "cow.h"
 #include "read-ff-sdf.h"
@@ -159,7 +160,7 @@ int main(int argc, char **argv)
   cow_init(0, NULL, modes);
 
 
-  enum DatasetType dset_type = DSET_TYPE_FFE;
+  enum DatasetType dset_type = DSET_TYPE_MFFE;
   struct config_t cfg = configure_new();
   char output_filename[1024] = "";
 
@@ -404,6 +405,29 @@ void process_file(struct config_t cfg)
   cow_histogram_setdomaincomm(alpha_hist, domain);
   cow_histogram_commit(alpha_hist);
 
+  cow_histogram *mup_hist = cow_histogram_new(); /* 1 - cos(theta) */
+  cow_histogram_setlower(mup_hist, 0, 1e-8);
+  cow_histogram_setupper(mup_hist, 0, 1.0);
+  cow_histogram_setnbins(mup_hist, 0, 512);
+  cow_histogram_setspacing(mup_hist, COW_HIST_SPACING_LOG);
+  cow_histogram_setbinmode(mup_hist, COW_HIST_BINMODE_DENSITY);
+  cow_histogram_setfullname(mup_hist, "mup-hist");
+  cow_histogram_setnickname(mup_hist, "mup-hist");
+  cow_histogram_setdomaincomm(mup_hist, domain);
+  cow_histogram_commit(mup_hist);
+
+
+  cow_histogram *mum_hist = cow_histogram_new(); /* 1 + cos(theta) */
+  cow_histogram_setlower(mum_hist, 0, 1e-8);
+  cow_histogram_setupper(mum_hist, 0, 1.0);
+  cow_histogram_setnbins(mum_hist, 0, 512);
+  cow_histogram_setspacing(mum_hist, COW_HIST_SPACING_LOG);
+  cow_histogram_setbinmode(mum_hist, COW_HIST_BINMODE_DENSITY);
+  cow_histogram_setfullname(mum_hist, "mum-hist");
+  cow_histogram_setnickname(mum_hist, "mum-hist");
+  cow_histogram_setdomaincomm(mum_hist, domain);
+  cow_histogram_commit(mum_hist);
+
 
   double time = 0.0;
   read_data_from_file(cfg, magnetic, electric, &time);
@@ -426,11 +450,16 @@ void process_file(struct config_t cfg)
   }
 
   for (int n=0; n<cow_domain_getnumlocalzonesincguard(domain, COW_ALL_DIMS); ++n) {
-    double JB = J[3*n+0] * B[3*n+0] + J[3*n+1] * B[3*n+1] + J[3*n+2] * B[3*n+2];
     double BB = B[3*n+0] * B[3*n+0] + B[3*n+1] * B[3*n+1] + B[3*n+2] * B[3*n+2];
+    double JJ = J[3*n+0] * J[3*n+0] + J[3*n+1] * J[3*n+1] + J[3*n+2] * J[3*n+2];
+    double JB = J[3*n+0] * B[3*n+0] + J[3*n+1] * B[3*n+1] + J[3*n+2] * B[3*n+2];
     cow_histogram_addsample1(alpha_hist, JB/BB/(2*M_PI), 1.0);
+    cow_histogram_addsample1(mup_hist, 1 - JB / sqrt(BB * JJ), 1.0);
+    cow_histogram_addsample1(mum_hist, 1 + JB / sqrt(BB * JJ), 1.0);
   }
   cow_histogram_seal(alpha_hist);
+  cow_histogram_seal(mup_hist);
+  cow_histogram_seal(mum_hist);
 
 
   htot = cow_domain_dblsum(domain, htot) / cow_domain_getnumglobalzones(domain, COW_ALL_DIMS);
@@ -456,6 +485,8 @@ void process_file(struct config_t cfg)
     cow_histogram_dumphdf5(Pe, cfg.output_filename, gname);
     cow_histogram_dumphdf5(Hr, cfg.output_filename, gname);
     cow_histogram_dumphdf5(alpha_hist, cfg.output_filename, gname);
+    cow_histogram_dumphdf5(mup_hist, cfg.output_filename, gname);
+    cow_histogram_dumphdf5(mum_hist, cfg.output_filename, gname);
   }
 
   if (cfg.write_derived_fields && cfg.output_filename) {
@@ -468,6 +499,8 @@ void process_file(struct config_t cfg)
   cow_histogram_del(Hr);
   cow_histogram_del(Hi);
   cow_histogram_del(alpha_hist);
+  cow_histogram_del(mup_hist);
+  cow_histogram_del(mum_hist);
   cow_dfield_del(magnetic);
   cow_dfield_del(electric);
   cow_dfield_del(vecpoten);
