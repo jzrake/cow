@@ -75,6 +75,10 @@ void _io_domain_del(cow_domain *d)
 
 void cow_domain_setcollective(cow_domain *d, int mode)
 {
+  if (mode) {
+    printf("[%s] requested collective without parallel HDF5 support: "
+	   "revert to independent\n", MODULE);
+  }
 #if (COW_HDF5 && COW_HDF5_MPI)
   if (mode && !cow_mpirunning()) {
     printf("[%s] requested collective without MPI running: "
