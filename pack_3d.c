@@ -13,7 +13,7 @@
 */
 
 #include "cow-cfg.h"
-#if (COW_FFTW && COW_MPI)
+#if (COW_MPI)
 #include "pack_3d.h"
 
 #if !defined(PACK_POINTER) && !defined(PACK_MEMCPY)

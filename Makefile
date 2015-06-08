@@ -46,15 +46,15 @@ endif
 default : $(EXE)
 
 $(EXE) : $(EXE).c $(LIB)
-	$(CC) $(CFLAGS) $(CLIBS) $^ $(HDF5_I) $(FFTW_I) $(HDF5_L) $(FFTW_L) $(RNPL_L) -o $@
+	$(CC) $(CFLAGS) $^ $(HDF5_I) $(FFTW_I) $(HDF5_L) $(FFTW_L) $(RNPL_L) $(CLIBS) -o $@
 
 $(LIB) : $(OBJ)
 	$(AR) $@ $?
 	$(RANLIB) $@
 
 %.o : %.c cow-cfg.h $(MAKEFILE_IN)
-	@$(CC) -MM $< > $(<:.c=.dep) $(HDF5_I) $(FFTW_I) $(RNPL_I)
-	$(CC) $(CFLAGS) $< -c $(HDF5_I) $(FFTW_I) $(RNPL_I)
+	$(CCMM) -MM $< > $(<:.c=.dep) $(HDF5_I) $(FFTW_I) $(RNPL_I)
+	$(CC) $(CFLAGS) -c $< $(HDF5_I) $(FFTW_I) $(RNPL_I)
 
 cow-cfg.h : .FORCE
 	@echo "/* cow config header file */" > $(TMP_H)

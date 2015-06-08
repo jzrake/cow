@@ -14,6 +14,7 @@
 
 /* details of how to do a 3d remap */
 
+#if (COW_MPI)
 #ifndef REMAP_3D_HEADER
 
 struct remap_plan_3d {
@@ -57,3 +58,4 @@ int remap_3d_collide(struct extent_3d *,
 		     struct extent_3d *, struct extent_3d *);
 
 #endif // REMAP_3D_HEADER
+#endif // COW_MPI

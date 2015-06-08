@@ -13,7 +13,7 @@
 */
 
 #include "cow-cfg.h"
-#if (COW_FFTW && COW_MPI)
+#if (COW_MPI)
 #include <stdlib.h>
 #include <stdio.h>
 #include <mpi.h>
