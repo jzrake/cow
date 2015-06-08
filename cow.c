@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 #include "remap_3d.h"
@@ -29,8 +30,12 @@ static void _dfield_freetype(cow_dfield *f);
 static void _dfield_extractreplace(cow_dfield *f, int *I0, int *I1, void *out,
                                    char op);
 
+static clock_t ApplicationStartTime = 0;
+
 void cow_init(int argc, char **argv, int modes)
 {
+  ApplicationStartTime = clock();
+
 #if (COW_MPI)
   int rank = 0;
   int size = 1;
@@ -61,7 +66,8 @@ void cow_init(int argc, char **argv, int modes)
 
 void cow_finalize(void)
 {
-  printf("[cow] shutting down\n");
+  printf("[cow] shutting down --- uptime: %12.10f hours\n",
+	 (clock() - ApplicationStartTime) / (3600.0 * CLOCKS_PER_SEC));
 #if (COW_MPI)
   int mpi_started;
   MPI_Initialized(&mpi_started);
