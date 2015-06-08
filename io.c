@@ -32,7 +32,9 @@
 #define KILOBYTES (1<<10)
 #define MODULE "hdf5"
 
+
 #if (COW_HDF5)
+#define COW_HDF5_MPI HDF5_HAVE_PARALLEL
 static int _io_write(cow_dfield *f, char *fname);
 static int _io_read(cow_dfield *f, char *fname);
 static int _io_check_file_exists(char *fname);
