@@ -34,11 +34,16 @@
 
 
 #if (COW_HDF5)
-#define COW_HDF5_MPI HDF5_HAVE_PARALLEL
+#ifdef H5_HAVE_PARALLEL
+#define COW_HDF5_MPI 1
+#else
+#define COW_HDF5_MPI 0
+#endif
 static int _io_write(cow_dfield *f, char *fname);
 static int _io_read(cow_dfield *f, char *fname);
 static int _io_check_file_exists(char *fname);
 #endif
+
 
 void _io_domain_commit(cow_domain *d)
 {
@@ -77,10 +82,6 @@ void _io_domain_del(cow_domain *d)
 
 void cow_domain_setcollective(cow_domain *d, int mode)
 {
-  if (mode) {
-    printf("[%s] requested collective without parallel HDF5 support: "
-	   "revert to independent\n", MODULE);
-  }
 #if (COW_HDF5 && COW_HDF5_MPI)
   if (mode && !cow_mpirunning()) {
     printf("[%s] requested collective without MPI running: "
@@ -94,6 +95,11 @@ void cow_domain_setcollective(cow_domain *d, int mode)
   else {
     printf("[%s] setting HDF5 io mode to independent\n", MODULE);
     H5Pset_dxpl_mpio(d->dxpl, H5FD_MPIO_INDEPENDENT);
+  }
+#else
+  if (mode) {
+    printf("[%s] requested collective without parallel HDF5 support: "
+	   "revert to independent\n", MODULE);
   }
 #endif
 }
