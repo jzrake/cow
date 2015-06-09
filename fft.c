@@ -278,7 +278,7 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
 #endif // COW_FFTW
 }
 
-void cow_fft_helicityspec(cow_dfield *f, cow_histogram *hr, cow_histogram *hi)
+void cow_fft_helicityspec(cow_dfield *f, cow_histogram *h)
 {
 #if (COW_FFTW)
   if (!f->committed) return;
@@ -307,12 +307,9 @@ void cow_fft_helicityspec(cow_dfield *f, cow_histogram *hr, cow_histogram *hi)
   FFT_DATA Az;
   free(input);
 
-  cow_histogram_setbinmode(hr, COW_HIST_BINMODE_DENSITY);
-  cow_histogram_setbinmode(hi, COW_HIST_BINMODE_DENSITY);
-  cow_histogram_setdomaincomm(hr, f->domain);
-  cow_histogram_setdomaincomm(hi, f->domain);
-  cow_histogram_commit(hr);
-  cow_histogram_commit(hi);
+  cow_histogram_setbinmode(h, COW_HIST_BINMODE_DENSITY);
+  cow_histogram_setdomaincomm(h, f->domain);
+  cow_histogram_commit(h);
 
   for (int i=0; i<nx; ++i) {
     for (int j=0; j<ny; ++j) {
@@ -354,23 +351,17 @@ void cow_fft_helicityspec(cow_dfield *f, cow_histogram *hr, cow_histogram *hi)
 	{
 	  double kvec[3];
 	  double Kijk = k_at(f->domain, i, j, k, kvec);
-	  double Hr =
+	  double H =
 	    (Ax[0]*Bx[m][0] + Ax[1]*Bx[m][1]) +
 	    (Ay[0]*By[m][0] + Ay[1]*By[m][1]) +
 	    (Az[0]*Bz[m][0] + Az[1]*Bz[m][1]);
-	  double Hi =
-	    (Ax[1]*Bx[m][0] - Ax[0]*Bx[m][1]) +
-	    (Ay[1]*By[m][0] - Ay[0]*By[m][1]) +
-	    (Az[1]*Bz[m][0] - Az[0]*Bz[m][1]);
 
-	  cow_histogram_addsample1(hr, Kijk, Hr/norm);
-	  cow_histogram_addsample1(hi, Kijk, Hi/norm);
+	  cow_histogram_addsample1(h, Kijk, H/norm);
 	}
       }
     }
   }
-  cow_histogram_seal(hi);
-  cow_histogram_seal(hr);
+  cow_histogram_seal(h);
   free(Bx);
   free(By);
   free(Bz);

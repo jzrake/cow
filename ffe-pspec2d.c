@@ -386,18 +386,9 @@ void process_file(struct config_t cfg)
   cow_histogram_setnickname(Hr, "helicity");
 
 
-  cow_histogram *Hi = cow_histogram_new();
-  cow_histogram_setlower(Hi, 0, 1);
-  cow_histogram_setupper(Hi, 0, cfg.max_pspec_bin);
-  cow_histogram_setnbins(Hi, 0, cfg.num_pspec_bins);
-  cow_histogram_setspacing(Hi, COW_HIST_SPACING_LINEAR);
-  cow_histogram_setfullname(Hi, "helicity-imag");
-  cow_histogram_setnickname(Hi, "helicity-imag");
-
-
   cow_histogram *alpha_hist = cow_histogram_new();
-  cow_histogram_setlower(alpha_hist, 0, -512.0);
-  cow_histogram_setupper(alpha_hist, 0, +512.0);
+  cow_histogram_setlower(alpha_hist, 0, -32.0);
+  cow_histogram_setupper(alpha_hist, 0, +32.0);
   cow_histogram_setnbins(alpha_hist, 0, 8192);
   cow_histogram_setspacing(alpha_hist, COW_HIST_SPACING_LINEAR);
   cow_histogram_setfullname(alpha_hist, "alpha-hist");
@@ -468,7 +459,8 @@ void process_file(struct config_t cfg)
 
   //cow_fft_pspecvecfield(magnetic, Pb);
   //cow_fft_pspecvecfield(electric, Pe);
-  //cow_fft_helicityspec(magnetic, Hr, Hi);
+  //cow_fft_helicityspec(magnetic, Hr);
+
 
   if (cfg.output_filename) {
 
@@ -497,7 +489,6 @@ void process_file(struct config_t cfg)
   cow_histogram_del(Pb);
   cow_histogram_del(Pe);
   cow_histogram_del(Hr);
-  cow_histogram_del(Hi);
   cow_histogram_del(alpha_hist);
   cow_histogram_del(mup_hist);
   cow_histogram_del(mum_hist);
