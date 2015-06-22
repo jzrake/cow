@@ -47,6 +47,8 @@ typedef void (*cow_transform)(double *result, double **args, int **strides,
 void cow_init(int argc, char **argv, int modes);
 void cow_finalize(void);
 int cow_mpirunning(void);
+void *cow_start_clock();
+double cow_stop_clock(void *clock_s);
 
 cow_domain *cow_domain_new(void);
 void cow_domain_commit(cow_domain *d);

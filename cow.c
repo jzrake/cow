@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <time.h>
+#include <sys/time.h>
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 #include "remap_3d.h"
@@ -30,11 +30,11 @@ static void _dfield_freetype(cow_dfield *f);
 static void _dfield_extractreplace(cow_dfield *f, int *I0, int *I1, void *out,
                                    char op);
 
-static clock_t ApplicationStartTime = 0;
+static void *ApplicationStartTime = NULL;
 
 void cow_init(int argc, char **argv, int modes)
 {
-  ApplicationStartTime = clock();
+  ApplicationStartTime = cow_start_clock();
 
 #if (COW_MPI)
   int rank = 0;
@@ -67,7 +67,7 @@ void cow_init(int argc, char **argv, int modes)
 void cow_finalize(void)
 {
   printf("[cow] shutting down --- uptime: %12.10f hours\n",
-	 (clock() - ApplicationStartTime) / (3600.0 * CLOCKS_PER_SEC));
+	 cow_stop_clock(ApplicationStartTime) / 3600);
 #if (COW_MPI)
   int mpi_started;
   MPI_Initialized(&mpi_started);
@@ -84,6 +84,25 @@ int cow_mpirunning(void)
 #endif
   return mpi_started;
 }
+void *cow_start_clock()
+{
+  struct timeval *T = (struct timeval *) malloc(sizeof(struct timeval));
+  gettimeofday(T, NULL);
+  return T;
+}
+double cow_stop_clock(void *clock_s)
+{
+  struct timeval *T0 = (struct timeval *) clock_s;
+  struct timeval *T1 = (struct timeval *) malloc(sizeof(struct timeval));
+  gettimeofday(T1, NULL);
+  double ds = T1->tv_sec  - T0->tv_sec;
+  double du = T1->tv_usec - T0->tv_usec;
+  double dt = ds + 1e-6*du;
+  free(T0);
+  free(T1);
+  return dt;
+}
+
 
 // -----------------------------------------------------------------------------
 //
