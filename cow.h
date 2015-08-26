@@ -146,6 +146,7 @@ void cow_histogram_getbinlocx(cow_histogram *h, double *x);
 void cow_histogram_getbinlocy(cow_histogram *h, double *x);
 void cow_histogram_getbinvalv(cow_histogram *h, double *x);
 double cow_histogram_getbinval(cow_histogram *h, int i, int j);
+double cow_histogram_sample1(cow_histogram *h, double x);
 char *cow_histogram_getname(cow_histogram *h);
 
 void cow_fft_forward(cow_dfield *f, cow_dfield *fkre, cow_dfield *fkim);

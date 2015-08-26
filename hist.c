@@ -290,7 +290,6 @@ double cow_histogram_getbinval(cow_histogram *h, int i, int j)
   if (!(h->committed && h->sealed)) {
     return 0.0;
   }
-  if (!h->committed) return 0.0;
   if (i > h->nbinsx || j > h->nbinsy) return 0.0;
   int c = h->counts[i*h->nbinsy + j];
   double w = h->weight[i*h->nbinsy + j];
@@ -306,6 +305,53 @@ double cow_histogram_getbinval(cow_histogram *h, int i, int j)
   default:
     return 0.0;
   }
+}
+double cow_histogram_sample1(cow_histogram *h, double x)
+{
+  if (!(h->committed && h->sealed)) {
+    return 0.0;
+  }
+  if (x < h->bedgesx[0] || x > h->bedgesx[h->nbinsx]) {
+    return 0.0;
+  }
+  int n0 = 0;
+  int n1 = 0;
+  for (int n=0; n<h->nbinsx; ++n) {
+    if (h->bedgesx[n] - 1e-14 < x && x < h->bedgesx[n+1] + 1e-14) {
+      n0 = n;
+      n1 = n + 1;
+      break;
+    }
+  }
+  int m0 = n0;
+  int m1 = n1; 
+  if (h->nbinsx <= 1) { /* just to be safe */
+    m0 = 0;
+    m1 = 0;
+  }
+  else if (n0 == 0) { /* it's the first bin */
+    m0 = 0;
+    m1 = 1;
+  }
+  else if (n1 == h->nbinsx) { /* it's the last bin */
+    m0 = h->nbinsx - 2;
+    m1 = h->nbinsx - 1;
+  }
+  else if (x - h->bedgesx[n0] <= h->bedgesx[n1] - x) { /* x in the left half */
+    m0 = n0 - 1;
+    m1 = n1 - 1;
+  }
+  else if (x - h->bedgesx[n0] > h->bedgesx[n1] - x) { /* x in the right half */
+    m0 = n0;
+    m1 = n1;
+  }
+  double xc = 0.5*(h->bedgesx[n0] + h->bedgesx[n0+1]); /* center of bin */
+  double x0 = 0.5*(h->bedgesx[m0] + h->bedgesx[m0+1]);
+  double x1 = 0.5*(h->bedgesx[m1] + h->bedgesx[m1+1]);
+  double yc = cow_histogram_getbinval(h, n0, 0);
+  double y0 = cow_histogram_getbinval(h, m0, 0);
+  double y1 = cow_histogram_getbinval(h, m1, 0);
+  return yc + (x - xc) * (y1 - y0) / (x1 - x0);
 }
 char *cow_histogram_getname(cow_histogram *h)
 {
