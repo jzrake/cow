@@ -665,7 +665,8 @@ void cow_fft_solvepoisson(cow_dfield *rho, cow_dfield *phi)
 
   double *phix = _rev(domain, phik);
   cow_dfield_replace(phi, I0, I1, phix);
-
+  cow_dfield_syncguard(phi);
+  
   free(rhox);
   free(rhok);
   free(phix);
