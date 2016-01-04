@@ -278,7 +278,7 @@ void cow_fft_pspecvecfield(cow_dfield *f, cow_histogram *hist)
 #endif // COW_FFTW
 }
 
-void cow_fft_helicityspec(cow_dfield *f, cow_histogram *h)
+void cow_fft_helicityspec(cow_dfield *f, cow_histogram *h, char mode)
 {
 #if (COW_FFTW)
   if (!f->committed) return;
@@ -318,10 +318,10 @@ void cow_fft_helicityspec(cow_dfield *f, cow_histogram *h)
 	int m = i*ny*nz + j*nz + k;
 
 	// ---------------------------------------------------------------------
-	// Here we compute the inverse curl of B in order to get its vector
-	// potential A.
+	// In magnetic mode we compute the inverse curl of B in order to get
+	// vector potential A.
 	// ---------------------------------------------------------------------
-	{
+	if (mode == 'b') {
 	  double kvec[3];
 	  double Kijk = k_at_wspc(f->domain, i, j, k, kvec);
 	  double k2 = Kijk * Kijk;
@@ -340,12 +340,36 @@ void cow_fft_helicityspec(cow_dfield *f, cow_histogram *h)
 	  Az[1] = +(kvec[0] * By[m][0] - kvec[1] * Bx[m][0]) / k2;
 	}
 
+	
+	// ---------------------------------------------------------------------
+	// In velocity mode we compute the curl of u in order to get vorticity
+	// A.
+	// ---------------------------------------------------------------------
+	else if (mode == 'u') {
+	  double kvec[3];
+	  double Kijk = k_at_wspc(f->domain, i, j, k, kvec);
+	  double k2 = Kijk * Kijk;
+
+	  if (k2 < EFFECTIVELY_ZERO) {
+	    k2 = 1.0;
+	  }
+
+	  Ax[0] = -(kvec[1] * Bz[m][1] - kvec[2] * By[m][1]);
+	  Ax[1] = +(kvec[1] * Bz[m][0] - kvec[2] * By[m][0]);
+
+	  Ay[0] = -(kvec[2] * Bx[m][1] - kvec[0] * Bz[m][1]);
+	  Ay[1] = +(kvec[2] * Bx[m][0] - kvec[0] * Bz[m][0]);
+
+	  Az[0] = -(kvec[0] * By[m][1] - kvec[1] * Bx[m][1]);
+	  Az[1] = +(kvec[0] * By[m][0] - kvec[1] * Bx[m][0]);
+	}
+
 
 	// ---------------------------------------------------------------------
 	// Here we are taking the complex norm (absolute value squared) of the
 	// vector-valued Fourier amplitude corresponding to the wave-vector, k.
 	//
-	//                        P(k) = |\vec{A}_k \cdot \conj{\vec{B}_k}|
+	//           P(k) = |\vec{A}_k \cdot \conj{\vec{B}_k}|
 	//
 	// ---------------------------------------------------------------------
 	{
@@ -379,7 +403,7 @@ void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
     printf("[%s] error: need a 3-component field for pspecvectorfield", MODULE);
     return;
   }
-  clock_t start = clock();
+  //clock_t start = clock();
   int nx = cow_domain_getnumlocalzonesinterior(f->domain, 0);
   int ny = cow_domain_getnumlocalzonesinterior(f->domain, 1);
   int nz = cow_domain_getnumlocalzonesinterior(f->domain, 2);
@@ -453,8 +477,8 @@ void cow_fft_helmholtzdecomp(cow_dfield *f, int mode)
   cow_dfield_replace(f, I0, I1, res);
   cow_dfield_syncguard(f);
   free(res);
-  printf("[%s] %s took %3.2f seconds\n",
-	 MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
+  //printf("[%s] %s took %3.2f seconds\n",
+  //MODULE, __FUNCTION__, (double) (clock() - start) / CLOCKS_PER_SEC);
 #endif // COW_FFTW
 }
 
