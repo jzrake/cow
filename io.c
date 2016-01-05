@@ -25,12 +25,14 @@
  */
 
 #include <stdio.h>
+#include <string.h>
 #include <stdlib.h>
 #include <time.h>
 #define COW_PRIVATE_DEFS
 #include "cow.h"
 #define KILOBYTES (1<<10)
 #define MODULE "hdf5"
+
 
 
 #if (COW_HDF5)
@@ -42,6 +44,7 @@
 static int _io_write(cow_dfield *f, char *fname);
 static int _io_read(cow_dfield *f, char *fname);
 static int _io_check_file_exists(char *fname);
+static int H5Lexists_safe(hid_t base, char *path);
 #endif
 
 
@@ -207,6 +210,93 @@ int cow_dfield_read(cow_dfield *f, char *fname)
   return 0;
 #endif
 }
+
+
+int cow_dfield_write_slice(cow_dfield *f, char *fname, char *gname, int field)
+{
+#if (COW_HDF5)
+  cow_domain *d = f->domain;
+  char **pnames = f->members;
+  void *data = f->data;
+  int n_memb = f->n_members;
+  int n_dims = d->n_dims;
+  hsize_t *L_nint = d->L_nint_h5;
+  hsize_t G_strt[3] = {d->G_strt_h5[0], d->G_strt_h5[1], 1};
+  hsize_t G_ntot[3] = {d->G_ntot_h5[0], d->G_ntot_h5[1], 1};
+  hsize_t ndp1 = n_dims + 1;
+  hsize_t l_nint[4];
+  hsize_t l_ntot[4];
+  hsize_t l_strt[4];
+  hsize_t stride[4];
+  char dname[1024];
+  snprintf(dname, 1024, "%s/%s", gname, pnames[field]);
+  if (n_dims != 3) {
+    return 1; /* This function is for 3D domains only */
+  }
+  else {
+    printf("[%s] write slice to %s/%s/%s\n", MODULE, fname, gname, pnames[field]);
+  }
+  for (int i=0; i<n_dims; ++i) {
+    l_nint[i] = d->L_nint[i]; // Selection size, target and destination
+    l_ntot[i] = d->L_ntot[i]; // Memory space total size
+    l_strt[i] = d->L_strt[i]; // Memory space selection start
+    stride[i] = 1;
+  }
+  l_nint[ndp1 - 2] = 1;
+  l_nint[ndp1 - 1] = 1;
+  l_ntot[ndp1 - 1] = n_memb;
+  stride[ndp1 - 1] = n_memb;
+  if (f->domain->cart_rank == 0) {
+    FILE *testf = fopen(fname, "r");
+    hid_t fid;
+    if (testf == NULL) {
+      fid = H5Fcreate(fname, H5F_ACC_TRUNC, H5P_DEFAULT, H5P_DEFAULT);
+    }
+    else {
+      fclose(testf);
+      fid = H5Fopen(fname, H5F_ACC_RDWR, H5P_DEFAULT);
+    }
+    if (!H5Lexists_safe(fid, gname)) {
+      hid_t gcpl = H5Pcreate(H5P_LINK_CREATE);
+      H5Pset_create_intermediate_group(gcpl, 1);
+      hid_t memb = H5Gcreate(fid, gname, gcpl, H5P_DEFAULT, H5P_DEFAULT);
+      H5Pclose(gcpl);
+      H5Gclose(memb);
+    }
+    H5Fclose(fid);
+  }
+  for (int rank=0; rank<d->cart_size; ++rank) {
+    if (rank == d->cart_rank) {
+      hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
+      hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
+      hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
+      hid_t fspc = H5Screate_simple(n_dims-1, G_ntot, NULL);
+      hid_t dset;
+      if (H5Lexists(memb, pnames[field], H5P_DEFAULT)) {
+	dset = H5Dopen(memb, pnames[field], H5P_DEFAULT);
+      }
+      else {
+	dset = H5Dcreate(memb, pnames[field], H5T_NATIVE_DOUBLE, fspc,
+			 H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+      }
+      l_strt[ndp1 - 1] = field;
+      H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
+      H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
+      H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, H5P_DEFAULT, data);
+      H5Dclose(dset);
+      H5Sclose(fspc);
+      H5Sclose(mspc);
+      H5Gclose(memb);
+      H5Fclose(file);
+    }
+    if (cow_mpirunning()) {
+      MPI_Barrier(d->mpi_cart);
+    }
+  }
+#endif
+  return 0;
+}
+
 
 #if (COW_HDF5)
 int _io_write(cow_dfield *f, char *fname)
@@ -375,6 +465,41 @@ int _io_check_file_exists(char *fname)
   }
 }
 
+
+
+
+#if (COW_HDF5)
+int H5Lexists_safe(hid_t base, char *path)
+// -----------------------------------------------------------------------------
+// The HDF5 specification only allows H5Lexists to be called on an immediate
+// child of the current object. However, you may wish to see whether a whole
+// relative path exists, returning false if any of the intermediate links are
+// not present. This function does that.
+// http://www.hdfgroup.org/HDF5/doc/RM/RM_H5L.html#Link-Exists
+// -----------------------------------------------------------------------------
+{
+  hid_t last = base, next;
+  char *pch;
+  char pathc[2048];
+  strcpy(pathc, path);
+  pch = strtok(pathc, "/");
+  while (pch != NULL) {
+    int exists = H5Lexists(last, pch, H5P_DEFAULT);
+    if (!exists) {
+      if (last != base) H5Gclose(last);
+      return 0;
+    }
+    else {
+      next = H5Gopen(last, pch, H5P_DEFAULT);
+      if (last != base) H5Gclose(last);
+      last = next;
+    }
+    pch = strtok(NULL, "/");
+  }
+  if (last != base) H5Gclose(last);
+  return 1;
+}
+#endif
 
 
 /*

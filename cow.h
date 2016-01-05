@@ -122,6 +122,7 @@ void cow_dfield_syncguard(cow_dfield *f);
 void cow_dfield_reduce(cow_dfield *f, double *x);
 int cow_dfield_write(cow_dfield *f, char *fname);
 int cow_dfield_read(cow_dfield *f, char *fname);
+int cow_dfield_write_slice(cow_dfield *f, char *fname, char *gname, int field);
 
 cow_histogram *cow_histogram_new(void);
 void cow_histogram_commit(cow_histogram *h);
