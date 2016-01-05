@@ -267,27 +267,29 @@ int cow_dfield_write_slice(cow_dfield *f, char *fname, char *gname, int field)
   }
   for (int rank=0; rank<d->cart_size; ++rank) {
     if (rank == d->cart_rank) {
-      hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
-      hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
-      hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
-      hid_t fspc = H5Screate_simple(n_dims-1, G_ntot, NULL);
-      hid_t dset;
-      if (H5Lexists(memb, pnames[field], H5P_DEFAULT)) {
-	dset = H5Dopen(memb, pnames[field], H5P_DEFAULT);
+      if (cow_domain_getglobalstartindex(d, 2) == 0) {
+	hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
+	hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
+	hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
+	hid_t fspc = H5Screate_simple(n_dims-1, G_ntot, NULL);
+	hid_t dset;
+	if (H5Lexists(memb, pnames[field], H5P_DEFAULT)) {
+	  dset = H5Dopen(memb, pnames[field], H5P_DEFAULT);
+	}
+	else {
+	  dset = H5Dcreate(memb, pnames[field], H5T_NATIVE_DOUBLE, fspc,
+			   H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
+	}
+	l_strt[ndp1 - 1] = field;
+	H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
+	H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
+	H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, H5P_DEFAULT, data);
+	H5Dclose(dset);
+	H5Sclose(fspc);
+	H5Sclose(mspc);
+	H5Gclose(memb);
+	H5Fclose(file);
       }
-      else {
-	dset = H5Dcreate(memb, pnames[field], H5T_NATIVE_DOUBLE, fspc,
-			 H5P_DEFAULT, H5P_DEFAULT, H5P_DEFAULT);
-      }
-      l_strt[ndp1 - 1] = field;
-      H5Sselect_hyperslab(mspc, H5S_SELECT_SET, l_strt, stride, l_nint, NULL);
-      H5Sselect_hyperslab(fspc, H5S_SELECT_SET, G_strt, NULL, L_nint, NULL);
-      H5Dwrite(dset, H5T_NATIVE_DOUBLE, mspc, fspc, H5P_DEFAULT, data);
-      H5Dclose(dset);
-      H5Sclose(fspc);
-      H5Sclose(mspc);
-      H5Gclose(memb);
-      H5Fclose(file);
     }
     if (cow_mpirunning()) {
       MPI_Barrier(d->mpi_cart);
