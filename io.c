@@ -246,7 +246,7 @@ int cow_dfield_write_slice(cow_dfield *f, char *fname, char *gname, int field)
   l_nint[ndp1 - 1] = 1;
   l_ntot[ndp1 - 1] = n_memb;
   stride[ndp1 - 1] = n_memb;
-  if (f->domain->cart_rank == 0) {
+  if (d->cart_rank == 0) {
     FILE *testf = fopen(fname, "r");
     hid_t fid;
     if (testf == NULL) {
@@ -268,7 +268,7 @@ int cow_dfield_write_slice(cow_dfield *f, char *fname, char *gname, int field)
   for (int rank=0; rank<d->cart_size; ++rank) {
     if (rank == d->cart_rank) {
       if (cow_domain_getglobalstartindex(d, 2) == 0) {
-	hid_t file = H5Fopen(fname, H5F_ACC_RDWR, d->fapl);
+	hid_t file = H5Fopen(fname, H5F_ACC_RDWR, H5P_DEFAULT);
 	hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
 	hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
 	hid_t fspc = H5Screate_simple(n_dims-1, G_ntot, NULL);
