@@ -230,19 +230,16 @@ int cow_dfield_write_slice(cow_dfield *f, char *fname, char *gname, int field)
   hsize_t stride[4];
   char dname[1024];
   snprintf(dname, 1024, "%s/%s", gname, pnames[field]);
-  if (n_dims != 3) {
-    return 1; /* This function is for 3D domains only */
-  }
-  else {
-    printf("[%s] write slice to %s/%s/%s\n", MODULE, fname, gname, pnames[field]);
-  }
+  printf("[%s] write slice to %s/%s/%s\n", MODULE, fname, gname, pnames[field]);
   for (int i=0; i<n_dims; ++i) {
     l_nint[i] = d->L_nint[i]; // Selection size, target and destination
     l_ntot[i] = d->L_ntot[i]; // Memory space total size
     l_strt[i] = d->L_strt[i]; // Memory space selection start
     stride[i] = 1;
   }
-  l_nint[ndp1 - 2] = 1;
+  if (n_dims == 3) {
+    l_nint[ndp1 - 2] = 1;
+  }
   l_nint[ndp1 - 1] = 1;
   l_ntot[ndp1 - 1] = n_memb;
   stride[ndp1 - 1] = n_memb;
@@ -271,7 +268,7 @@ int cow_dfield_write_slice(cow_dfield *f, char *fname, char *gname, int field)
 	hid_t file = H5Fopen(fname, H5F_ACC_RDWR, H5P_DEFAULT);
 	hid_t memb = H5Gopen(file, gname, H5P_DEFAULT);
 	hid_t mspc = H5Screate_simple(ndp1, l_ntot, NULL);
-	hid_t fspc = H5Screate_simple(n_dims-1, G_ntot, NULL);
+	hid_t fspc = H5Screate_simple(2, G_ntot, NULL);
 	hid_t dset;
 	if (H5Lexists(memb, pnames[field], H5P_DEFAULT)) {
 	  dset = H5Dopen(memb, pnames[field], H5P_DEFAULT);
